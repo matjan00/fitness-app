@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <title>Fit</title>
+  <meta name="theme-color" content="#f3f5f9" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0b0e14" media="(prefers-color-scheme: dark)">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400..800&display=swap">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="gym.css">
+  <link rel="stylesheet" href="food.css">
+  <link rel="stylesheet" href="run.css">
+  <script src="vendor/supabase.js"></script>
+  <script src="vendor/chart.umd.min.js"></script>
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <div id="loading" class="center-screen"><div class="spinner"></div></div>
+
+  <div id="login" class="center-screen" hidden>
+    <form id="login-form" class="card login-card">
+      <img src="icon.svg" alt="" width="56" height="56">
+      <h1>Fit</h1>
+      <p class="tagline">Gym, runs and food in one place</p>
+      <label>Email<input type="email" name="email" autocomplete="username" required></label>
+      <label>Password<input type="password" name="password" autocomplete="current-password" required></label>
+      <p class="error" hidden></p>
+      <button class="primary" type="submit">Log in</button>
+      <button class="link" type="button" id="login-skip">Use without an account for now</button>
+    </form>
+  </div>
+
+  <div id="app" hidden>
+    <main id="view"></main>
+    <div id="banner" hidden></div>
+    <nav id="tabbar"></nav>
+  </div>
+</body>
+</html>

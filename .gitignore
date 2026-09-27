@@ -1,0 +1,4 @@
+node_modules/
+scripts/exercises-source.json
+.env
+*.local.*
