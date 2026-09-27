@@ -119,4 +119,7 @@ const ICONS = {
   folder: '<path d="M3 6h6l2 2h10v11H3z"/>',
   download: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
   upload: '<path d="M12 20V9M7 14l5-5 5 5M5 4h14"/>',
+  heart: '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>',
+  bolt: '<path d="M13 3L5 13h6l-1 8 8-10h-6z"/>',
+  flag: '<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>',
 };
