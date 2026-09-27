@@ -1,11 +1,11 @@
 // Offline support. The app files are served "stale-while-revalidate": the saved copy opens instantly
 // (also with no signal at the gym) and a fresh copy is fetched in the background for next time.
 // Exercise pictures are cached the first time they are shown. Supabase/Strava calls are never cached.
-const VERSION = 'fit-v3';
+const VERSION = 'fit-v4';
 const CORE = ['./', 'index.html', 'style.css', 'gym.css', 'food.css', 'run.css', 'app.js', 'util.js', 'store.js', 'nav.js',
   'charts.js', 'config.js', 'me.js', 'gym.js', 'gym-calc.js', 'gym-data.js', 'gym-lib.js', 'gym-workout.js', 'gym-routines.js',
   'food.js', 'food-parse.js', 'food-db.js', 'food-calc.js', 'food-cats.js', 'food-ui.js', 'food-recipes.js', 'data/foods.json',
-  'run.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png',
+  'run.js', 'run-coach.js', 'run-detail.js', 'run-strava.js', 'run-demo.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png',
   'vendor/supabase.js', 'vendor/chart.umd.min.js', 'data/exercises.json'];
 
 self.addEventListener('install', (e) => {
