@@ -44,7 +44,15 @@ export function push(build, opts = {}) {
   return screen;
 }
 
-window.addEventListener('popstate', () => {
+window.addEventListener('popstate', (e) => {
+  // history.go(-n) fires a single popstate, so close every screen deeper than the state we landed on.
+  const target = Math.max(0, Math.min(e.state?.depth ?? 0, stack.length - 1));
+  while (stack.length > target) closeTop();
+  const next = top();
+  if (next) next.render(); else onReveal();
+});
+
+function closeTop() {
   const s = stack.pop();
   if (!s) return;
   s.el.classList.remove('open');
@@ -52,9 +60,7 @@ window.addEventListener('popstate', () => {
   setTimeout(() => s.el.remove(), 220);
   if (!stack.length) document.body.classList.remove('has-screen');
   try { s.opts.onClose?.(); } catch (e) { console.error(e); }
-  const next = top();
-  if (next) next.render(); else onReveal();
-});
+}
 
 // Close every open screen (e.g. after finishing a workout).
 export function closeAll() {
