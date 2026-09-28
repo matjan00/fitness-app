@@ -247,6 +247,18 @@
 .rn-label { font-size: 13px; font-weight: 600; color: var(--text-2); margin-bottom: 6px; }
 .rn-sheet-text p { line-height: 1.5; }
 
+/* ---------- goal plan ---------- */
+.rn-behind { border: 1.5px solid var(--down); }
+.rn-behind-ic { flex: none; width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; background: var(--down-soft); color: var(--down); }
+.rn-behind-ic svg { width: 16px; height: 16px; }
+.rn-plan-detail { display: grid; gap: 8px; margin-top: 10px; }
+.rn-plan-detail b { font-size: 12.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--text-2); display: block; }
+.rn-plan-detail p { font-size: 14px; margin-top: 2px; }
+.rn-tips { margin: 8px 0 0; padding-left: 18px; }
+.rn-tips li { margin-top: 4px; }
+.rn-goal-prompt p { margin-top: 6px; }
+.rn-plan-done p { padding: 4px 2px; }
+
 @media (max-width: 350px) {
   .rn-hero-stats { grid-template-columns: repeat(2, 1fr); }
 }

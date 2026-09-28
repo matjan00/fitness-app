@@ -16,6 +16,7 @@ import { chart, fade, cssVar } from './charts.js';
 import * as C from './run-coach.js';
 import { demoRuns, demoWorkouts } from './run-demo.js';
 import { runRow, wireRows, openRun, openAllRuns, feedbackHtml } from './run-detail.js';
+import * as RP from './run-plan-ui.js';
 
 export const tab = { id: 'run', title: 'Run', icon: 'run', render: renderTab };
 export const homeCard = { order: 15, render: renderHome };
@@ -29,6 +30,7 @@ let cache = { key: '', ctx: null };
 let legMuscles = null;      // exercise id → primary muscles (from data/exercises.json)
 let tabEl = null, homeEl = null, meEl = null;
 let planView = null;        // 'this' | 'next' | null (automatic: next week once this one is wrapped up)
+let matchedKey = '';        // ctx cache key we've already tried to auto-match plan sessions against
 
 // ---------- Garmin sync status ----------
 const garminStatus = () => store.all('garmin-status')[0] || null;
@@ -77,9 +79,14 @@ function getCtx() {
     if (workouts.length) loadExercises();
     cache = { key, ctx: C.buildContext({ runs: runsOf(), workouts, settings: settings(), now, isLeg }) };
   }
+  if (!demo && matchedKey !== cache.key) {
+    matchedKey = cache.key;
+    RP.syncPlanMatches(cache.ctx).then((changed) => { if (changed) { version++; rerender(); } }).catch(() => {});
+  }
   return cache.ctx;
 }
 const findRun = (id) => getCtx().runs.find((r) => r.id === id);
+const afterPlanChange = () => { version++; rerender(); };
 
 function rerender() {
   if (tabEl?.isConnected && tabEl.dataset.tab === 'run') renderTab(tabEl);
@@ -146,6 +153,7 @@ function renderTab(el) {
   if (!runs.length) return renderSetup(el);
   const ctx = getCtx();
   const rv = ctx.review;
+  const plan = demo ? null : RP.getPlan();
   el.innerHTML = `
     <div class="page-head row between">
       <div><p class="muted">Week of ${esc(weekTitle(rv.thisWeek.start))}</p><h1>Run</h1></div>
@@ -155,7 +163,8 @@ function renderTab(el) {
     <div class="stack">
       ${heroHtml(ctx)}
       ${fitnessHtml(ctx)}
-      ${planHtml(ctx)}
+      ${plan ? RP.planSectionHtml(ctx, plan) : goalPromptHtml(demo)}
+      ${plan ? '' : planHtml(ctx)}
       ${notesHtml(ctx)}
     </div>
     <h3 class="section-title">Recent runs</h3>
@@ -176,6 +185,8 @@ function renderTab(el) {
   el.querySelector('[data-a="exit-demo"]')?.addEventListener('click', stopDemo);
   el.querySelector('[data-a="all"]')?.addEventListener('click', () => openAllRuns(ctx));
   el.querySelector('[data-a="vdot-info"]')?.addEventListener('click', vdotInfo);
+  if (plan) RP.wirePlanSection(el, ctx, plan, afterPlanChange);
+  else el.querySelector('[data-a="rn-setup-goal"]')?.addEventListener('click', () => RP.openSetup(ctx, afterPlanChange));
   $$('[data-plan]', el).forEach((b) => { b.onclick = () => { planView = b.dataset.plan; renderTab(el); }; });
   $$('[data-pr]', el).forEach((b) => { b.onclick = () => { const r = findRun(b.dataset.pr); if (r) openRun(r, ctx); }; });
   const todayRun = el.querySelector('[data-today-run]');
@@ -273,6 +284,15 @@ function planHtml(ctx) {
       </div>`).join('')}</div>
     ${plan.notes.map((n) => `<p class="tiny muted rn-note">${esc(n)}</p>`).join('')}
     <p class="tiny muted rn-note">Days are a suggestion — move runs around your week, just keep hard days apart.</p>
+  </div>`;
+}
+
+function goalPromptHtml(isDemo) {
+  return `<div class="card rn-goal-prompt">
+    <div class="card-head"><h2>Have a race in mind?</h2></div>
+    <p class="small muted">Set a distance and target time and the coach builds a realistic training plan around how often you run — from 2 to 5 times a week.</p>
+    ${isDemo ? '<p class="tiny muted" style="margin-top:8px">Exit demo data to set up a real plan — it wouldn\'t be saved while exploring demo data.</p>'
+      : '<button class="primary block" style="margin-top:10px" data-a="rn-setup-goal">Set a goal</button>'}
   </div>`;
 }
 
@@ -439,6 +459,7 @@ function renderHome(el) {
   const fb = C.runFeedback(last, ctx)[0];
   const d = pct(tw.km, lw.km);
   const today = ctx.today;
+  const plan = demo ? null : RP.getPlan();
   el.innerHTML = `<div class="card rn-home" role="button" tabindex="0">
     <div class="card-head"><h2 class="rn-home-title">${icon('run')}Running${demo ? ' <span class="pill gold">Demo</span>' : ''}</h2><span class="link">Open</span></div>
     <div class="rn-home-week">
@@ -450,7 +471,7 @@ function renderHome(el) {
       <p class="small"><b>${esc(last.name || 'Run')}</b> <span class="muted">· ${esc(relDay(last.start))} · ${C.km(last.distance_m).toFixed(1)} km · ${C.fmtPace(C.paceOf(last))}/km</span></p>
       ${fb ? `<p class="small rn-home-fb rn-fb-${esc(fb.tone)}">${icon(TONE_ICON[fb.tone] || 'info')}<span>${esc(fb.text)}</span></p>` : ''}
     </button>
-    <div class="rn-home-today"><span class="rn-today-k">Today</span><b>${esc(today.title)}</b><p class="small muted">${esc(today.detail)}</p></div>
+    ${plan ? RP.homeNextSessionHtml(plan, ctx.now) : `<div class="rn-home-today"><span class="rn-today-k">Today</span><b>${esc(today.title)}</b><p class="small muted">${esc(today.detail)}</p></div>`}
   </div>`;
   const card = el.firstElementChild;
   card.onclick = () => window.showTab?.('run');
@@ -464,6 +485,7 @@ function renderMe(el) {
   const cfg = settings();
   const ctx = getCtx();
   const st = garminStatus();
+  const plan = demo ? null : RP.getPlan();
   el.innerHTML = `<h3 class="section-title">Running</h3>
     <div class="card stack rn-me">
       <div class="rn-garmin-row">
@@ -471,8 +493,9 @@ function renderMe(el) {
         <div class="grow"><b>Garmin</b><p class="small muted" id="rn-st-text">${esc(store.configured ? (st ? garminStatusText(st) : 'Setup: add your Garmin login as GitHub secrets — ask Claude.') : 'Needs online sync, which isn’t set up yet.')}</p></div>
         <div id="rn-st-actions" class="row">${store.configured ? `<button class="icon-btn ${syncing ? 'rn-spin' : ''}" data-a="sync" aria-label="Refresh" ${syncing ? 'disabled' : ''}>${icon('sync')}</button>` : ''}</div>
       </div>
-      <div><p class="rn-label">Runs per week</p><div class="seg" id="rn-rpw">${[3, 4, 5, 6].map((n) => `<button data-v="${n}" class="${ctx.runsPerWeek === n ? 'on' : ''}">${n}</button>`).join('')}</div></div>
+      ${plan ? RP.meGoalPlanHtml(plan) : `<div><p class="rn-label">Runs per week</p><div class="seg" id="rn-rpw">${[3, 4, 5, 6].map((n) => `<button data-v="${n}" class="${ctx.runsPerWeek === n ? 'on' : ''}">${n}</button>`).join('')}</div></div>
       <div><p class="rn-label">Goal</p><div class="seg" id="rn-focus">${['5k', '10k'].map((f) => `<button data-v="${f}" class="${ctx.focus === f ? 'on' : ''}">${f === '5k' ? 'Faster 5k' : 'Faster 10k'}</button>`).join('')}</div></div>
+      ${demo ? '' : '<button class="ghost" id="rn-goal-start">Set a race goal & plan</button>'}`}
       <label>Max heart rate (optional)
         <input id="rn-maxhr" inputmode="numeric" autocomplete="off" placeholder="${ctx.maxHrSource === 'data' ? `${ctx.maxHr} — highest seen in your runs` : `${ctx.maxHr} — rough default`}" value="${esc(cfg.max_hr || '')}"></label>
       ${demo ? '<button class="ghost" id="rn-exit-demo">Exit demo data</button>' : ''}
@@ -480,6 +503,8 @@ function renderMe(el) {
 
   $$('#rn-rpw button', el).forEach((b) => { b.onclick = () => saveSettings({ runs_per_week: Number(b.dataset.v) }); });
   $$('#rn-focus button', el).forEach((b) => { b.onclick = () => saveSettings({ focus: b.dataset.v }); });
+  $('#rn-goal-start', el)?.addEventListener('click', () => RP.openSetup(ctx, afterPlanChange));
+  if (plan) RP.wireMeGoalPlan(el, ctx, afterPlanChange);
   $('#rn-maxhr', el).onchange = (e) => {
     const raw = e.target.value.trim();
     const v = Number(raw);
