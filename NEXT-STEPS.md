@@ -18,3 +18,7 @@
 ## Later ideas (from QA)
 - Allow moving food-search / quick-add diary entries between meals (only recipe entries can move now).
 - Recipes whose caption has no line breaks at all still parse only partially (edit screen fixes it).
+
+## Next (decided 2026-09-28 with the user)
+A. Recipes → manual-first: user types everything; pasted link is saved + app auto-grabs title + cover photo (saved as its own compressed copy; own photo from camera/gallery also possible); ingredients typed with food-DB autocomplete + auto macros; tags auto-suggested but editable. Link auto-import of ingredients/subtitles no longer the main path (user found TikTok fetching unreliable).
+B. "Learn to cook" section in Food: ~16 short lessons for a HOME COOK, focus: fit/high-protein meals + flavour & seasoning. Each: why it works, key steps, common mistakes, doneness cues/temps, practice task, video-search link; progress (learned, practice log with rating/notes); recipes tagged with a technique link to its lesson and vice versa.
