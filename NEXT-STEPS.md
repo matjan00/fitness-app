@@ -1,19 +1,20 @@
-# Where we are (2026-09-27, evening)
+# Where we are (2026-09-28)
 
 ## Done
-- Foundation (store/sync, navigation, shell, styles, offline cache, exercise library) — committed.
-- Gym tracker — built, tested, committed (commit 40a5c03).
-- Supabase project `fitness-app` (ref txhcnqwrdazgaxjwabln): `records` table created, sign-ups off, user login created.
-- GitHub repo matjan00/fitness-app (public) + Pages → https://matjan00.github.io/fitness-app/ (only the foundation is pushed so far).
+- Foundation, Gym, Food, Running — built, QA'd twice (87 tests pass), committed locally.
+- Supabase: `records` + `strava_tokens` tables (RLS on), sign-ups off, user login created.
+- Edge functions deployed: `fetch-recipe` (checks the user's login itself; strangers get 401) and `strava` (--no-verify-jwt, checks login itself).
+  Deploy command (bundled npx; the global npx/npm 6 on this PC is broken):
+  "C:\Program Files\nodejs\node.exe" "C:\Program Files\nodejs\node_modules\npm\bin\npx-cli.js" --yes supabase@2.118.0 functions deploy <name> --project-ref txhcnqwrdazgaxjwabln --use-api
+  SQL: same prefix + `db query --linked --project-ref txhcnqwrdazgaxjwabln -f file.sql`
+- docs/config.js filled in (app now shows the login screen).
 
-## In progress
-- Food — DONE, committed (106cdf6). Deploy: supabase functions deploy fetch-recipe (JWT verification on). Files: docs/food*.js, docs/data/foods.json, supabase/functions/fetch-recipe/, scripts/food-*.
-- Running — DONE, committed (c7fc9e3). 86/86 tests pass. Deploy: run supabase/strava.sql; Strava app callback domain matjan00.github.io; secrets STRAVA_CLIENT_ID/STRAVA_CLIENT_SECRET (user sets); supabase functions deploy strava --no-verify-jwt; Garmin Connect → Connected Apps → Strava.
-- QA pass 1 (Sonnet) — stopped at 74% usage. No bugs found in what it covered (shell, gym core loop, food paste-import + diary-from-recipe). Details + untested list in QA-PROGRESS.md. Possible issue to check: after rapid navigation + fast back presses a screen once stayed half off-screen (nav.js stack vs history) — not reproduced.
+## Waiting for the user
+1. Approve the summary → user pushes to GitHub (one PowerShell command).
+2. Strava API app (strava.com/settings/api, callback domain matjan00.github.io) → put Client ID + Secret into Supabase dashboard → Edge Functions → Secrets as STRAVA_CLIENT_ID / STRAVA_CLIENT_SECRET.
+3. Garmin Connect → Connected apps → Strava.
+4. Install on the phone (Chrome → ⋮ → Add to Home screen / Install app) and log in.
 
-## Still to do
-1. Continue QA from the "Not yet tested" list in QA-PROGRESS.md (Sonnet; resume the same agent if possible). Check the nav.js rapid-back issue.
-2. (merged into 1)
-3. Put Supabase URL + publishable key into docs/config.js (values in lead's memory notes).
-4. Deploy edge functions (fetch-recipe, strava) + run supabase/strava.sql; user creates the Strava API app and sets secrets himself.
-5. Show the user a summary, then push to GitHub (user runs the push command; PowerShell needs `$env:Path += ";C:\Program Files\Git\cmd"`).
+## Later ideas (from QA)
+- Allow moving food-search / quick-add diary entries between meals (only recipe entries can move now).
+- Recipes whose caption has no line breaks at all still parse only partially (edit screen fixes it).
