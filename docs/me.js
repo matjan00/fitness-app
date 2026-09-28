@@ -6,6 +6,7 @@ import * as store from './store.js';
 import * as gym from './gym.js';
 import * as food from './food.js';
 import * as run from './run.js';
+import * as update from './update.js';
 
 export const tab = { id: 'me', title: 'Me', icon: 'me', render };
 export const homeCard = null;
@@ -22,7 +23,10 @@ function render(el) {
       </div>
       <input type="file" id="me-file" accept="application/json,.json" hidden>
     </div>
+    <h3 class="section-title">App</h3>
+    <div class="card row between" id="me-version"></div>
     <p class="tiny muted center" style="margin-top:24px">Exercise pictures: free-exercise-db (public domain)</p>`;
+  renderVersion($('#me-version', el));
 
   const wrap = $('#me-sections', el);
   [gym, run, food].map((m) => m.meSection).filter(Boolean).sort((a, b) => a.order - b.order).forEach((s) => {
@@ -50,6 +54,24 @@ function render(el) {
       toast(`Restored ${n} items`);
     } catch (ex) {
       toast(ex.message);
+    }
+  };
+}
+
+// "App version 11 · Up to date" with a Check for updates / Update button.
+function renderVersion(box, status = '') {
+  const newer = update.newerVersion();
+  box.innerHTML = `<div class="grow"><b>App version ${update.APP_VERSION}</b>
+      <p class="small ${newer ? 'up' : 'muted'}">${newer ? `Version ${newer} is available` : esc(status || 'Tap to check for a newer version')}</p></div>
+    <button class="${newer ? 'primary' : 'ghost'}" id="me-update">${icon('sync')} ${newer ? 'Update' : 'Check'}</button>`;
+  $('#me-update', box).onclick = async (e) => {
+    e.currentTarget.disabled = true;
+    if (update.newerVersion()) return update.applyUpdate();
+    try {
+      await update.checkForUpdate();
+      renderVersion(box, 'Up to date');
+    } catch {
+      renderVersion(box, "Couldn't check — are you online?");
     }
   };
 }

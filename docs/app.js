@@ -15,7 +15,7 @@ import * as gym from './gym.js';
 import * as food from './food.js';
 import * as run from './run.js';
 import * as me from './me.js';
-import { APP_VERSION } from './version.js';
+import * as update from './update.js';
 
 const modules = [gym, run, food, me];
 const tabs = [
@@ -30,41 +30,21 @@ function greeting() {
   return h < 5 ? 'Good night' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
 }
 
-// ---------- updates ----------
-// version.js travels with the (cached) app; version.json is always fetched fresh from the website.
-// When the website has a newer number, Home shows an "Update" button that drops the saved copy and reloads.
-let newVersion = null;
-
+// Home shows an "Update" card when the website has a newer version (see update.js).
 async function checkForUpdate() {
-  try {
-    const res = await fetch(`version.json?t=${Date.now()}`, { cache: 'no-store' });
-    if (!res.ok) return;
-    const { v } = await res.json();
-    if (Number(v) > APP_VERSION && newVersion !== v) {
-      newVersion = v;
-      if (current === 'home') renderTab();
-    }
-  } catch { /* offline — try again later */ }
-}
-
-async function applyUpdate() {
-  try {
-    const regs = (await navigator.serviceWorker?.getRegistrations?.()) || [];
-    await Promise.all(regs.map((r) => r.update().catch(() => {})));
-    const keys = await caches.keys();
-    await Promise.all(keys.filter((k) => k !== 'fit-images').map((k) => caches.delete(k)));
-  } catch { /* reload anyway */ }
-  location.reload();
+  const before = update.newerVersion();
+  try { await update.checkForUpdate(); } catch { return; /* offline — try again later */ }
+  if (update.newerVersion() !== before && current === 'home') renderTab();
 }
 
 function renderHome(el) {
   el.innerHTML = `<div class="page-head"><p class="muted">${new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
     <h1>${greeting()}</h1></div>
-    ${newVersion ? `<div class="card update-card"><div class="grow"><b>New version available</b>
+    ${update.newerVersion() ? `<div class="card update-card"><div class="grow"><b>New version available</b>
       <p class="small muted">Get the latest features and fixes. Your data stays.</p></div>
       <button class="primary" id="app-update">${icon('sync')} Update</button></div>` : ''}
     <div class="home-cards"></div>`;
-  $('#app-update', el)?.addEventListener('click', (e) => { e.currentTarget.disabled = true; applyUpdate(); });
+  $('#app-update', el)?.addEventListener('click', (e) => { e.currentTarget.disabled = true; update.applyUpdate(); });
   const wrap = $('.home-cards', el);
   modules.map((m) => m.homeCard).filter(Boolean).sort((a, b) => a.order - b.order).forEach((c) => {
     const d = document.createElement('div');
