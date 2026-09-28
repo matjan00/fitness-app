@@ -4,7 +4,12 @@
 //   fetchRecipe(url, { fetchImpl, hostCheck, timeoutMs, maxBytes }) → normalized result:
 //     { source: 'web'|'tiktok'|'youtube', url, title, image, author, text, links: [], jsonld: null | {
 //         ingredients: [], steps: [], servings, yield, prepMin, cookMin, totalMin, nutrition: { kcal, protein, carbs, fat, servingSize } | null,
-//         description, keywords, category, cuisine } }
+//         description, keywords, category, cuisine },
+//       transcript: null | string, transcriptLang: null | string }
+//
+//   For TikTok/YouTube, `transcript` is a best-effort fallback: the video's spoken subtitles (auto-generated
+//   or not), cleaned of WebVTT timestamps/markup, used only when the caption/description text itself doesn't
+//   already look like it holds a recipe (few/no "quantity + unit" lines). The app decides what to do with it.
 //
 // Everything below the fetch helpers is pure (string in → object out) and unit-tested in tests/food-extract.test.js.
 
@@ -454,6 +459,90 @@ export function parseTikTokHtml(html) {
   return { title: desc, author, image: image || metaContent(html, ['og:image']) };
 }
 
+// ---------- subtitles / transcript (fallback when the caption/description has no recipe) ----------
+
+// Rough check: does this text already contain at least two "quantity + unit" ingredient-shaped lines?
+// (A lighter-weight cousin of the app's own parser — good enough to decide whether a video needs its
+// spoken subtitles fetched at all; the app makes the final call with the full parser.)
+const QTY_UNIT_RE = /\b\d+[.,]?\d*\s*(?:g|gr|gram\w*|kg|dag|dkg|ml|l|litr\w*|łyż\w*|szklank\w*|szt\w*|ząb\w*|ząb\w*|cup|cups|tbsp|tsp|oz|lb|garś\w*|garsc\w*|szczypt\w*|pinch\w*)\b/giu;
+export function looksLikeRecipe(text) {
+  const s = String(text || '');
+  if (!s.trim()) return false;
+  const hits = s.match(QTY_UNIT_RE) || [];
+  return hits.length >= 2;
+}
+
+// WebVTT (or near-VTT) → clean prose: drops the header, cue numbers, timestamp lines and inline tags,
+// and collapses rolling/cumulative auto-caption lines (each new line repeating the previous one plus a
+// few more words) down to the longest version of each.
+export function cleanVtt(vtt) {
+  const lines = String(vtt || '').replace(/\r/g, '').split('\n');
+  const kept = [];
+  for (let raw of lines) {
+    let l = raw.trim();
+    if (!l) continue;
+    if (/^WEBVTT\b/i.test(l)) continue;
+    if (/^(NOTE|STYLE|REGION|Kind|Language)\b/i.test(l)) continue;
+    if (/^\d+$/.test(l)) continue; // cue number
+    if (/^\d{2}(:\d{2}){1,2}[.,]\d{3}\s*-->/.test(l)) continue; // timestamp line (with optional cue settings)
+    l = decodeEntities(l.replace(/<[^>]*>/g, '')).replace(/\s+/g, ' ').trim();
+    if (l) kept.push(l);
+  }
+  const merged = [];
+  for (const l of kept) {
+    const last = merged[merged.length - 1];
+    if (last && (l.startsWith(last) || last.startsWith(l))) merged[merged.length - 1] = l.length > last.length ? l : last;
+    else merged.push(l);
+  }
+  return merged.join(' ').replace(/\s+/g, ' ').trim();
+}
+
+// YouTube's default caption format (XML: <text start="…" dur="…">…</text>) — used when the ?fmt=vtt
+// request comes back empty.
+export function youtubeCaptionXmlToText(xml) {
+  const matches = [...String(xml || '').matchAll(/<text\b[^>]*>([\s\S]*?)<\/text>/g)];
+  const lines = matches.map((m) => decodeEntities(m[1].replace(/<[^>]+>/g, '')).replace(/\s+/g, ' ').trim()).filter(Boolean);
+  const merged = [];
+  for (const l of lines) {
+    const last = merged[merged.length - 1];
+    if (last && (l.startsWith(last) || last.startsWith(l))) merged[merged.length - 1] = l.length > last.length ? l : last;
+    else merged.push(l);
+  }
+  return merged.join(' ').replace(/\s+/g, ' ').trim();
+}
+
+// Pick the best subtitle/caption track: Polish first, then English, then whatever is there; within a
+// language, a human-written track wins over an auto-generated ("ASR"/"asr") one.
+export function pickSubtitle(list, getLang, isAsr = () => false) {
+  if (!Array.isArray(list) || !list.length) return null;
+  const groups = [['pl', 'pol'], ['en', 'eng']];
+  const inGroup = (lang, g) => g.some((p) => lang.toLowerCase().startsWith(p));
+  for (const g of groups) {
+    const matches = list.filter((x) => inGroup(getLang(x) || '', g));
+    if (matches.length) return matches.find((x) => !isAsr(x)) || matches[0];
+  }
+  return list[0];
+}
+
+// TikTok video JSON → its subtitle track list (video.subtitleInfos / claSubtitleInfos), each item like
+// { LanguageCodeName: 'pol-PL', Url, Format: 'webvtt', Source: 'ASR' | 'MT' | ... }.
+export function tiktokSubtitleList(html) {
+  const data = jsonAfter(html, 'id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">')
+    || jsonAfter(html, '<script id="SIGI_STATE" type="application/json">');
+  const item = data?.__DEFAULT_SCOPE__?.['webapp.video-detail']?.itemInfo?.itemStruct
+    || (data?.ItemModule && Object.values(data.ItemModule)[0]) || null;
+  const list = item?.video?.subtitleInfos || item?.video?.claSubtitleInfos || [];
+  return Array.isArray(list) ? list : [];
+}
+
+// YouTube watch page JSON → its caption track list (captions.playerCaptionsTracklistRenderer.captionTracks),
+// each item like { baseUrl, languageCode: 'pl', kind: 'asr' | undefined, name: { simpleText } }.
+export function youtubeCaptionTracks(html) {
+  const pr = jsonAfter(html, 'ytInitialPlayerResponse = ') || jsonAfter(html, 'ytInitialPlayerResponse=') || jsonAfter(html, '"playerResponse":');
+  const tracks = pr?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
+  return Array.isArray(tracks) ? tracks : [];
+}
+
 // Links in a caption/description that look like a recipe page ("Przepis: https://…")
 export function recipeLinks(text) {
   return [...String(text || '').matchAll(/https?:\/\/[^\s<>"')\]]+/g)].map((m) => m[0].replace(/[.,;:!?]+$/, ''))
@@ -474,7 +563,22 @@ export async function fetchRecipe(rawUrl, opts = {}) {
     const page = await fetchText(watch, { ...opts, headers: { Cookie: 'SOCS=CAI; CONSENT=YES+cb.20240101-00-p0.pl+FX+000' } });
     const out = parseYouTube(page.text, `https://www.youtube.com/watch?v=${id}`);
     if (!out.title && !out.text) throw new FetchError('YouTube did not return the video details. Paste the description as text instead.', 502);
-    return { ...out, links: recipeLinks(out.text) };
+    let transcript = null, transcriptLang = null;
+    if (!looksLikeRecipe(out.text)) {
+      try {
+        const track = pickSubtitle(youtubeCaptionTracks(page.text), (t) => t.languageCode, (t) => t.kind === 'asr');
+        if (track?.baseUrl) {
+          const v = await fetchText(`${track.baseUrl}&fmt=vtt`, { ...opts, maxBytes: 500000, accept: 'text/vtt,*/*' });
+          let cleaned = cleanVtt(v.text);
+          if (!cleaned) {
+            const x = await fetchText(track.baseUrl, { ...opts, maxBytes: 500000, accept: 'text/xml,*/*' });
+            cleaned = youtubeCaptionXmlToText(x.text);
+          }
+          if (cleaned) { transcript = cleaned; transcriptLang = track.languageCode || null; }
+        }
+      } catch { /* subtitles are a best-effort extra */ }
+    }
+    return { ...out, links: recipeLinks(out.text), transcript, transcriptLang };
   }
 
   if (kind === 'tiktok') {
@@ -486,6 +590,7 @@ export async function fetchRecipe(rawUrl, opts = {}) {
     }
     final = final.split('?')[0];
     let meta = null;
+    let pageHtml = null;
     try {
       const o = await fetchText(`https://www.tiktok.com/oembed?url=${encodeURIComponent(final)}`, { ...opts, accept: 'application/json' });
       meta = parseTikTokOembed(JSON.parse(o.text));
@@ -493,12 +598,25 @@ export async function fetchRecipe(rawUrl, opts = {}) {
     if (!meta || !meta.title) {
       try {
         const page = await fetchText(final, opts);
-        const p = parseTikTokHtml(page.text);
+        pageHtml = page.text;
+        const p = parseTikTokHtml(pageHtml);
         meta = { title: p.title || meta?.title || '', author: p.author || meta?.author || null, image: meta?.image || p.image };
       } catch (e) { if (!meta) throw e; }
     }
     if (!meta?.title) throw new FetchError('TikTok did not return the caption. Paste it as text instead.', 502);
-    return { source: 'tiktok', url: final, title: '', image: meta.image, author: meta.author, text: meta.title, jsonld: null, links: recipeLinks(meta.title) };
+    let transcript = null, transcriptLang = null;
+    if (!looksLikeRecipe(meta.title)) {
+      try {
+        if (!pageHtml) pageHtml = (await fetchText(final, opts)).text;
+        const sub = pickSubtitle(tiktokSubtitleList(pageHtml), (s) => s.LanguageCodeName, (s) => s.Source === 'ASR');
+        if (sub?.Url) {
+          const v = await fetchText(sub.Url, { ...opts, maxBytes: 500000, accept: 'text/vtt,*/*' });
+          const cleaned = cleanVtt(v.text);
+          if (cleaned) { transcript = cleaned; transcriptLang = sub.LanguageCodeName || null; }
+        }
+      } catch { /* subtitles are a best-effort extra */ }
+    }
+    return { source: 'tiktok', url: final, title: '', image: meta.image, author: meta.author, text: meta.title, jsonld: null, links: recipeLinks(meta.title), transcript, transcriptLang };
   }
 
   const page = await fetchText(url, opts);

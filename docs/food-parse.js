@@ -261,6 +261,55 @@ function weightIn(text) {
   return Math.round(q * k * 10) / 10;
 }
 
+// ---------- prose ingredients (spoken transcripts) ----------
+// Units minus the ones that are only trustworthy right after a digit ("x", "c", "a", …) — too likely to
+// be an ordinary word when scanning free-flowing sentences instead of one-ingredient-per-line text.
+const PROSE_UNIT_ALTS = [...UNIT_LOOKUP.keys()].filter((w) => !WEAK_UNITS.has(w)).sort((a, b) => b.length - a.length)
+  .map((w) => w.replace(/[.]/g, '\\.').replace(/ /g, '\\s+'));
+const PROSE_UNIT_RE = `(?:${PROSE_UNIT_ALTS.join('|')})`;
+// A number (digit or word, incl. "a"/"an" — only meaningful once a unit follows) directly followed by a unit:
+// "200 gram", "dwie łyżki", "pół szklanki", "two cups", "a pinch".
+const PROSE_ANCHOR_RE = new RegExp(`\\b(${RANGE}|${WORD_NUM_RE})\\s*(${PROSE_UNIT_RE})\\b`, 'giu');
+// Where a candidate ingredient name should stop: sentence punctuation, a conjunction joining the next
+// clause/ingredient, or a cooking-action verb ("i mieszamy", "and stir").
+const PROSE_STOP_RE = /[.!?\n;]|\b(?:oraz|i|plus|and|then|next|potem|nastepnie|a takze|do)\b|\b(?:dodaj|dodac|wymieszaj|wymieszac|smaz\w*|piecz\w*|piec\b|gotuj\w*|gotowac|pokroj\w*|pokroic|wlej\w*|wlac|podsmaz\w*|dus\w*|dusic|zagotuj\w*|odcedz\w*|przelozy?c?\w*|posyp\w*|podawaj\w*|podac|rozgrzej\w*|nagrzej\w*|wstaw\w*|wyjmij\w*|zblenduj\w*|zmiksuj\w*|ubij\w*|obierz\w*|posiekaj\w*|marynuj\w*|dopraw\w*|mix|add|stir|bake|cook|fry|boil|simmer|chop|slice|heat|preheat|serve|pour|whisk|season|combine|place|remove|blend|roast|grill|transfer|spread|sprinkle|drain)\b/i;
+const MAX_PROSE_NAME = 60; // characters
+const DANGLING_TAIL = /\s+(?:z|w|i|o|do|of|with|and|a|an)$/i;
+
+// Scan free prose (a spoken-recipe transcript, no ingredient list) for "quantity + unit + ingredient" phrases
+// and return them as candidate lines in the same shape splitRecipeText().ingredients produces — plain
+// strings that parseIngredient() can parse. Best-effort: it only catches phrases with a recognizable unit,
+// so bare counts ("3 eggs") inside prose are not picked up (too ambiguous — could be a time, a temperature…).
+export function extractProseIngredients(text) {
+  const s = String(text ?? '').slice(0, 20000);
+  const f = fold(s);
+  const seen = new Set();
+  const out = [];
+  const anchors = [...f.matchAll(PROSE_ANCHOR_RE)];
+  for (let i = 0; i < anchors.length; i++) {
+    const m = anchors[i];
+    const anchorStart = m.index;
+    const anchorEnd = m.index + m[0].length;
+    const nextStart = anchors[i + 1] ? anchors[i + 1].index : f.length;
+    const segment = f.slice(anchorEnd, Math.min(nextStart, anchorEnd + MAX_PROSE_NAME + 20));
+    let end = Math.min(segment.length, MAX_PROSE_NAME);
+    const stop = segment.search(PROSE_STOP_RE);
+    if (stop >= 0) end = Math.min(end, stop);
+    const nameFolded = segment.slice(0, end).trim();
+    if (!/\p{L}/u.test(nameFolded)) continue; // no actual ingredient word followed the quantity
+    // Slice the ORIGINAL (accented, cased) text using the same offsets: fold() preserves character
+    // count/position for Polish diacritics (ą→a, ł→l, …), so indices line up.
+    let line = s.slice(anchorStart, anchorEnd + end).trim().replace(DANGLING_TAIL, '').trim();
+    line = line.replace(/[,;:]+$/, '').trim();
+    if (!line) continue;
+    const key = fold(line);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(line);
+  }
+  return out;
+}
+
 // ---------- servings ----------
 export function parseServings(text) {
   const f = fold(text);

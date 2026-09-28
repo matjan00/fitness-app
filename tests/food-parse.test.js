@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseIngredient, parseQty, parseServings, splitRecipeText, fold, shortTitle, durationMin } from '../docs/food-parse.js';
+import { parseIngredient, parseQty, parseServings, splitRecipeText, fold, shortTitle, durationMin, extractProseIngredients } from '../docs/food-parse.js';
 
 const P = (line) => {
   const r = parseIngredient(line);
@@ -234,4 +234,46 @@ test('shortTitle and durations', () => {
   assert.equal(durationMin('PT1H20M'), 80);
   assert.equal(durationMin('PT45M'), 45);
   assert.equal(durationMin(''), null);
+});
+
+// ---------- prose ingredients (spoken transcripts, no written recipe) ----------
+test('extractProseIngredients finds quantity+unit+ingredient phrases in Polish prose', () => {
+  const cases = [
+    ['Dodajemy 200 gram piersi z kurczaka do garnka.', ['200 gram piersi z kurczaka']],
+    ['Bierzemy dwie łyżki oliwy z oliwek i mieszamy.', ['dwie łyżki oliwy z oliwek']],
+    ['Wlewamy pół szklanki mleka.', ['pół szklanki mleka']],
+    ['Do miski wsypujemy 3 szklanki mąki pszennej.', ['3 szklanki mąki pszennej']],
+    ['Dosypujemy jedną szczyptę soli.', ['jedną szczyptę soli']],
+    ['Dorzucamy dwa ząbki czosnku.', ['dwa ząbki czosnku']],
+    ['Mieszamy z jedną łyżeczką cynamonu.', ['jedną łyżeczką cynamonu']],
+    ['Bierzemy półtorej szklanki wody.', ['półtorej szklanki wody']],
+  ];
+  for (const [text, expected] of cases) assert.deepEqual(extractProseIngredients(text), expected, text);
+});
+
+test('extractProseIngredients finds quantity+unit+ingredient phrases in English prose', () => {
+  const cases = [
+    ['Add two cups of flour and mix well.', ['two cups of flour']],
+    ['You will need a pinch of salt.', ['a pinch of salt']],
+    ['Add 200 g of chicken and one tablespoon of oil.', ['200 g of chicken', 'one tablespoon of oil']],
+    ['Now stir in half a cup of milk.', ['a cup of milk']],
+    ['Whisk together a cup of sugar and two eggs.', ['a cup of sugar']],
+  ];
+  for (const [text, expected] of cases) assert.deepEqual(extractProseIngredients(text), expected, text);
+});
+
+test('extractProseIngredients: the resulting lines parse into real ingredients', () => {
+  const lines = extractProseIngredients('Dodajemy 200 gram piersi z kurczaka, dwie łyżki oliwy z oliwek oraz szczyptę soli.');
+  const parsed = lines.map((l) => { const p = parseIngredient(l); return { qty: p.qty, unit: p.unit, name: p.name }; });
+  assert.deepEqual(parsed, [
+    { qty: 200, unit: 'g', name: 'piersi z kurczaka' },
+    { qty: 2, unit: 'tbsp', name: 'oliwy z oliwek' },
+  ]);
+});
+
+test('extractProseIngredients ignores bare numbers without a unit (times, temperatures) and dedupes', () => {
+  assert.deepEqual(extractProseIngredients('Pieczemy w 180 stopniach przez 10 minut.'), []);
+  assert.equal(extractProseIngredients('We can now serve the dish with rice.').length, 0);
+  const dup = extractProseIngredients('Dodaj 200 g mąki. Później dosyp jeszcze 200 g mąki.');
+  assert.deepEqual(dup, ['200 g mąki']);
 });

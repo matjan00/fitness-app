@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   checkUrl, classify, youtubeId, extractFromHtml, parseYouTube, parseTikTokOembed, parseTikTokHtml, decodeEntities, htmlToText,
   durationMin, isPrivateAddress, recipeLinks, fetchText, fetchRecipe, FetchError,
+  looksLikeRecipe, cleanVtt, youtubeCaptionXmlToText, pickSubtitle, tiktokSubtitleList, youtubeCaptionTracks,
 } from '../supabase/functions/fetch-recipe/extract.js';
 
 test('URL safety checks', () => {
@@ -138,4 +139,135 @@ test('fetchRecipe: TikTok short link → oEmbed caption', async () => {
   assert.equal(r.text, 'Sushi  Składniki:  250 g ryżu');
   assert.equal(r.author, 'Ewa');
   await assert.rejects(fetchRecipe('https://www.instagram.com/reel/abc', { fetchImpl: f }), /Instagram/);
+});
+
+// ---------- subtitles / transcript fallback ----------
+
+test('looksLikeRecipe: caption text with real quantities vs a bare hook line', () => {
+  assert.equal(looksLikeRecipe('Kurczak po koreańsku: 200 g piersi z kurczaka, 2 łyżki sosu sojowego'), true);
+  assert.equal(looksLikeRecipe('250 g ryżu i reszta w wideo'), false); // only one quantity
+  assert.equal(looksLikeRecipe('GOTUJEMY'), false);
+  assert.equal(looksLikeRecipe(''), false);
+  assert.equal(looksLikeRecipe('Add 200 g of chicken and 2 tbsp of oil'), true);
+});
+
+// Trimmed, real WebVTT returned by a TikTok "pol-PL" ASR subtitle track (whisper-generated).
+const TIKTOK_VTT = `WEBVTT
+
+00:00:00.040 --> 00:00:03.000
+Halinka jakie my dzisiaj przepyszne rzeczy gotujemy
+
+00:00:14.400 --> 00:00:16.520
+co my w ogóle robimy kurczaka Po koreańsku
+
+00:00:29.280 --> 00:00:31.880
+czyli basmati 13
+
+00:00:31.881 --> 00:00:33.961
+15min 1 torebka`;
+
+test('cleanVtt strips timestamps/header and joins into prose', () => {
+  const out = cleanVtt(TIKTOK_VTT);
+  assert.equal(out, 'Halinka jakie my dzisiaj przepyszne rzeczy gotujemy co my w ogóle robimy kurczaka Po koreańsku czyli basmati 13 15min 1 torebka');
+});
+
+test('cleanVtt collapses rolling/cumulative caption lines', () => {
+  const rolling = `WEBVTT
+
+00:00:00.000 --> 00:00:01.000
+Add two
+
+00:00:01.000 --> 00:00:02.000
+Add two cups
+
+00:00:02.000 --> 00:00:03.000
+Add two cups of flour`;
+  assert.equal(cleanVtt(rolling), 'Add two cups of flour');
+});
+
+test('cleanVtt strips inline tags and cue numbers', () => {
+  const withTags = `WEBVTT
+
+1
+00:00:00.000 --> 00:00:02.000 align:start position:0%
+<c>Dodajemy</c> <00:00:00.500>sól i pieprz</c>`;
+  assert.equal(cleanVtt(withTags), 'Dodajemy sól i pieprz');
+});
+
+test('youtubeCaptionXmlToText parses the default timedtext XML format', () => {
+  const xml = '<transcript><text start="0" dur="2">Add two cups</text><text start="2" dur="2">Add two cups of flour &amp; salt</text></transcript>';
+  assert.equal(youtubeCaptionXmlToText(xml), 'Add two cups of flour & salt');
+});
+
+// Trimmed shape of item.video.subtitleInfos as actually returned by a TikTok video page
+// (script#__UNIVERSAL_DATA_FOR_REHYDRATION__ → …itemStruct.video.subtitleInfos).
+test('tiktokSubtitleList reads real subtitleInfos shape and pickSubtitle prefers Polish', () => {
+  const html = '<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">' + JSON.stringify({
+    __DEFAULT_SCOPE__: { 'webapp.video-detail': { itemInfo: { itemStruct: { desc: 'GOTUJEMY', video: {
+      subtitleInfos: [
+        { LanguageID: '28', LanguageCodeName: 'pol-PL', Url: 'https://v16.tiktokcdn.com/pl.vtt', Format: 'webvtt', Version: '1:whisper_lid', Source: 'ASR' },
+        { LanguageID: '1', LanguageCodeName: 'eng-US', Url: 'https://v16.tiktokcdn.com/en.vtt', Format: 'webvtt', Source: 'ASR' },
+      ],
+    } } } } },
+  }) + '</script>';
+  const list = tiktokSubtitleList(html);
+  assert.equal(list.length, 2);
+  const pick = pickSubtitle(list, (s) => s.LanguageCodeName, (s) => s.Source === 'ASR');
+  assert.equal(pick.LanguageCodeName, 'pol-PL');
+  assert.equal(pick.Url, 'https://v16.tiktokcdn.com/pl.vtt');
+});
+
+test('pickSubtitle falls back to English, then to whatever is first, and prefers non-ASR', () => {
+  const enOnly = [{ LanguageCodeName: 'eng-US', Url: 'e' }, { LanguageCodeName: 'jpn-JP', Url: 'j' }];
+  assert.equal(pickSubtitle(enOnly, (s) => s.LanguageCodeName).Url, 'e');
+  const otherOnly = [{ LanguageCodeName: 'jpn-JP', Url: 'j' }, { LanguageCodeName: 'deu-DE', Url: 'd' }];
+  assert.equal(pickSubtitle(otherOnly, (s) => s.LanguageCodeName).Url, 'j');
+  assert.equal(pickSubtitle([], (s) => s.LanguageCodeName), null);
+  const manualVsAsr = [{ languageCode: 'pl', kind: 'asr', baseUrl: 'a' }, { languageCode: 'pl', baseUrl: 'm' }];
+  assert.equal(pickSubtitle(manualVsAsr, (t) => t.languageCode, (t) => t.kind === 'asr').baseUrl, 'm');
+});
+
+// Trimmed shape of captions.playerCaptionsTracklistRenderer.captionTracks as actually returned by a
+// YouTube watch page's ytInitialPlayerResponse.
+test('youtubeCaptionTracks reads real captionTracks shape from ytInitialPlayerResponse', () => {
+  const html = 'var ytInitialPlayerResponse = ' + JSON.stringify({
+    captions: { playerCaptionsTracklistRenderer: { captionTracks: [
+      { baseUrl: 'https://www.youtube.com/api/timedtext?lang=en', vssId: '.en', languageCode: 'en', name: { simpleText: 'English' } },
+      { baseUrl: 'https://www.youtube.com/api/timedtext?lang=en&kind=asr', vssId: 'a.en', languageCode: 'en', kind: 'asr', name: { simpleText: 'English (auto)' } },
+    ] } },
+    videoDetails: { title: 'x' },
+  }) + '; var x = 1;';
+  const tracks = youtubeCaptionTracks(html);
+  assert.equal(tracks.length, 2);
+  const pick = pickSubtitle(tracks, (t) => t.languageCode, (t) => t.kind === 'asr');
+  assert.equal(pick.vssId, '.en');
+});
+
+test('fetchRecipe: TikTok falls back to spoken subtitles when the caption has no recipe', async () => {
+  const full = 'https://www.tiktok.com/@gloriankaaa/video/7486173288650034454';
+  const html = '<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">' + JSON.stringify({
+    __DEFAULT_SCOPE__: { 'webapp.video-detail': { itemInfo: { itemStruct: { desc: 'GOTUJEMY', author: { nickname: 'Glorianka' }, video: {
+      cover: 'https://c/x.jpg',
+      subtitleInfos: [{ LanguageID: '28', LanguageCodeName: 'pol-PL', Url: 'https://cdn.tiktok.com/sub.vtt', Format: 'webvtt', Source: 'ASR' }],
+    } } } } },
+  }) + '</script>';
+  const f = fakeFetch({
+    [`https://www.tiktok.com/oembed?url=${encodeURIComponent(full)}`]: { body: 'not json', type: 'application/json' },
+    [full]: { body: html },
+    'https://cdn.tiktok.com/sub.vtt': { body: TIKTOK_VTT, type: 'text/plain' },
+  });
+  const r = await fetchRecipe(full, { fetchImpl: f });
+  assert.equal(r.text, 'GOTUJEMY');
+  assert.equal(r.transcriptLang, 'pol-PL');
+  assert.match(r.transcript, /kurczaka Po koreańsku/);
+});
+
+test('fetchRecipe: TikTok skips subtitles when the caption already has a recipe', async () => {
+  const full = 'https://www.tiktok.com/@ewa/video/111';
+  const f = fakeFetch({
+    [`https://www.tiktok.com/oembed?url=${encodeURIComponent(full)}`]: { body: JSON.stringify({ title: 'Sushi: 250 g ryżu, 2 łyżki octu', author_name: 'Ewa', thumbnail_url: 'https://t/1.jpg' }), type: 'application/json' },
+  });
+  const r = await fetchRecipe(full, { fetchImpl: f });
+  assert.equal(r.transcript, null);
+  assert.equal(r.transcriptLang, null);
 });

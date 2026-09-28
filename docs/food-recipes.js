@@ -4,7 +4,7 @@ import { $, $$, esc, icon, toast, n0, n1, parseNum, local, today, uid } from './
 import * as store from './store.js';
 import { push, page, sheet, confirmSheet, chooseSheet } from './nav.js';
 import { SUPABASE_URL, SUPABASE_KEY } from './config.js';
-import { parseIngredient, splitRecipeText, extractLinks, shortTitle, UNIT_LABEL } from './food-parse.js';
+import { parseIngredient, splitRecipeText, extractLinks, shortTitle, UNIT_LABEL, extractProseIngredients } from './food-parse.js';
 import { bestMatch, toGrams } from './food-db.js';
 import { recipeTotals, perServing, macrosFor, ingredientStatus } from './food-calc.js';
 import { CATEGORIES, suggestCategories, catLabel } from './food-cats.js';
@@ -52,6 +52,10 @@ export function draftFromFetched(j) {
   const ld = j.jsonld;
   const parsed = splitRecipeText(j.text || '');
   const useLd = ld && ld.ingredients?.length;
+  // The caption/description had no recipe in it (few or no "quantity + unit" lines) but the video's
+  // spoken subtitles did — fall back to ingredients picked out of that prose transcript.
+  const useTranscript = !useLd && !parsed.ingredients.length && !!(j.transcript && j.transcript.trim());
+  const transcriptLines = useTranscript ? extractProseIngredients(j.transcript) : [];
   const title = (ld?.title || j.title || parsed.title || '').trim();
   const d = {
     title: j.source === 'tiktok' ? (parsed.title || shortTitle(j.text) || 'TikTok recipe') : shortTitle(title) || title,
@@ -60,7 +64,7 @@ export function draftFromFetched(j) {
     servings: (useLd && ld.servings) || parsed.servings || ld?.servings || 2,
     prepMin: ld?.prepMin || null,
     cookMin: ld?.cookMin || (ld?.totalMin && !ld?.prepMin ? ld.totalMin : null),
-    ingredients: linesToIngredients(useLd ? ld.ingredients : parsed.ingredients),
+    ingredients: linesToIngredients(useLd ? ld.ingredients : useTranscript ? transcriptLines : parsed.ingredients),
     steps: useLd ? ld.steps : parsed.steps,
     notes: '',
     text: j.text || '',
@@ -68,7 +72,17 @@ export function draftFromFetched(j) {
     siteNutrition: ld?.nutrition || null,
   };
   if (j.source === 'youtube' && j.title) d.title = shortTitle(j.title) || j.title;
-  if (!d.ingredients.length && !d.steps.length && j.text) d.notes = j.text.slice(0, 3000);
+  if (useTranscript) {
+    // The transcript text itself becomes the notes, so the user can read the whole spoken recipe.
+    d.notes = j.transcript.slice(0, 3000);
+    if (!d.title) d.title = shortTitle(j.transcript) || d.title;
+    d.notice = 'Recipe taken from the video’s spoken subtitles — check the amounts.';
+  } else if (!d.ingredients.length && !d.steps.length && j.text) {
+    d.notes = j.text.slice(0, 3000);
+  }
+  if (!d.ingredients.length && !d.steps.length && !(j.transcript && j.transcript.trim())) {
+    d.notice = 'This video has no written recipe or subtitles — type or paste the recipe below.';
+  }
   return d;
 }
 export function draftFromText(text) {
@@ -194,6 +208,7 @@ export function editRecipe(draft, { id = null } = {}) {
     el.innerHTML = page({ title: id ? 'Edit recipe' : 'Review recipe', right: '<button class="primary" id="fd-save">Save</button>', body: `
       <div class="fd-edit-hero">${img(r.image, 'fd-hero-img')}
         ${r.image ? '<button class="icon-btn fd-img-x" id="fd-noimg" aria-label="Remove photo">' + icon('close') + '</button>' : ''}</div>
+      ${r.notice ? `<div class="card flat small" style="margin-top:12px">${icon('info')} ${esc(r.notice)}</div>` : ''}
       <div class="form" style="margin-top:12px">
         <label>Title<input id="fd-title" value="${esc(r.title)}" placeholder="Recipe name"></label>
         <div class="fd-3"><label>Servings<input id="fd-serv" inputmode="numeric" value="${esc(r.servings)}"></label>
