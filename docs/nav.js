@@ -16,11 +16,43 @@ export const setRevealHandler = (fn) => { onReveal = fn; };
 export const depth = () => stack.length;
 export const top = () => stack[stack.length - 1];
 
+// Going back is asynchronous (history.back() → popstate later). If code closes a screen and opens
+// another straight away, the new screen must wait until the back step has landed; otherwise the
+// pending back would close the new screen instead and the stack would drift from browser history.
+let pendingBack = 0;          // back steps requested but not yet received
+const waiting = [];           // screens to open once pendingBack reaches 0
+let backTimer = null;
+
+function goBack(steps) {
+  pendingBack += steps;
+  clearTimeout(backTimer);
+  // Safety net: if the browser never reports the back step, don't block new screens forever.
+  backTimer = setTimeout(() => { pendingBack = 0; flushWaiting(); }, 1000);
+  history.go(-steps);
+}
+
+function flushWaiting() {
+  while (pendingBack === 0 && waiting.length) activate(waiting.shift());
+}
+
+function activate(screen) {
+  const { el, opts } = screen;
+  document.body.append(el);
+  stack.push(screen);
+  history.pushState({ depth: stack.length }, '');
+  screen.render();
+  if (opts.sheet) {
+    el.addEventListener('click', (e) => { if (e.target === el) screen.close(); });
+  }
+  requestAnimationFrame(() => el.classList.add('open'));
+  document.body.classList.add('has-screen');
+}
+
 export function push(build, opts = {}) {
   const el = document.createElement('div');
   el.className = opts.sheet ? 'sheet-wrap' : 'screen';
   if (opts.className) el.classList.add(...opts.className.split(' '));
-  document.body.append(el);
+  let closing = false;
   const screen = {
     el,
     opts,
@@ -31,25 +63,30 @@ export function push(build, opts = {}) {
       const sc2 = el.querySelector('.scroll');
       if (sc2) sc2.scrollTop = pos;
     },
-    close() { if (stack.includes(screen)) history.back(); },
+    close() {
+      const i = waiting.indexOf(screen);
+      if (i >= 0) { waiting.splice(i, 1); try { opts.onClose?.(); } catch (e) { console.error(e); } return; }
+      if (closing || !stack.includes(screen)) return;
+      closing = true;
+      // Close this screen and anything opened on top of it.
+      goBack(stack.length - stack.indexOf(screen));
+    },
   };
-  stack.push(screen);
-  history.pushState({ depth: stack.length }, '');
-  screen.render();
-  if (opts.sheet) {
-    el.addEventListener('click', (e) => { if (e.target === el) screen.close(); });
-  }
-  requestAnimationFrame(() => el.classList.add('open'));
-  document.body.classList.add('has-screen');
+  if (pendingBack > 0) waiting.push(screen);
+  else activate(screen);
   return screen;
 }
 
 window.addEventListener('popstate', (e) => {
   // history.go(-n) fires a single popstate, so close every screen deeper than the state we landed on.
   const target = Math.max(0, Math.min(e.state?.depth ?? 0, stack.length - 1));
+  const popped = stack.length - target;
   while (stack.length > target) closeTop();
+  pendingBack = Math.max(0, pendingBack - popped);
+  if (pendingBack === 0) clearTimeout(backTimer);
   const next = top();
   if (next) next.render(); else onReveal();
+  flushWaiting();
 });
 
 function closeTop() {
@@ -64,8 +101,9 @@ function closeTop() {
 
 // Close every open screen (e.g. after finishing a workout).
 export function closeAll() {
-  const n = stack.length;
-  if (n) history.go(-n);
+  waiting.length = 0;
+  const n = stack.length - pendingBack;
+  if (n > 0) goBack(n);
 }
 
 export function page({ title = '', back = true, right = '', body = '', footer = '', sub = '' }) {
