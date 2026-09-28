@@ -7,7 +7,7 @@
 // Deploy:  supabase functions deploy fetch-recipe
 // (JWT verification stays ON: the app sends the logged-in user's token, so strangers cannot use it as a proxy.)
 
-import { fetchRecipe, FetchError, isPrivateAddress } from './extract.js';
+import { fetchRecipe, fetchImageDataUrl, FetchError, isPrivateAddress } from './extract.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -53,12 +53,28 @@ Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') return json({ error: 'Use POST with {"url": "…"}' }, 405);
   if (!(await isLoggedIn(req))) return json({ error: 'Please log in to import recipes from links.' }, 401);
 
-  let body: { url?: unknown };
+  let body: { url?: unknown; image?: unknown };
   try {
     body = await req.json();
   } catch {
-    return json({ error: 'Send JSON: {"url": "…"}' }, 400);
+    return json({ error: 'Send JSON: {"url": "…"} or {"image": "…"}' }, 400);
   }
+
+  // Image mode: fetch a remote photo server-side (avoids cross-origin canvas taint) and hand back base64,
+  // so the app can save a permanent compressed copy instead of the expiring remote URL.
+  const image = typeof body?.image === 'string' ? body.image.trim() : '';
+  if (image) {
+    if (image.length > 2000) return json({ error: 'Missing or too long "image".' }, 400);
+    try {
+      const result = await fetchImageDataUrl(image, { hostCheck });
+      return json(result);
+    } catch (e) {
+      if (e instanceof FetchError) return json({ error: e.message }, e.status);
+      console.error(e);
+      return json({ error: 'Something went wrong while fetching that image.' }, 500);
+    }
+  }
+
   const url = typeof body?.url === 'string' ? body.url.trim() : '';
   if (!url || url.length > 2000) return json({ error: 'Missing or too long "url".' }, 400);
 

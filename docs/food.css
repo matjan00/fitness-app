@@ -110,8 +110,12 @@
 .fd-guess { color: var(--gold); font-weight: 600; }
 .fd-addline { display: flex; gap: 6px; align-items: center; padding: 10px 0 6px; }
 .fd-addline input { flex: 1; min-width: 0; }
+.fd-suggest { position: absolute; left: 0; right: 40px; top: 100%; z-index: 5; margin-top: 4px; max-height: 240px; overflow: auto; padding: 4px; }
+.fd-suggest .list-item { padding: 8px 8px; }
 .fd-chipwrap { display: flex; flex-wrap: wrap; gap: 7px; }
 .fd-chipwrap .chip { padding: 6px 11px; }
+.chip.suggested { border-style: dashed; }
+.chip.suggested.on { background: var(--card-2); color: var(--text); border-color: var(--text-3); }
 .fd-orig { white-space: pre-wrap; word-break: break-word; font: 13px/1.45 inherit; font-family: inherit; background: var(--card-2); border-radius: 12px; padding: 12px; margin: 0; max-height: 320px; overflow: auto; }
 
 /* ---------- detail ---------- */

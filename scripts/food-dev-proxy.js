@@ -3,7 +3,7 @@
 // The app uses it automatically when it runs on localhost. Same code as the real function (extract.js).
 import http from 'node:http';
 import dns from 'node:dns/promises';
-import { fetchRecipe, FetchError, isPrivateAddress } from '../supabase/functions/fetch-recipe/extract.js';
+import { fetchRecipe, fetchImageDataUrl, FetchError, isPrivateAddress } from '../supabase/functions/fetch-recipe/extract.js';
 
 const port = Number(process.env.PORT) || 5191;
 const CORS = {
@@ -27,10 +27,23 @@ http.createServer(async (req, res) => {
   if (req.method !== 'POST') return send(405, { error: 'Use POST' });
   let raw = '';
   for await (const chunk of req) { raw += chunk; if (raw.length > 10000) return send(413, { error: 'Too big' }); }
-  let url = '';
-  try { url = String(JSON.parse(raw).url || '').trim(); } catch { return send(400, { error: 'Send JSON: {"url": "…"}' }); }
-  if (!url) return send(400, { error: 'Missing "url".' });
+  let body;
+  try { body = JSON.parse(raw); } catch { return send(400, { error: 'Send JSON: {"url": "…"} or {"image": "…"}' }); }
+  const image = String(body.image || '').trim();
+  const url = String(body.url || '').trim();
   const t0 = Date.now();
+  if (image) {
+    try {
+      const out = await fetchImageDataUrl(image, { hostCheck });
+      console.log(`OK ${Date.now() - t0}ms image ${image}`);
+      send(200, out);
+    } catch (e) {
+      console.log(`ERR ${Date.now() - t0}ms ${image}: ${e.message}`);
+      send(e instanceof FetchError ? e.status : 500, { error: e instanceof FetchError ? e.message : 'Something went wrong while fetching that image.' });
+    }
+    return;
+  }
+  if (!url) return send(400, { error: 'Missing "url".' });
   try {
     const out = await fetchRecipe(url, { hostCheck });
     console.log(`OK ${Date.now() - t0}ms ${out.source} ${url}`);

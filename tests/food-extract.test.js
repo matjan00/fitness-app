@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   checkUrl, classify, youtubeId, extractFromHtml, parseYouTube, parseTikTokOembed, parseTikTokHtml, decodeEntities, htmlToText,
-  durationMin, isPrivateAddress, recipeLinks, fetchText, fetchRecipe, FetchError,
+  durationMin, isPrivateAddress, recipeLinks, fetchText, fetchRecipe, fetchImageDataUrl, FetchError,
   looksLikeRecipe, cleanVtt, youtubeCaptionXmlToText, pickSubtitle, tiktokSubtitleList, youtubeCaptionTracks,
 } from '../supabase/functions/fetch-recipe/extract.js';
 
@@ -124,6 +124,40 @@ test('fetchText follows safe redirects, blocks unsafe ones, caps size', async ()
   await assert.rejects(fetchText('https://c.com/', { fetchImpl: f }), /not allowed/);
   await assert.rejects(fetchText('https://big.com/', { fetchImpl: f, maxBytes: 1000 }), /too big/);
   await assert.rejects(fetchText('https://a.com/x', { fetchImpl: f, hostCheck: async (h) => { if (h === 'b.com') throw new FetchError('That address is not allowed.'); } }), /not allowed/);
+});
+
+// A fake fetch that serves binary bodies (Uint8Array), for the image-mode tests below.
+function fakeImageFetch(routes) {
+  return async (url) => {
+    const r = routes[url];
+    if (!r) return new Response(null, { status: 404 });
+    if (r.redirect) return new Response(null, { status: 302, headers: { location: r.redirect } });
+    return new Response(r.body, { status: r.status || 200, headers: r.type ? { 'content-type': r.type } : {} });
+  };
+}
+
+test('fetchImageDataUrl: fetches, caps size, checks content-type, follows redirects', async () => {
+  const jpg = new Uint8Array([0xff, 0xd8, 0xff, 0xd9, 1, 2, 3]);
+  const f = fakeImageFetch({
+    'https://a.com/pic.jpg': { body: jpg, type: 'image/jpeg' },
+    'https://a.com/redir.jpg': { redirect: 'https://a.com/pic.jpg' },
+    'https://a.com/notimg': { body: '<html></html>', type: 'text/html' },
+    'https://a.com/huge.jpg': { body: new Uint8Array(1000), type: 'image/jpeg' },
+    'https://a.com/broken.jpg': { status: 500 },
+  });
+  const r = await fetchImageDataUrl('https://a.com/pic.jpg', { fetchImpl: f });
+  assert.equal(r.contentType, 'image/jpeg');
+  assert.match(r.dataUrl, /^data:image\/jpeg;base64,/);
+  const decoded = Buffer.from(r.dataUrl.split(',')[1], 'base64');
+  assert.deepEqual([...decoded], [...jpg]);
+
+  const r2 = await fetchImageDataUrl('https://a.com/redir.jpg', { fetchImpl: f });
+  assert.equal(r2.contentType, 'image/jpeg');
+
+  await assert.rejects(fetchImageDataUrl('https://a.com/notimg', { fetchImpl: f }), /not an image/);
+  await assert.rejects(fetchImageDataUrl('https://a.com/huge.jpg', { fetchImpl: f, maxBytes: 500 }), /too big/);
+  await assert.rejects(fetchImageDataUrl('https://a.com/broken.jpg', { fetchImpl: f }), /Could not load/);
+  await assert.rejects(fetchImageDataUrl('http://127.0.0.1/x.jpg', { fetchImpl: f }), /not allowed/);
 });
 
 test('fetchRecipe: TikTok short link → oEmbed caption', async () => {

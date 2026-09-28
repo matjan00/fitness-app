@@ -4,11 +4,14 @@ import { $, $$, esc, icon, toast, n0, n1, parseNum, local, today, uid } from './
 import * as store from './store.js';
 import { push, page, sheet, confirmSheet, chooseSheet } from './nav.js';
 import { SUPABASE_URL, SUPABASE_KEY } from './config.js';
-import { parseIngredient, splitRecipeText, extractLinks, shortTitle, UNIT_LABEL, extractProseIngredients } from './food-parse.js';
-import { bestMatch, toGrams } from './food-db.js';
+import { parseIngredient, splitRecipeText, extractLinks, shortTitle, UNIT_LABEL } from './food-parse.js';
+import { bestMatch, toGrams, search as searchFoods } from './food-db.js';
 import { recipeTotals, perServing, macrosFor, ingredientStatus } from './food-calc.js';
 import { CATEGORIES, suggestCategories, catLabel } from './food-cats.js';
 import { getIndex, snap, rememberMatch, remembered, pickFood, macroLine, img, MEALS, mealLabel } from './food-ui.js';
+import { compressFile, compressRemote } from './food-photo.js';
+
+const CAT_DIMS = ['meal', 'technique', 'main'];
 
 // ---------- fetch-recipe endpoint ----------
 const isLocal = ['localhost', '127.0.0.1'].includes(location.hostname);
@@ -48,51 +51,9 @@ function linesToIngredients(lines) {
   }).filter((i) => i.name || i.head);
 }
 
-export function draftFromFetched(j) {
-  const ld = j.jsonld;
-  const parsed = splitRecipeText(j.text || '');
-  const useLd = ld && ld.ingredients?.length;
-  // The caption/description had no recipe in it (few or no "quantity + unit" lines) but the video's
-  // spoken subtitles did — fall back to ingredients picked out of that prose transcript.
-  const useTranscript = !useLd && !parsed.ingredients.length && !!(j.transcript && j.transcript.trim());
-  const transcriptLines = useTranscript ? extractProseIngredients(j.transcript) : [];
-  const title = (ld?.title || j.title || parsed.title || '').trim();
-  const d = {
-    title: j.source === 'tiktok' ? (parsed.title || shortTitle(j.text) || 'TikTok recipe') : shortTitle(title) || title,
-    image: j.image || ld?.image || null,
-    source: { type: j.source, url: j.url, author: j.author || null },
-    servings: (useLd && ld.servings) || parsed.servings || ld?.servings || 2,
-    prepMin: ld?.prepMin || null,
-    cookMin: ld?.cookMin || (ld?.totalMin && !ld?.prepMin ? ld.totalMin : null),
-    ingredients: linesToIngredients(useLd ? ld.ingredients : useTranscript ? transcriptLines : parsed.ingredients),
-    steps: useLd ? ld.steps : parsed.steps,
-    notes: '',
-    text: j.text || '',
-    links: j.links || [],
-    siteNutrition: ld?.nutrition || null,
-  };
-  if (j.source === 'youtube' && j.title) d.title = shortTitle(j.title) || j.title;
-  if (useTranscript) {
-    // The transcript text itself becomes the notes, so the user can read the whole spoken recipe.
-    d.notes = j.transcript.slice(0, 3000);
-    if (!d.title) d.title = shortTitle(j.transcript) || d.title;
-    d.notice = 'Recipe taken from the video’s spoken subtitles — check the amounts.';
-  } else if (!d.ingredients.length && !d.steps.length && j.text) {
-    d.notes = j.text.slice(0, 3000);
-  }
-  if (!d.ingredients.length && !d.steps.length && !(j.transcript && j.transcript.trim())) {
-    d.notice = 'This video has no written recipe or subtitles — type or paste the recipe below.';
-  }
-  return d;
-}
-export function draftFromText(text) {
-  const p = splitRecipeText(text);
-  return {
-    title: p.title || 'My recipe', image: null, source: { type: 'text', url: extractLinks(text)[0] || null },
-    servings: p.servings || 2, prepMin: null, cookMin: null,
-    ingredients: linesToIngredients(p.ingredients), steps: p.steps, notes: '', text, links: [],
-  };
-}
+// Only the title + cover photo are auto-filled from a link now (see editRecipe's link field) — ingredients and
+// steps are always typed or pasted in by hand. `shortTitle`/`extractProseIngredients` stay in food-parse.js and
+// are still used by the "paste text" helper below via splitRecipeText.
 
 // Match every ingredient to a food and compute grams (remembered choices first).
 export async function matchAll(ings) {
@@ -117,66 +78,42 @@ function regrams(ing) {
   ing.guess = g.guess;
 }
 
-// ---------- import screen ----------
-export function openImport({ url = '', text = '', auto = false } = {}) {
-  let mode = text && !url ? 'text' : 'link';
-  let busy = false;
-  let error = '';
-  push((el, s) => {
-    const ep = importEndpoint();
-    el.innerHTML = page({ title: 'Add a recipe', body: `
-      <div class="seg" id="fd-mode"><button data-m="link" class="${mode === 'link' ? 'on' : ''}">From a link</button><button data-m="text" class="${mode === 'text' ? 'on' : ''}">Paste text</button><button data-m="blank" class="">Blank</button></div>
-      ${mode === 'link' ? `
-        <div class="card stack" style="margin-top:14px">
-          <p class="small muted">Recipe website, TikTok or YouTube (also Shorts). Tip: in TikTok / YouTube tap <b>Share → Fit</b> to send it here directly.</p>
-          <input id="fd-url" type="url" inputmode="url" placeholder="https://…" value="${esc(url)}" autocomplete="off">
-          ${!ep ? '<p class="small error">Link import isn\'t set up yet — paste the recipe text instead.</p>' : ''}
-          ${error ? `<p class="small error">${esc(error)}</p>` : ''}
-          <button class="primary block" id="fd-go" ${busy ? 'disabled' : ''}>${busy ? '<span class="spinner fd-spin"></span> Reading the recipe…' : 'Import'}</button>
-        </div>
-        <div class="fd-sources"><span>${icon('food')} Websites</span><span>♪ TikTok</span><span>▶ YouTube</span></div>`
-      : `<div class="card stack" style="margin-top:14px">
-          <p class="small muted">Paste a recipe (e.g. an Instagram caption). Ingredients and steps are found automatically — you can fix everything on the next screen.</p>
-          <textarea id="fd-text" rows="12" placeholder="Makaron z kurczakiem&#10;Składniki:&#10;200 g makaronu&#10;…">${esc(text)}</textarea>
-          <button class="primary block" id="fd-parse">Continue</button></div>`}` });
-    $$('#fd-mode button', el).forEach((b) => { b.onclick = () => {
-      if (b.dataset.m === 'blank') { s.close(); setTimeout(() => editRecipe({ title: '', servings: 2, ingredients: [], steps: [], source: { type: 'manual' } }), 260); return; }
-      mode = b.dataset.m; error = ''; s.render();
-    }; });
-    const go = $('#fd-go', el);
-    if (go) {
-      $('#fd-url', el).oninput = (e) => { url = e.target.value; };
-      go.onclick = async () => {
-        url = $('#fd-url', el).value.trim();
-        const found = extractLinks(url)[0] || (/^[\w.-]+\.[a-z]{2,}\//i.test(url) ? `https://${url}` : null);
-        if (!found) { error = 'Paste a link that starts with https://'; s.render(); return; }
-        busy = true; error = ''; s.render();
-        try {
-          const j = await fetchLink(found);
-          const d = draftFromFetched(j);
-          await matchAll(d.ingredients);
-          busy = false;
-          s.close();
-          setTimeout(() => editRecipe(d), 260);
-        } catch (e) {
-          busy = false; error = e.message; s.render();
-        }
-      };
-      // Shared from another app: start right away.
-      if (auto && url && !busy && !error) { auto = false; setTimeout(() => go.click(), 0); }
-    }
-    const parse = $('#fd-parse', el);
-    if (parse) {
-      $('#fd-text', el).oninput = (e) => { text = e.target.value; };
-      parse.onclick = async () => {
-        text = $('#fd-text', el).value;
-        if (!text.trim()) return;
-        const d = draftFromText(text);
-        await matchAll(d.ingredients);
-        s.close();
-        setTimeout(() => editRecipe(d), 260);
-      };
-    }
+// ---------- manual-first "new recipe" entry ----------
+// A blank draft, optionally with a source link pre-filled (title + photo are fetched inside editRecipe itself).
+export function blankDraft({ url = '' } = {}) {
+  const found = url ? (extractLinks(url)[0] || (/^[\w.-]+\.[a-z]{2,}\//i.test(url) ? `https://${url}` : url)) : '';
+  return { title: '', servings: 2, image: null, source: found ? { type: 'link', url: found } : { type: 'manual' }, ingredients: [], steps: [], notes: '', links: [] };
+}
+
+// Open the manual "new recipe" form. `url` (e.g. from Android share) pre-fills the link field and starts the
+// title+photo fetch right away. `text` (a shared caption with no link) is run through the same best-effort
+// parser as the "paste text" helper, so nothing shared to the app is lost.
+export async function openManual({ url = '', text = '' } = {}) {
+  const d = blankDraft({ url });
+  if (text && !url) {
+    const p = splitRecipeText(text);
+    if (p.title) d.title = p.title;
+    if (p.servings) d.servings = p.servings;
+    d.ingredients = linesToIngredients(p.ingredients);
+    await matchAll(d.ingredients);
+    d.steps = p.steps;
+  }
+  editRecipe(d, { autoFetchLink: !!d.source?.url });
+}
+
+// Small "paste recipe text to fill in" helper sheet — secondary to typing things in by hand.
+function pasteTextSheet() {
+  return new Promise((resolve) => {
+    let result = null;
+    push((el, s) => {
+      el.innerHTML = sheet({ title: 'Paste recipe text', body: `
+        <p class="small muted" style="margin:-4px 0 10px">Paste a recipe (e.g. a website listing or an Instagram caption). Ingredients and steps are found automatically — added to what you already have.</p>
+        <textarea id="fd-ptext" rows="10" placeholder="Makaron z kurczakiem&#10;Składniki:&#10;200 g makaronu&#10;…"></textarea>
+        <div class="sheet-actions"><button class="ghost" data-a="no">Cancel</button><button class="primary" data-a="ok">Fill in</button></div>` });
+      $('[data-a=ok]', el).onclick = () => { result = $('#fd-ptext', el).value; s.close(); };
+      $('[data-a=no]', el).onclick = () => s.close();
+      setTimeout(() => $('#fd-ptext', el)?.focus(), 250);
+    }, { sheet: true, onClose: () => resolve(result) });
   });
 }
 
@@ -196,18 +133,53 @@ function qtyTxt(ing) {
   return `${q}${ing.unit ? ` ${UNIT_LABEL[ing.unit] || ing.unit}` : ''}`;
 }
 
-export function editRecipe(draft, { id = null } = {}) {
+function catsHtml(r) {
+  return Object.entries(CATEGORIES).map(([dim, c]) => `<div><p class="tiny muted" style="margin-bottom:6px">${esc(c.label)}</p>
+    <div class="fd-chipwrap">${c.items.map((it) => {
+      const on = r.cats[dim]?.includes(it.key);
+      const suggested = on && !r.catsConfirmed[dim]?.includes(it.key);
+      return `<button class="chip ${on ? 'on' : ''} ${suggested ? 'suggested' : ''}" data-dim="${dim}" data-key="${it.key}" title="${suggested ? 'Suggested — tap to confirm' : ''}">${esc(it.label)}${suggested ? ' ?' : ''}</button>`;
+    }).join('')}</div></div>`).join('');
+}
+
+// Merge newly-suggested category chips into r.cats, skipping anything the user already removed.
+function resuggest(r) {
+  const sug = suggestCategories({ title: r.title, ingredients: r.ingredients, steps: r.steps });
+  for (const dim of CAT_DIMS) {
+    const list = (r.cats[dim] ||= []);
+    const removed = r.catsRemoved[dim] || [];
+    for (const key of sug[dim]) if (!list.includes(key) && !removed.includes(key)) list.push(key);
+  }
+}
+
+export function editRecipe(draft, opts = {}) {
+  const id = opts.id ?? null;
+  let autoFetchLink = !!opts.autoFetchLink;
   const r = JSON.parse(JSON.stringify(draft));
   r.ingredients ||= [];
   r.steps ||= [];
   if (!r.cats) r.cats = suggestCategories({ title: r.title, ingredients: r.ingredients, steps: r.steps });
+  r.catsConfirmed ||= {};
+  r.catsRemoved ||= {};
+  // Editing an existing recipe: its saved tags were already chosen, not fresh suggestions — don't dash them.
+  if (id) for (const dim of CAT_DIMS) if (!r.catsConfirmed[dim]) r.catsConfirmed[dim] = [...(r.cats[dim] || [])];
   let showText = false;
+  let pendingFood = null; // a food picked from the ingredient-suggestion dropdown, for the next Add
   push((el, s) => {
     const t = recipeTotals(r.ingredients);
     const ps = perServing(t, r.servings);
-    el.innerHTML = page({ title: id ? 'Edit recipe' : 'Review recipe', right: '<button class="primary" id="fd-save">Save</button>', body: `
-      <div class="fd-edit-hero">${img(r.image, 'fd-hero-img')}
+    el.innerHTML = page({ title: id ? 'Edit recipe' : 'New recipe', right: '<button class="primary" id="fd-save">Save</button>', body: `
+      <div class="form">
+        <label>Recipe link (optional)<input id="fd-link" type="url" inputmode="url" value="${esc(r.source?.url || '')}" placeholder="https://tiktok.com/… or a recipe site" autocomplete="off"></label>
+      </div>
+      ${r._linkBusy ? '<p class="tiny muted"><span class="spinner fd-spin"></span> Fetching title & photo…</p>' : ''}
+      ${r._linkErr && !r._linkBusy ? '<p class="tiny muted">Couldn’t get the photo — add your own.</p>' : ''}
+      <div class="fd-edit-hero" style="margin-top:10px">${img(r.image, 'fd-hero-img')}
         ${r.image ? '<button class="icon-btn fd-img-x" id="fd-noimg" aria-label="Remove photo">' + icon('close') + '</button>' : ''}</div>
+      <div class="row" style="gap:8px;margin-top:8px">
+        <button class="ghost small" id="fd-photopick">${icon('upload')} ${r.image ? 'Change photo' : 'Take / choose photo'}</button>
+      </div>
+      <input type="file" accept="image/*" id="fd-photofile" style="display:none">
       ${r.notice ? `<div class="card flat small" style="margin-top:12px">${icon('info')} ${esc(r.notice)}</div>` : ''}
       <div class="form" style="margin-top:12px">
         <label>Title<input id="fd-title" value="${esc(r.title)}" placeholder="Recipe name"></label>
@@ -219,22 +191,22 @@ export function editRecipe(draft, { id = null } = {}) {
 
       <h3 class="section-title">Ingredients</h3>
       <div class="card fd-ings">${r.ingredients.length ? r.ingredients.map((ing, i) => ingRow(ing, i)).join('') : '<p class="small muted">No ingredients yet.</p>'}
-        <div class="fd-addline"><input id="fd-newline" placeholder="Add: e.g. 200 g ryżu" autocomplete="off"><button class="icon-btn" id="fd-addbtn" aria-label="Add">${icon('plus')}</button></div>
+        <div class="fd-addline" style="position:relative"><input id="fd-newline" placeholder="Add: e.g. 200 g ryżu" autocomplete="off"><button class="icon-btn" id="fd-addbtn" aria-label="Add">${icon('plus')}</button>
+          <div id="fd-sugg" class="card fd-suggest" style="display:none"></div></div>
       </div>
       <p class="tiny muted" style="margin:8px 4px 0">Tap a food to change the match — your choice is remembered for future recipes.</p>
+      <button class="link small" id="fd-pastehelp" style="margin:6px 4px 0;text-align:left">Paste recipe text to fill in</button>
 
       <h3 class="section-title">Steps</h3>
       <textarea id="fd-steps" rows="${Math.min(14, Math.max(4, r.steps.length * 2 + 1))}" placeholder="One step per line">${esc(r.steps.join('\n'))}</textarea>
 
       <h3 class="section-title">Categories</h3>
-      <div class="card stack-sm">${Object.entries(CATEGORIES).map(([dim, c]) => `<div><p class="tiny muted" style="margin-bottom:6px">${esc(c.label)}</p>
-        <div class="fd-chipwrap">${c.items.map((it) => `<button class="chip ${r.cats[dim]?.includes(it.key) ? 'on' : ''}" data-dim="${dim}" data-key="${it.key}">${esc(it.label)}</button>`).join('')}</div></div>`).join('')}</div>
+      <div class="card stack-sm" id="fd-cats">${catsHtml(r)}</div>
 
       <h3 class="section-title">Notes & source</h3>
       <div class="form">
         <textarea id="fd-notes" rows="3" placeholder="Your notes">${esc(r.notes || '')}</textarea>
-        <label>Source link<input id="fd-src" type="url" value="${esc(r.source?.url || '')}" placeholder="https://…"></label>
-        ${r.links?.length ? `<div class="card flat small">Links in the description:${r.links.map((l) => `<div class="row between" style="margin-top:6px"><span class="ellipsis grow">${esc(l)}</span><button class="link" data-link="${esc(l)}">Import</button></div>`).join('')}</div>` : ''}
+        ${r.links?.length ? `<div class="card flat small">Links in the description:${r.links.map((l) => `<div class="row between" style="margin-top:6px"><span class="ellipsis grow">${esc(l)}</span><button class="link" data-link="${esc(l)}">Use</button></div>`).join('')}</div>` : ''}
         ${r.text ? `<button class="link small" id="fd-showtext" style="text-align:left">${showText ? 'Hide' : 'Show'} the original text</button>${showText ? `<pre class="fd-orig">${esc(r.text)}</pre>` : ''}` : ''}
       </div>
       ${id ? '<button class="ghost danger-text block" id="fd-delete" style="margin-top:22px">Delete recipe</button>' : ''}` });
@@ -243,22 +215,122 @@ export function editRecipe(draft, { id = null } = {}) {
       const t2 = recipeTotals(r.ingredients);
       $('#fd-tot', el).innerHTML = totalsHtml(t2, perServing(t2, r.servings), r);
     };
+    async function tryFetchLink(url) {
+      r._linkFetched = url;
+      r._linkBusy = true; r._linkErr = false;
+      s.render();
+      try {
+        const j = await fetchLink(url);
+        const rawTitle = (j.jsonld?.title || j.title || (j.source === 'tiktok' ? j.text : '') || '').trim();
+        const t2 = shortTitle(rawTitle) || rawTitle || (j.author ? `Recipe by ${j.author}` : '');
+        if (t2 && !r.title.trim()) r.title = t2;
+        r.source = { type: j.source || 'link', url: j.url || url, author: j.author || null };
+        const imgUrl = j.image || j.jsonld?.image || null;
+        if (imgUrl) {
+          const data = await compressRemote(imgUrl);
+          if (data) r.image = data; else r._linkErr = true;
+        }
+      } catch {
+        r._linkErr = true;
+      } finally {
+        r._linkBusy = false;
+        s.render();
+      }
+    }
+    const linkInput = $('#fd-link', el);
+    linkInput.oninput = (e) => { r.source = { ...(r.source || {}), url: e.target.value.trim() || null }; };
+    const tryTriggerFetch = () => {
+      const raw = (r.source?.url || '').trim();
+      if (!raw) return;
+      const found = extractLinks(raw)[0] || (/^[\w.-]+\.[a-z]{2,}\//i.test(raw) ? `https://${raw}` : raw);
+      if (found && found !== r._linkFetched) { r.source = { ...(r.source || {}), url: found }; tryFetchLink(found); }
+    };
+    linkInput.onblur = tryTriggerFetch;
+    linkInput.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); tryTriggerFetch(); linkInput.blur(); } };
+    linkInput.addEventListener('paste', () => setTimeout(tryTriggerFetch, 0));
+    $('#fd-photopick', el).onclick = () => $('#fd-photofile', el).click();
+    $('#fd-photofile', el).onchange = async (e) => {
+      const file = e.target.files?.[0];
+      e.target.value = '';
+      if (!file) return;
+      try {
+        const data = await compressFile(file);
+        if (data) { r.image = data; r._linkErr = false; }
+      } catch { toast('Could not use that photo'); }
+      s.render();
+    };
+    const refreshCats = () => {
+      const box = $('#fd-cats', el);
+      if (!box) return;
+      box.innerHTML = catsHtml(r);
+      bindCatChips();
+    };
     $('#fd-title', el).oninput = (e) => { r.title = e.target.value; };
+    // Re-suggest tags on blur — patches just the category chips in place so it never steals focus
+    // mid-click the way a full re-render would (e.g. tapping straight from Title into the next field).
+    $('#fd-title', el).onblur = () => { resuggest(r); refreshCats(); };
     $('#fd-serv', el).oninput = (e) => { r.servings = Math.max(1, parseNum(e.target.value) || 1); refreshTotals(); };
     $('#fd-prep', el).oninput = (e) => { r.prepMin = parseNum(e.target.value); };
     $('#fd-cook', el).oninput = (e) => { r.cookMin = parseNum(e.target.value); };
     $('#fd-steps', el).oninput = (e) => { r.steps = e.target.value.split('\n').map((x) => x.trim()).filter(Boolean); };
     $('#fd-notes', el).oninput = (e) => { r.notes = e.target.value; };
-    $('#fd-src', el).oninput = (e) => { r.source = { ...(r.source || {}), url: e.target.value.trim() || null }; };
     $('#fd-noimg', el)?.addEventListener('click', () => { r.image = null; s.render(); });
     $('#fd-showtext', el)?.addEventListener('click', () => { showText = !showText; s.render(); });
-    $$('[data-link]', el).forEach((b) => { b.onclick = () => openImport({ url: b.dataset.link }); });
-    $$('.chip[data-dim]', el).forEach((b) => { b.onclick = () => {
-      const list = (r.cats[b.dataset.dim] ||= []);
-      const i = list.indexOf(b.dataset.key);
-      if (i >= 0) list.splice(i, 1); else list.push(b.dataset.key);
-      b.classList.toggle('on', i < 0);
-    }; });
+    $('#fd-pastehelp', el).onclick = async () => {
+      const text = await pasteTextSheet();
+      if (!text || !text.trim()) return;
+      const p = splitRecipeText(text);
+      if (!r.title.trim() && p.title) r.title = p.title;
+      const newIngs = linesToIngredients(p.ingredients);
+      await matchAll(newIngs);
+      r.ingredients.push(...newIngs);
+      r.steps.push(...p.steps);
+      resuggest(r);
+      s.render();
+    };
+    $$('[data-link]', el).forEach((b) => { b.onclick = () => { s.close(); setTimeout(() => editRecipe(blankDraft({ url: b.dataset.link }), { autoFetchLink: true }), 260); }; });
+    function bindCatChips() {
+      $$('.chip[data-dim]', el).forEach((b) => { b.onclick = () => {
+        const dim = b.dataset.dim, key = b.dataset.key;
+        const list = (r.cats[dim] ||= []);
+        const confirmed = (r.catsConfirmed[dim] ||= []);
+        const removed = (r.catsRemoved[dim] ||= []);
+        const i = list.indexOf(key);
+        if (i >= 0 && !confirmed.includes(key)) { confirmed.push(key); }
+        else if (i >= 0) { list.splice(i, 1); const ci = confirmed.indexOf(key); if (ci >= 0) confirmed.splice(ci, 1); if (!removed.includes(key)) removed.push(key); }
+        else { list.push(key); confirmed.push(key); const ri = removed.indexOf(key); if (ri >= 0) removed.splice(ri, 1); }
+        refreshCats();
+      }; });
+    }
+    bindCatChips();
+    // ingredient food-suggestion dropdown while typing a new line
+    const suggBox = $('#fd-sugg', el);
+    const renderSugg = (list) => {
+      if (!list.length) { suggBox.style.display = 'none'; suggBox.innerHTML = ''; return; }
+      suggBox.style.display = 'block';
+      suggBox.innerHTML = list.map((f, i) => `<button type="button" class="list-item" data-si="${i}"><div class="grow"><div class="ellipsis"><b>${esc(f.src === 'db' ? f.en : f.name)}</b></div><div class="sub ellipsis">${esc(f.src === 'db' ? (f.pl || '') : (f.brand || (f.src === 'custom' ? 'My food' : '')))}</div></div></button>`).join('');
+      $$('[data-si]', suggBox).forEach((b) => { b.onclick = () => {
+        pendingFood = list[+b.dataset.si];
+        renderSugg([]);
+        $('#fd-newline', el)?.focus();
+      }; });
+    };
+    let suggTimer;
+    const newlineInput = $('#fd-newline', el);
+    newlineInput.oninput = () => {
+      pendingFood = null;
+      clearTimeout(suggTimer);
+      const val = newlineInput.value;
+      suggTimer = setTimeout(async () => {
+        const p = parseIngredient(val);
+        const name = (p.name || val).trim();
+        if (name.length < 2) { renderSugg([]); return; }
+        const index = await getIndex();
+        const list = searchFoods(index, name, 6).map((x) => x.food);
+        if (newlineInput.value === val) renderSugg(list);
+      }, 150);
+    };
+    newlineInput.onblur = () => setTimeout(() => renderSugg([]), 150);
     // grams inputs
     $$('.fd-g', el).forEach((inp) => { inp.oninput = () => {
       const ing = r.ingredients[+inp.dataset.i];
@@ -277,6 +349,7 @@ export function editRecipe(draft, { id = null } = {}) {
       ing.conf = 'user';
       regrams(ing);
       rememberMatch(ing.name, f);
+      resuggest(r);
       s.render();
     }; });
     $$('[data-menu]', el).forEach((b) => { b.onclick = async () => {
@@ -297,6 +370,7 @@ export function editRecipe(draft, { id = null } = {}) {
       } else if (v === 'unmatch') { ing.food = null; ing.conf = null; ing.grams = null; ing.toTaste = true; }
       else if (v === 'up' && i > 0) { [r.ingredients[i - 1], r.ingredients[i]] = [r.ingredients[i], r.ingredients[i - 1]]; }
       else if (v === 'del') r.ingredients.splice(i, 1);
+      resuggest(r);
       s.render();
     }; });
     const addLine = async () => {
@@ -304,8 +378,17 @@ export function editRecipe(draft, { id = null } = {}) {
       const line = inp.value.trim();
       if (!line) return;
       const n = linesToIngredients([line]);
-      await matchAll(n);
+      if (pendingFood && n.length === 1 && !n[0].head) {
+        n[0].food = snap(pendingFood);
+        n[0].conf = 'user';
+        regrams(n[0]);
+        rememberMatch(n[0].name, pendingFood);
+      } else {
+        await matchAll(n);
+      }
+      pendingFood = null;
       r.ingredients.push(...n);
+      resuggest(r);
       s.render();
       setTimeout(() => $('#fd-newline', el)?.focus(), 50);
     };
@@ -335,6 +418,11 @@ export function editRecipe(draft, { id = null } = {}) {
         history.go(-2);
       }
     });
+    // Opened from a shared link (Android share-target): fetch title + photo right away, once.
+    if (autoFetchLink && r.source?.url && !r._linkFetched && !r._linkBusy) {
+      autoFetchLink = false;
+      setTimeout(() => tryFetchLink(r.source.url), 0);
+    }
   });
 }
 
@@ -486,7 +574,7 @@ export function renderBook(box) {
       <button class="primary" id="fd-import" style="padding:12px 14px">${icon('plus')} Add</button></div>
     ${all.length && rows.length ? `<div class="fd-filters">${chipBar()}</div>` : ''}
     ${!all.length ? `<div class="card empty" style="margin-top:14px">${icon('food')}<h2>Your recipe book is empty</h2>
-      <p class="small" style="margin:6px 0 14px">Import from a recipe website, TikTok or YouTube — or paste the text. Macros are calculated for you.</p>
+      <p class="small" style="margin:6px 0 14px">Type it in, with smart help matching ingredients and macros as you go.</p>
       <button class="primary" id="fd-import2">Add your first recipe</button></div>`
       : list.length ? `<div class="fd-grid">${list.map((r) => { const ps = recipePer(r); return `<button class="fd-rcard" data-rid="${r.id}">${img(r.image)}
         <div class="fd-rcard-body"><b class="fd-2l">${esc(r.title)}</b><span class="small muted">${n0(ps.kcal)} kcal · <span class="fd-p">${n0(ps.p)} g P</span></span></div></button>`; }).join('')}</div>`
@@ -508,8 +596,8 @@ export function renderBook(box) {
     renderBook(box);
   }; });
   $$('[data-rid]', box).forEach((b) => { b.onclick = () => openRecipe(b.dataset.rid); });
-  $('#fd-import', box).onclick = () => openImport();
-  $('#fd-import2', box)?.addEventListener('click', () => openImport());
+  $('#fd-import', box).onclick = () => editRecipe(blankDraft());
+  $('#fd-import2', box)?.addEventListener('click', () => editRecipe(blankDraft()));
 }
 
 export { uid };

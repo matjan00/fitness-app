@@ -73,13 +73,13 @@ export function youtubeId(url) {
 }
 
 // ---------- fetching ----------
-async function readCapped(res, maxBytes) {
+async function readBytesCapped(res, maxBytes, tooBigMsg = 'That page is too big to import.') {
   const len = Number(res.headers.get('content-length') || 0);
-  if (len && len > maxBytes) throw new FetchError('That page is too big to import.', 413);
+  if (len && len > maxBytes) throw new FetchError(tooBigMsg, 413);
   if (!res.body || !res.body.getReader) {
-    const t = await res.text();
-    if (t.length > maxBytes) throw new FetchError('That page is too big to import.', 413);
-    return t;
+    const buf = new Uint8Array(await res.arrayBuffer());
+    if (buf.length > maxBytes) throw new FetchError(tooBigMsg, 413);
+    return buf;
   }
   const reader = res.body.getReader();
   const chunks = [];
@@ -88,12 +88,23 @@ async function readCapped(res, maxBytes) {
     const { done, value } = await reader.read();
     if (done) break;
     total += value.byteLength;
-    if (total > maxBytes) { try { await reader.cancel(); } catch { /* ignore */ } throw new FetchError('That page is too big to import.', 413); }
+    if (total > maxBytes) { try { await reader.cancel(); } catch { /* ignore */ } throw new FetchError(tooBigMsg, 413); }
     chunks.push(value);
   }
   const buf = new Uint8Array(total);
   let off = 0;
   for (const c of chunks) { buf.set(c, off); off += c.byteLength; }
+  return buf;
+}
+// base64-encode without spreading huge arrays onto the call stack.
+function toBase64(bytes) {
+  let binary = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  return btoa(binary);
+}
+async function readCapped(res, maxBytes) {
+  const buf = await readBytesCapped(res, maxBytes);
   const ct = res.headers.get('content-type') || '';
   let charset = (ct.match(/charset=([\w-]+)/i) || [])[1] || 'utf-8';
   if (!ct.match(/charset=/i)) {
@@ -142,6 +153,49 @@ export async function fetchText(url, opts = {}) {
     throw new FetchError('Too many redirects.', 502);
   } catch (e) {
     if (ctrl.signal.aborted && !(e instanceof FetchError)) throw new FetchError('The site took too long to answer.', 504);
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
+// GET a remote image (manual redirects, timeout, size cap, image/* only) and return it base64-encoded.
+// Used so the app can save a permanent copy of a recipe photo — TikTok/CDN image URLs expire, and a remote
+// image can't be drawn to a <canvas> cross-origin without this server-side fetch.
+export async function fetchImageDataUrl(rawUrl, opts = {}) {
+  const { fetchImpl = fetch, hostCheck, timeoutMs = TIMEOUT_MS, maxBytes = MAX_IMAGE_BYTES } = opts;
+  let current = checkUrl(rawUrl);
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    for (let hop = 0; hop < 6; hop++) {
+      if (hostCheck) await hostCheck(current.hostname);
+      let res;
+      try {
+        res = await fetchImpl(current.href, {
+          redirect: 'manual',
+          signal: ctrl.signal,
+          headers: { 'User-Agent': USER_AGENT, Accept: 'image/*' },
+        });
+      } catch (e) {
+        if (ctrl.signal.aborted) throw new FetchError('The image took too long to load.', 504);
+        throw new FetchError(`Could not reach the image (${e.message || e}).`, 502);
+      }
+      if (res.status >= 300 && res.status < 400 && res.headers.get('location')) {
+        current = checkUrl(new URL(res.headers.get('location'), current).href);
+        try { await res.body?.cancel(); } catch { /* ignore */ }
+        continue;
+      }
+      if (!res.ok) throw new FetchError(`Could not load the image (${res.status}).`, 502);
+      const ct = (res.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+      if (!ct.startsWith('image/')) throw new FetchError('That link is not an image.', 415);
+      const buf = await readBytesCapped(res, maxBytes, 'That image is too big.');
+      return { dataUrl: `data:${ct};base64,${toBase64(buf)}`, contentType: ct };
+    }
+    throw new FetchError('Too many redirects.', 502);
+  } catch (e) {
+    if (ctrl.signal.aborted && !(e instanceof FetchError)) throw new FetchError('The image took too long to load.', 504);
     throw e;
   } finally {
     clearTimeout(timer);

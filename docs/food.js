@@ -6,7 +6,7 @@ import { push, page, sheet, chooseSheet } from './nav.js';
 import { chart, fade, cssVar } from './charts.js';
 import { sumEntries, suggestTargets, ACTIVITY, weightTrend, weeklyChange, latestWeight, macrosFor } from './food-calc.js';
 import { MEALS, mealLabel, settings, targets, saveSettings, ring, bar, pickFood, amountSheet, snap, customFoodForm, img } from './food-ui.js';
-import { renderBook, openImport, logRecipe, recipePer, openRecipe } from './food-recipes.js';
+import { renderBook, openManual, blankDraft, logRecipe, recipePer, openRecipe, editRecipe } from './food-recipes.js';
 import { loadFoods } from './food-db.js';
 
 export const tab = { id: 'food', title: 'Food', icon: 'food', render };
@@ -149,7 +149,7 @@ function pickRecipe(meal) {
         <div class="grow"><div class="ellipsis"><b>${esc(r.title)}</b></div><div class="sub">${n0(ps.kcal)} kcal · P ${n0(ps.p)} g per serving</div></div></button>`; }).join('')
         : `<div class="empty"><p>${recs.length ? 'No recipe matches.' : 'No recipes yet.'}</p><button class="primary" id="fd-imp" style="margin-top:12px">Add a recipe</button></div>`;
       $$('[data-rid]', el).forEach((b) => { b.onclick = async () => { await logRecipe(store.get(b.dataset.rid), { day: d, meal }); s.close(); }; });
-      $('#fd-imp', el)?.addEventListener('click', () => { s.close(); setTimeout(() => openImport(), 260); });
+      $('#fd-imp', el)?.addEventListener('click', () => { s.close(); setTimeout(() => editRecipe(blankDraft()), 260); });
     };
     el.innerHTML = page({ title: `${mealLabel(meal)} · recipe`, body: `<div class="search">${icon('search')}<input id="fd-q" type="search" placeholder="Search my recipes"></div>
       <div class="card" style="margin-top:12px;padding-top:4px;padding-bottom:4px"><div class="list" id="fd-rlist"></div></div>` });
@@ -480,7 +480,7 @@ export function init() {
     local.set('fd-view', 'recipes');
     setTimeout(() => {
       window.showTab('food');
-      setTimeout(() => openImport(url ? { url, auto: true } : { text: all }), 60);
+      setTimeout(() => openManual(url ? { url } : { text: all }), 60);
     }, 0);
   }
   // Warm up the food table in the background so the first search is instant.
