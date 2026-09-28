@@ -1,7 +1,7 @@
 // Running coach: pure, rule-based logic (no DOM, no store). Covered by tests/run-coach.test.js.
 //
-// A run (kind 'run' record, written by the Strava edge function, see supabase/functions/strava/map.js):
-//   { id, strava_id, name, type, sport, start (ISO), start_local, distance_m, moving_s, elapsed_s, elev_m,
+// A run (kind 'run' record, written by the scheduled Garmin sync job, see scripts/garmin_sync.py):
+//   { id, garmin_id, name, type, sport, start (ISO), start_local, distance_m, moving_s, elapsed_s, elev_m,
 //     avg_hr, max_hr, avg_cadence (steps/min), avg_speed, max_speed, suffer, workout_type (1 race, 2 long, 3 workout),
 //     splits:[{km, d, s, hr, elev}], laps:[{n, d, s, hr, cad}], best_efforts:[{name, s, distance, pr_rank}], polyline }
 // Every field except start / distance_m / moving_s may be missing.

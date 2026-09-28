@@ -123,7 +123,7 @@ export function openRun(run, ctx) {
           ${efforts.filter((e) => Number(e.pr_rank) === 1).map((e) => `<span class="pill gold">${icon('trophy')}${esc(e.name)} PR</span>`).join('')}</div>
         <div class="stats rn-dstats">${stats}</div>
         ${fb.length ? `<div class="card rn-coach"><div class="card-head"><h2>Coach</h2></div>${feedbackHtml(fb)}</div>` : ''}
-        ${run.detail === false ? '<p class="card flat small muted">Splits and laps are still loading from Strava — they appear after the next sync.</p>' : ''}
+        ${run.detail === false ? '<p class="card flat small muted">Splits and laps are still loading from Garmin — they appear after the next sync.</p>' : ''}
         ${run.polyline ? `<div class="card rn-route-card">${routeSvg(run.polyline)}</div>` : ''}
         ${splits.length >= 2 ? `<div class="card"><div class="card-head"><h2>Splits</h2><span class="tiny muted rn-legend"><i class="rn-lg-pace"></i>pace${splits.some((s) => s.hr) ? '<i class="rn-lg-hr"></i>heart rate' : ''}</span></div>
           <div class="chart-box"><canvas id="rn-splits"></canvas></div>
@@ -137,7 +137,7 @@ export function openRun(run, ctx) {
         ${efforts.length ? `<div class="card"><div class="card-head"><h2>Best efforts</h2></div>
           <table class="rn-table"><tbody>${efforts.map((e) => `<tr><td>${esc(e.name)}</td><td><b>${C.fmtTime(e.s)}</b></td><td class="muted">${C.fmtPace(e.s / (e.distance / 1000))}/km</td><td>${Number(e.pr_rank) === 1 ? '<span class="pill gold">PR</span>' : Number(e.pr_rank) === 2 ? '<span class="pill">2nd</span>' : Number(e.pr_rank) === 3 ? '<span class="pill">3rd</span>' : ''}</td></tr>`).join('')}</tbody></table></div>` : ''}
         ${run.description ? `<div class="card flat small">${esc(run.description)}</div>` : ''}
-        ${run.strava_id && !run.demo ? `<a class="rn-strava-link" href="https://www.strava.com/activities/${encodeURIComponent(run.strava_id)}" target="_blank" rel="noopener">View on Strava</a>` : ''}
+        ${run.garmin_id && !run.demo ? `<a class="rn-garmin-link" href="https://connect.garmin.com/modern/activity/${encodeURIComponent(run.garmin_id)}" target="_blank" rel="noopener">View on Garmin Connect</a>` : ''}
       `,
     });
     if (splits.length >= 2) drawSplits($('#rn-splits', el), splits);

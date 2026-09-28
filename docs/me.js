@@ -1,4 +1,4 @@
-// "Me" tab: sections contributed by the feature modules (body weight, targets, Strava…),
+// "Me" tab: sections contributed by the feature modules (body weight, targets, Garmin sync status…),
 // then account / sync and backup, which live here.
 
 import { $, esc, icon, toast, local, niceDate, niceTime } from './util.js';

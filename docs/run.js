@@ -1,17 +1,19 @@
-// Running: Strava-synced run history, fitness estimate, per-run feedback, weekly review and a weekly plan.
+// Running: Garmin-synced run history, fitness estimate, per-run feedback, weekly review and a weekly plan.
 //
-//   run-coach.js   pure coaching logic (tested)       run-strava.js  OAuth + calls to the "strava" edge function
-//   run-detail.js  list rows + run detail screens     run-demo.js    sample runs for "Try with demo data" (memory only)
+//   run-coach.js   pure coaching logic (tested)       scripts/garmin_sync.py  GitHub Action that pulls
+//   run-detail.js  list rows + run detail screens                            from Garmin Connect every 3h
+//   run-demo.js    sample runs for "Try with demo data" (memory only)
 //
-// Runs are kind 'run' records written server-side by the edge function; the app only reads them.
-// Settings live in store config 'run': { runs_per_week, focus: '5k'|'10k', max_hr, strava_client_id }.
+// Runs are kind 'run' records written by the scheduled Garmin sync job; the app only reads them and
+// shows a status card built from the kind 'garmin-status' record the job also writes
+// ({ last_sync_at, runs_total, full_sync_done, last_error }). Settings live in store config 'run':
+// { runs_per_week, focus: '5k'|'10k', max_hr }.
 
 import { $, $$, esc, icon, toast, niceDate, relDay, mins } from './util.js';
 import * as store from './store.js';
-import { push, sheet, chooseSheet } from './nav.js';
+import { push, sheet } from './nav.js';
 import { chart, fade, cssVar } from './charts.js';
 import * as C from './run-coach.js';
-import * as S from './run-strava.js';
 import { demoRuns, demoWorkouts } from './run-demo.js';
 import { runRow, wireRows, openRun, openAllRuns, feedbackHtml } from './run-detail.js';
 
@@ -19,7 +21,7 @@ export const tab = { id: 'run', title: 'Run', icon: 'run', render: renderTab };
 export const homeCard = { order: 15, render: renderHome };
 export const meSection = { order: 20, render: renderMe };
 
-const DEFAULTS = { runs_per_week: 4, focus: '5k', max_hr: null, strava_client_id: '' };
+const DEFAULTS = { runs_per_week: 4, focus: '5k', max_hr: null };
 let demo = null;            // { runs, workouts } while exploring demo data (never saved)
 let syncing = false;
 let version = 0;            // bumped when runs / workouts / settings change
@@ -27,6 +29,17 @@ let cache = { key: '', ctx: null };
 let legMuscles = null;      // exercise id → primary muscles (from data/exercises.json)
 let tabEl = null, homeEl = null, meEl = null;
 let planView = null;        // 'this' | 'next' | null (automatic: next week once this one is wrapped up)
+
+// ---------- Garmin sync status ----------
+const garminStatus = () => store.all('garmin-status')[0] || null;
+
+function garminStatusText(st) {
+  if (!st) return '';
+  if (st.last_error) return `Garmin sync problem: ${st.last_error}`;
+  const when = st.last_sync_at ? `last sync ${relDay(st.last_sync_at).toLowerCase()} ${new Date(st.last_sync_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}` : 'not synced yet';
+  const runs = st.runs_total ? ` · ${st.runs_total} run${st.runs_total === 1 ? '' : 's'}` : '';
+  return `Synced automatically from Garmin every 3 hours · ${when}${runs}`;
+}
 
 export function settings() {
   const { id, key, ...cfg } = store.getConfig('run', DEFAULTS);
@@ -76,34 +89,22 @@ function rerender() {
 
 export function init() {
   store.onChange((kinds) => {
-    if (kinds.has('run') || kinds.has('workout') || kinds.has('config')) version++;
-  });
-  S.handleRedirect().then(async (res) => {
-    if (!res) return;
-    toast(res.message, 3500);
-    if (res.ok) {
-      window.showTab?.('run');
-      await doSync(false);
-    }
-  }).catch((e) => toast(e.message, 4000));
-  // Refresh the connection status quietly now and then.
-  S.ready().then((r) => {
-    const st = S.cachedStatus();
-    if (r.ok && (!st || Date.now() - (st.checked_at || 0) > 6 * 3600000)) S.refreshStatus().then(rerender).catch(() => {});
+    if (kinds.has('run') || kinds.has('workout') || kinds.has('config') || kinds.has('garmin-status')) version++;
+    if (kinds.has('garmin-status')) rerender();
   });
 }
 
+// "Refresh" just pulls whatever the Garmin GitHub Action already saved to Supabase — the job
+// itself runs on its own schedule (every 3 hours), the app never talks to Garmin directly.
 async function doSync(silent) {
-  if (syncing || demo) return;
+  if (syncing || demo || !store.configured) return;
   syncing = true;
   rerender();
   try {
-    const res = await S.sync();
-    if (!silent || res.added || res.updated || res.deleted) toast(S.syncMessage(res), 3500);
+    await store.syncNow();
+    if (!silent) toast('Refreshed', 2000);
   } catch (e) {
-    S.deferAutoSync(10);
-    if (!silent) toast(e.message, 4000);
-    if (/revoked|not connected/i.test(e.message)) S.refreshStatus().catch(() => {});
+    if (!silent) toast(e.message || 'Could not refresh', 4000);
   } finally {
     syncing = false;
     rerender();
@@ -130,8 +131,8 @@ const weekTitle = (ms) => new Date(ms).toLocaleDateString('en-GB', { day: 'numer
 const TONE_ICON = { good: 'check', tip: 'info', warn: 'info', info: 'note', pr: 'trophy' };
 
 function syncButton() {
-  if (demo || !S.isConnected()) return '';
-  return `<button class="icon-btn rn-sync ${syncing ? 'rn-spin' : ''}" data-a="sync" aria-label="Sync runs from Strava" ${syncing ? 'disabled' : ''}>${icon('sync')}</button>`;
+  if (demo || !store.configured) return '';
+  return `<button class="icon-btn rn-sync ${syncing ? 'rn-spin' : ''}" data-a="sync" aria-label="Refresh runs" ${syncing ? 'disabled' : ''}>${icon('sync')}</button>`;
 }
 
 function demoBar() {
@@ -168,7 +169,7 @@ function renderTab(el) {
       ${prHtml(ctx)}
       ${pacesHtml(ctx)}
     </div>
-    <p class="tiny muted center rn-foot">Coaching is rule-based guidance, not medical advice. Listen to your body.${!demo && S.isConnected() ? ' · Data from Strava' : ''}</p>`;
+    <p class="tiny muted center rn-foot">Coaching is rule-based guidance, not medical advice. Listen to your body.${!demo && garminStatus() ? ' · Data from Garmin' : ''}</p>`;
 
   wireRows(el, ctx, findRun);
   el.querySelector('[data-a="sync"]')?.addEventListener('click', () => doSync(false));
@@ -180,7 +181,6 @@ function renderTab(el) {
   const todayRun = el.querySelector('[data-today-run]');
   if (todayRun) todayRun.onclick = () => { const r = findRun(todayRun.dataset.todayRun); if (r) openRun(r, ctx); };
   drawTabCharts(el, ctx);
-  if (!demo && !syncing && S.autoSyncDue()) setTimeout(() => doSync(true), 400);
 }
 
 function heroHtml(ctx) {
@@ -238,7 +238,7 @@ function vdotInfo() {
     el.innerHTML = sheet({
       title: 'How the coach measures fitness',
       body: `<div class="stack-sm small rn-sheet-text">
-        <p><b>VDOT</b> is a running fitness score from coach Jack Daniels. It comes from your fastest recent efforts (races, time trials, and the best 1 mile / 5k / 10k segments Strava finds inside your runs) over the last 8 weeks.</p>
+        <p><b>VDOT</b> is a running fitness score from coach Jack Daniels. It comes from your fastest recent efforts (races, time trials, and the best 1 mile / 5k / 10k segments found inside your runs) over the last 8 weeks.</p>
         <p>From VDOT the app predicts your 5k and 10k times and sets your <b>training paces</b>. The small range under a prediction is a cross-check with the Riegel formula.</p>
         <p>The score only rises when you run a fast effort — so an all-out 5k every 4–8 weeks keeps it accurate.</p>
         <p class="muted">Predictions assume you've trained for the distance. Heat, hills and wind make real times slower.</p>
@@ -399,51 +399,26 @@ function renderSetup(el) {
     <div class="rn-hero rn-setup">
       <span class="rn-setup-ic">${icon('run')}</span>
       <h2>Your running coach</h2>
-      <p>Connect Strava and every Garmin run lands here automatically — with feedback on each run, your fitness and 5k/10k predictions, and a weekly plan to get faster.</p>
-      <div id="rn-connect" class="rn-connect"><div class="spinner rn-spinner-sm"></div></div>
+      <p>Every run on your Garmin watch lands here automatically — with feedback on each run, your fitness and 5k/10k predictions, and a weekly plan to get faster.</p>
+      <div id="rn-connect" class="rn-connect">${garminBox()}</div>
       <button class="rn-demo-btn" data-a="demo">${icon('play')} Try with demo data</button>
     </div>
     <h3 class="section-title">How it works</h3>
     <div class="card rn-steps">
-      <div><span>1</span><p><b>Garmin → Strava.</b> In the Garmin Connect app: More → Settings → Connected Apps → Strava. Your watch runs then upload to Strava by themselves.</p></div>
-      <div><span>2</span><p><b>Strava → this app.</b> Tap “Connect Strava” and allow access to your activities.</p></div>
+      <div><span>1</span><p><b>Set up once.</b> Add your Garmin login as GitHub secrets — see GARMIN-SETUP.md, or ask Claude.</p></div>
+      <div><span>2</span><p><b>Runs to your watch.</b> Nothing to do here — a scheduled job pulls new runs from Garmin Connect every 3 hours.</p></div>
       <div><span>3</span><p><b>Run.</b> New runs appear when you open this tab. The coach adapts your plan every week.</p></div>
     </div>`;
   el.querySelector('[data-a="demo"]').onclick = startDemo;
-  fillConnect($('#rn-connect', el));
+  el.querySelector('[data-a="refresh"]')?.addEventListener('click', () => doSync(false));
 }
 
-async function fillConnect(box) {
-  const r = await S.ready();
-  if (!box.isConnected) return;
-  const cfg = settings();
-  const st = S.cachedStatus();
-  if (!r.ok && r.why === 'not-configured') {
-    box.innerHTML = '<p class="small rn-setup-note">Online sync isn’t set up yet, so Strava can’t connect. You can explore everything with demo data meanwhile.</p>';
-    return;
-  }
-  if (!r.ok) {
-    box.innerHTML = '<button class="rn-strava-btn">Log in to connect Strava</button>';
-    box.querySelector('button').onclick = () => window.showTab?.('me');
-    return;
-  }
-  if (st?.connected) {
-    box.innerHTML = `<p class="small rn-setup-note">Connected${st.athlete_name ? ` as ${esc(st.athlete_name)}` : ''}. ${syncing ? 'Fetching your runs…' : 'No runs found in the last 6 months yet.'}</p>
-      <button class="rn-strava-btn" ${syncing ? 'disabled' : ''}>${icon('sync')} ${syncing ? 'Syncing…' : 'Sync runs now'}</button>`;
-    box.querySelector('button').onclick = () => doSync(false);
-    return;
-  }
-  box.innerHTML = '<button class="rn-strava-btn">Connect Strava</button>';
-  box.querySelector('button').onclick = () => connect(cfg.strava_client_id || st?.client_id);
-}
-
-function connect(clientId) {
-  if (!clientId) {
-    toast('Add your Strava Client ID in Me → Running first');
-    window.showTab?.('me');
-    return;
-  }
-  location.href = S.authorizeUrl(clientId);
+function garminBox() {
+  if (!store.configured) return '<p class="small rn-setup-note">Online sync isn’t set up yet, so Garmin runs can’t appear here. You can explore everything with demo data meanwhile.</p>';
+  const st = garminStatus();
+  const text = st ? garminStatusText(st) : 'Setup: add your Garmin login as GitHub secrets — ask Claude. Once done, runs appear here automatically within a few hours.';
+  return `<p class="small rn-setup-note">${esc(text)}</p>
+    <button class="rn-garmin-btn" data-a="refresh" ${syncing ? 'disabled' : ''}>${icon('sync')} ${syncing ? 'Refreshing…' : 'Refresh'}</button>`;
 }
 
 // ---------- Home card ----------
@@ -453,7 +428,7 @@ function renderHome(el) {
   if (!runs.length) {
     el.innerHTML = `<button class="card rn-home rn-home-empty">
       <span class="rn-dot rn-t-long">${icon('run')}</span>
-      <div class="grow"><b>Running coach</b><p class="small muted">Connect Strava to get feedback on every run and a weekly plan for a faster 5k and 10k.</p></div>
+      <div class="grow"><b>Running coach</b><p class="small muted">Runs synced automatically from Garmin get feedback, a fitness score and a weekly plan for a faster 5k and 10k.</p></div>
       <span class="rn-chev">${icon('back')}</span></button>`;
     el.firstElementChild.onclick = () => window.showTab?.('run');
     return;
@@ -488,19 +463,14 @@ function renderMe(el) {
   meEl = el;
   const cfg = settings();
   const ctx = getCtx();
-  const st = S.cachedStatus();
+  const st = garminStatus();
   el.innerHTML = `<h3 class="section-title">Running</h3>
     <div class="card stack rn-me">
-      <div class="rn-strava-row">
-        <span class="rn-strava-logo">${icon('run')}</span>
-        <div class="grow"><b>Strava</b><p class="small muted" id="rn-st-text">Checking…</p></div>
-        <div id="rn-st-actions" class="row"></div>
+      <div class="rn-garmin-row">
+        <span class="rn-garmin-logo">${icon('run')}</span>
+        <div class="grow"><b>Garmin</b><p class="small muted" id="rn-st-text">${esc(store.configured ? (st ? garminStatusText(st) : 'Setup: add your Garmin login as GitHub secrets — ask Claude.') : 'Needs online sync, which isn’t set up yet.')}</p></div>
+        <div id="rn-st-actions" class="row">${store.configured ? `<button class="icon-btn ${syncing ? 'rn-spin' : ''}" data-a="sync" aria-label="Refresh" ${syncing ? 'disabled' : ''}>${icon('sync')}</button>` : ''}</div>
       </div>
-      <details class="rn-details" ${!cfg.strava_client_id && !st?.client_id && store.configured ? 'open' : ''}>
-        <summary>Strava app settings</summary>
-        <label>Client ID<input id="rn-cid" inputmode="numeric" autocomplete="off" placeholder="${esc(st?.client_id || 'e.g. 123456')}" value="${esc(cfg.strava_client_id || '')}"></label>
-        <p class="tiny muted">From strava.com/settings/api. There, set “Authorization Callback Domain” to <b>${esc(location.hostname)}</b>. The Client Secret goes only into the server (Supabase secrets), never here.</p>
-      </details>
       <div><p class="rn-label">Runs per week</p><div class="seg" id="rn-rpw">${[3, 4, 5, 6].map((n) => `<button data-v="${n}" class="${ctx.runsPerWeek === n ? 'on' : ''}">${n}</button>`).join('')}</div></div>
       <div><p class="rn-label">Goal</p><div class="seg" id="rn-focus">${['5k', '10k'].map((f) => `<button data-v="${f}" class="${ctx.focus === f ? 'on' : ''}">${f === '5k' ? 'Faster 5k' : 'Faster 10k'}</button>`).join('')}</div></div>
       <label>Max heart rate (optional)
@@ -510,7 +480,6 @@ function renderMe(el) {
 
   $$('#rn-rpw button', el).forEach((b) => { b.onclick = () => saveSettings({ runs_per_week: Number(b.dataset.v) }); });
   $$('#rn-focus button', el).forEach((b) => { b.onclick = () => saveSettings({ focus: b.dataset.v }); });
-  $('#rn-cid', el).onchange = (e) => saveSettings({ strava_client_id: e.target.value.replace(/\D/g, '') });
   $('#rn-maxhr', el).onchange = (e) => {
     const raw = e.target.value.trim();
     const v = Number(raw);
@@ -518,54 +487,5 @@ function renderMe(el) {
     saveSettings({ max_hr: raw ? Math.round(v) : null });
   };
   $('#rn-exit-demo', el)?.addEventListener('click', stopDemo);
-  fillStravaStatus(el);
-}
-
-async function fillStravaStatus(el) {
-  const text = $('#rn-st-text', el), actions = $('#rn-st-actions', el);
-  const r = await S.ready();
-  if (!text.isConnected) return;
-  if (!r.ok) {
-    text.textContent = r.why === 'not-configured' ? 'Needs online sync, which isn’t set up yet.' : 'Log in below to connect Strava.';
-    return;
-  }
-  let st = S.cachedStatus();
-  const show = () => {
-    if (!text.isConnected) return;
-    if (st?.connected) {
-      const when = st.last_sync_at ? `last sync ${relDay(st.last_sync_at).toLowerCase()} ${new Date(st.last_sync_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}` : 'not synced yet';
-      text.textContent = `Connected${st.athlete_name ? ` as ${st.athlete_name}` : ''} · ${syncing ? 'syncing…' : when}${st.pending ? ` · ${st.pending} runs still loading` : ''}`;
-      actions.innerHTML = `<button class="icon-btn ${syncing ? 'rn-spin' : ''}" data-a="sync" aria-label="Sync now" ${syncing ? 'disabled' : ''}>${icon('sync')}</button>
-        <button class="icon-btn" data-a="more" aria-label="Strava options">${icon('more')}</button>`;
-      actions.querySelector('[data-a="sync"]').onclick = () => doSync(false);
-      actions.querySelector('[data-a="more"]').onclick = stravaMenu;
-    } else {
-      text.textContent = 'Not connected';
-      actions.innerHTML = '<button class="rn-strava-btn rn-strava-sm">Connect</button>';
-      actions.querySelector('button').onclick = () => connect(settings().strava_client_id || st?.client_id);
-    }
-  };
-  show();
-  if (!st || Date.now() - (st.checked_at || 0) > 5 * 60000) {
-    try { st = await S.refreshStatus(); show(); } catch (e) {
-      if (text.isConnected && !st) text.textContent = e.message;
-    }
-  }
-}
-
-async function stravaMenu() {
-  const choice = await chooseSheet('Strava', [
-    { value: 'sync', label: 'Sync runs now', icon: 'sync' },
-    { value: 'keep', label: 'Disconnect, keep my runs', icon: 'close' },
-    { value: 'delete', label: 'Disconnect and delete synced runs', icon: 'trash', danger: true },
-  ]);
-  if (!choice) return;
-  if (choice === 'sync') { doSync(false); return; }
-  try {
-    const res = await S.disconnect(choice === 'delete');
-    toast(choice === 'delete' ? `Strava disconnected, ${res.removed || 0} runs removed` : 'Strava disconnected');
-  } catch (e) {
-    toast(e.message);
-  }
-  rerender();
+  $('[data-a="sync"]', el)?.addEventListener('click', () => doSync(false));
 }
