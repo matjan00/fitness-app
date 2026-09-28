@@ -15,6 +15,7 @@ import * as gym from './gym.js';
 import * as food from './food.js';
 import * as run from './run.js';
 import * as me from './me.js';
+import { APP_VERSION } from './version.js';
 
 const modules = [gym, run, food, me];
 const tabs = [
@@ -29,9 +30,41 @@ function greeting() {
   return h < 5 ? 'Good night' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
 }
 
+// ---------- updates ----------
+// version.js travels with the (cached) app; version.json is always fetched fresh from the website.
+// When the website has a newer number, Home shows an "Update" button that drops the saved copy and reloads.
+let newVersion = null;
+
+async function checkForUpdate() {
+  try {
+    const res = await fetch(`version.json?t=${Date.now()}`, { cache: 'no-store' });
+    if (!res.ok) return;
+    const { v } = await res.json();
+    if (Number(v) > APP_VERSION && newVersion !== v) {
+      newVersion = v;
+      if (current === 'home') renderTab();
+    }
+  } catch { /* offline — try again later */ }
+}
+
+async function applyUpdate() {
+  try {
+    const regs = (await navigator.serviceWorker?.getRegistrations?.()) || [];
+    await Promise.all(regs.map((r) => r.update().catch(() => {})));
+    const keys = await caches.keys();
+    await Promise.all(keys.filter((k) => k !== 'fit-images').map((k) => caches.delete(k)));
+  } catch { /* reload anyway */ }
+  location.reload();
+}
+
 function renderHome(el) {
   el.innerHTML = `<div class="page-head"><p class="muted">${new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
-    <h1>${greeting()}</h1></div><div class="home-cards"></div>`;
+    <h1>${greeting()}</h1></div>
+    ${newVersion ? `<div class="card update-card"><div class="grow"><b>New version available</b>
+      <p class="small muted">Get the latest features and fixes. Your data stays.</p></div>
+      <button class="primary" id="app-update">${icon('sync')} Update</button></div>` : ''}
+    <div class="home-cards"></div>`;
+  $('#app-update', el)?.addEventListener('click', (e) => { e.currentTarget.disabled = true; applyUpdate(); });
   const wrap = $('.home-cards', el);
   modules.map((m) => m.homeCard).filter(Boolean).sort((a, b) => a.order - b.order).forEach((c) => {
     const d = document.createElement('div');
@@ -109,6 +142,8 @@ async function start() {
   });
   setRevealHandler(renderTab);
   store.syncNow().catch(() => {});
+  checkForUpdate();
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkForUpdate(); });
 
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     // When a new version of the app takes over, reload once so the new files are used straight away.

@@ -291,3 +291,8 @@ textarea { resize: vertical; min-height: 80px; line-height: 1.45; }
 @media (min-width: 760px) {
   #view { padding-top: 28px; }
 }
+
+/* ---------- update card (Home) ---------- */
+.update-card { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; border: 1px solid var(--accent); background: var(--accent-soft); }
+.update-card .primary { padding: 10px 14px; flex: none; }
+.update-card svg { width: 18px; height: 18px; }
