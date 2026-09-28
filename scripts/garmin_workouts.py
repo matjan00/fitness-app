@@ -91,10 +91,10 @@ def _executable(step, order, child_id=None):
     }
     b = _pace_bounds(step)
     if b and kind in ("run", "recovery"):
-        # Garmin pace targets are speeds in m/s: One = slower end (lower speed), Two = faster end.
+        # Garmin pace targets are speeds in m/s: One = faster end, Two = slower end (the other order shows reversed on the watch).
         out["targetType"] = dict(PACE_TARGET)
-        out["targetValueOne"] = speed_ms(b[1])
-        out["targetValueTwo"] = speed_ms(b[0])
+        out["targetValueOne"] = speed_ms(b[0])
+        out["targetValueTwo"] = speed_ms(b[1])
     return out
 
 

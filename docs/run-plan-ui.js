@@ -73,7 +73,7 @@ async function callSendFunction(session) {
     r = await fetch(`${SUPABASE_URL}/functions/v1/garmin-send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', apikey: SUPABASE_KEY, Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ session_id: session.id, steps: P.sessionSteps(session), name: P.watchWorkoutName(session) }),
+      body: JSON.stringify({ session_id: session.id, steps: P.sessionSteps(session), name: P.watchWorkoutName(session, getPlan()?.sessions || []) }),
     });
   } catch {
     throw new Error('No connection — check your internet and try again.');

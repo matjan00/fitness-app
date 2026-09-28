@@ -509,11 +509,10 @@ export function sessionSteps(session) {
 }
 
 // Short workout name shown on the watch, e.g. "Fit · W3 VO2max intervals 5×1 km".
-export function watchWorkoutName(session) {
-  if (!session) return 'Fit · run';
-  let name = `Fit · W${session.week} ${session.title || 'Run'}`;
-  const r = session.type === 'intervals' ? parseReps(session.main) : null;
-  if (r) name += ` ${r.reps}×${r.distance_m >= 1000 ? `${round1(r.distance_m / 1000)} km` : `${r.distance_m} m`}`;
-  else if (session.totalKm) name += ` ${round1(session.totalKm)} km`;
-  return name.slice(0, 60);
+export function watchWorkoutName(session, sessions = []) {
+  // Short, simple name for the watch: "Week 3 · Run 2" (run number within that week).
+  if (!session) return 'Fit run';
+  const inWeek = sessions.filter((s) => s.week === session.week).sort((a, b) => a.index - b.index);
+  const n = inWeek.findIndex((s) => s.id === session.id) + 1;
+  return n > 0 ? `Week ${session.week} · Run ${n}` : `Week ${session.week} · ${session.title || 'Run'}`.slice(0, 40);
 }

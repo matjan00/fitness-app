@@ -291,6 +291,6 @@ test('sessionSteps: every generated session yields valid steps and a short name'
     const st = P.sessionSteps(s);
     assert.ok(st.length >= 1, s.type);
     for (const x of st.flatMap((y) => (y.steps ? y.steps : [y]))) assert.ok(x.distance_m || x.duration_s || x.open, `${s.type} step has an end condition`);
-    assert.ok(P.watchWorkoutName(s).startsWith('Fit · W'));
+    assert.ok(P.watchWorkoutName(s).startsWith('Week '));
   }
 });

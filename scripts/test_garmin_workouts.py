@@ -42,9 +42,9 @@ class Convert(unittest.TestCase):
         work, rec = rg["workoutSteps"]
         self.assertEqual(work["stepType"]["stepTypeKey"], "interval")
         self.assertEqual(work["targetType"]["workoutTargetTypeKey"], "pace.zone")
-        self.assertLess(work["targetValueOne"], work["targetValueTwo"])  # slower speed first
-        self.assertAlmostEqual(work["targetValueOne"], 1000 / 268, places=3)
-        self.assertAlmostEqual(work["targetValueTwo"], 1000 / 252, places=3)
+        self.assertGreater(work["targetValueOne"], work["targetValueTwo"])  # faster speed first (FR55 order)
+        self.assertAlmostEqual(work["targetValueOne"], 1000 / 252, places=3)
+        self.assertAlmostEqual(work["targetValueTwo"], 1000 / 268, places=3)
         self.assertEqual(rec["stepType"]["stepTypeKey"], "recovery")
         self.assertEqual(rec["endCondition"]["conditionTypeKey"], "time")
         self.assertEqual(rec["endConditionValue"], 90.0)
@@ -68,7 +68,7 @@ class Convert(unittest.TestCase):
     def test_reversed_pace_bounds_still_ok(self):
         w = gw.build_workout("x", [{"kind": "run", "distance_m": 5000, "pace_min_s_per_km": 410, "pace_max_s_per_km": 370}])
         s = w["workoutSegments"][0]["workoutSteps"][0]
-        self.assertLess(s["targetValueOne"], s["targetValueTwo"])
+        self.assertGreater(s["targetValueOne"], s["targetValueTwo"])
 
     def test_name_cleaned_and_json_serialisable(self):
         w = gw.build_workout("  Fit   W1\nEasy " + "x" * 200, INTERVALS, description="d")
