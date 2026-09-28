@@ -354,7 +354,10 @@ export function splitRecipeText(input) {
   // Captions from TikTok arrive on one line: the line breaks became double spaces, bullets are " * ".
   if ((text.match(/\n/g) || []).length < 3) {
     text = text.replace(/ {2,}/g, '\n').replace(/\s+[*\u2022\u25aa]\s+/g, '\n* ').replace(/\s+(?=(?:\p{Extended_Pictographic}\ufe0f?)+\s*\d)/gu, '\n')
-      .replace(/\s+(?=\p{Lu}\p{Ll}{2,}:(?:\s|$))/gu, '\n');
+      .replace(/\s+(?=\p{Lu}\p{Ll}{2,}:(?:\s|$))/gu, '\n')
+      // Some captions collapse every line break to a single space, so "Ingredients"/"Instructions" end up
+      // mid-sentence with no marker at all; split before them so the header regexes below can see them.
+      .replace(/(?<=\S)\s+(?=(?:ingredients?|instructions?|directions?|method|sk[l\u0142]adniki|przygotowanie|wykonanie)\b[^a-z0-9])/gi, '\n');
     // Re-join a sentence that was broken by a stray double space: "Po doprowadzeniu ry\u017cu" + "do wrzenia, \u2026"
     const ls = text.split('\n');
     for (let i = ls.length - 2; i >= 0; i--) {

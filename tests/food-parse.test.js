@@ -180,6 +180,15 @@ test('TikTok caption with inline * bullets and sub-headings', () => {
   assert.deepEqual(r.ingredients, ['Ciasto:', '8 jajek', '15 łyżek oleju', '3 szklanki mąki -400 g', 'Krem:', '3 szklanki mleka', '370 g masła']);
 });
 
+test('TikTok caption with no colons or double spaces at all (oEmbed title)', () => {
+  // Some oEmbed titles collapse every line break to a single space, so "Ingredients"/"Instructions"
+  // land mid-sentence with no colon or extra spacing to mark them — the title must not swallow the rest.
+  const r = splitRecipeText('Marry Me Chicken Pasta Ingredients Chicken 2 chicken breasts, sliced horizontally and pounded to an even thickness A drizzle of oil, for cooking Salt and black pepper, to taste 1 tsp onion powder 1 tsp garlic powder 1 tsp paprika Pasta Your favorite pasta, cooked according to package directions Instructions Prepare the chicken: Slice each chicken breast in half horizontally and pound gently.');
+  assert.equal(r.title, 'Marry Me Chicken Pasta');
+  assert.ok(r.ingredients.length > 0);
+  assert.ok(r.steps.length > 0);
+});
+
 test('website text: yield lines skipped, sub-headings kept, end sections dropped', () => {
   const r = splitRecipeText(`Składniki
 16 - 17 sztuk
