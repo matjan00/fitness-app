@@ -241,3 +241,56 @@ test('sessionFeedback: flags intervals run faster than target', () => {
   const fb = P.sessionFeedback(session, run, ctx);
   assert.ok(fb.some((f) => /quicker/i.test(f.text)));
 });
+
+// ---------- structured steps ----------
+const S = (o) => ({ week: 3, totalKm: 8, warmup: '', cooldown: '', targetPace: null, ...o });
+
+test('sessionSteps: easy run is one run at the easy pace range', () => {
+  const st = P.sessionSteps(S({ type: 'easy', title: 'Easy run', main: '8 km easy @ 6:10–6:50/km.', targetPace: [370, 410] }));
+  assert.deepEqual(st, [{ kind: 'run', distance_m: 8000, pace_min_s_per_km: 370, pace_max_s_per_km: 410 }]);
+});
+
+test('sessionSteps: intervals -> warmup, repeat(run+recovery), cooldown', () => {
+  const st = P.sessionSteps(S({ type: 'intervals', title: 'VO2max intervals', warmup: '2 km easy + strides', cooldown: '1.5 km easy', main: '5 × 1 km @ 4:20/km, 90 s jog between reps.', targetPace: [252, 268] }));
+  assert.equal(st[0].kind, 'warmup');
+  assert.equal(st[0].distance_m, 2000);
+  assert.deepEqual(st[1], { kind: 'repeat', reps: 5, steps: [{ kind: 'run', distance_m: 1000, pace_min_s_per_km: 252, pace_max_s_per_km: 268 }, { kind: 'recovery', duration_s: 90 }] });
+  assert.deepEqual(st[2], { kind: 'cooldown', distance_m: 1500 });
+});
+
+test('sessionSteps: distance recovery, and a range recovery uses the midpoint', () => {
+  const a = P.sessionSteps(S({ type: 'intervals', main: '8 × 400 m @ 3:50/km, 160 m jog between reps.', targetPace: [222, 238] }));
+  assert.deepEqual(a[0].steps[1], { kind: 'recovery', distance_m: 160 });
+  const b = P.sessionSteps(S({ type: 'intervals', main: '4 × 1.5 km @ 4:40/km (goal 10k pace 5:00/km), 2–3 min jog recovery.', targetPace: [274, 286] }));
+  assert.equal(b[0].reps, 4);
+  assert.equal(b[0].steps[0].distance_m, 1500);
+  assert.deepEqual(b[0].steps[1], { kind: 'recovery', duration_s: 150 });
+});
+
+test('sessionSteps: tempo is a timed run with a pace range', () => {
+  const st = P.sessionSteps(S({ type: 'tempo', warmup: '2 km easy', cooldown: '1.5 km easy', main: '15 min steady @ 5:30/km (you could say a few words).', targetPace: [324, 336] }));
+  assert.deepEqual(st.map((s) => s.kind), ['warmup', 'run', 'cooldown']);
+  assert.deepEqual(st[1], { kind: 'run', duration_s: 900, pace_min_s_per_km: 324, pace_max_s_per_km: 336 });
+});
+
+test('sessionSteps: time trials = timed warm-up, untargeted goal-distance run, cool-down', () => {
+  const st = P.sessionSteps(S({ type: 'test5k', warmup: '15 min easy jogging + strides', cooldown: '10 min easy jogging', main: '5 km, run as fast as you can sustain evenly.' }));
+  assert.deepEqual(st, [{ kind: 'warmup', duration_s: 900 }, { kind: 'run', distance_m: 5000 }, { kind: 'cooldown', duration_s: 600 }]);
+  assert.equal(P.sessionSteps(S({ type: 'test10k', main: '10 km, run as fast as you can.' }))[0].distance_m, 10000);
+});
+
+test('sessionSteps: strides = easy run then a 6 x 20 s repeat', () => {
+  const st = P.sessionSteps(S({ type: 'strides', totalKm: 5.6, main: '5 km easy @ 6:10–6:50/km, then 6 × 20 s strides (quick).', targetPace: [370, 410] }));
+  assert.equal(st[0].distance_m, 5000);
+  assert.deepEqual(st[1], { kind: 'repeat', reps: 6, steps: [{ kind: 'run', duration_s: 20 }, { kind: 'recovery', duration_s: 40 }] });
+});
+
+test('sessionSteps: every generated session yields valid steps and a short name', () => {
+  const plan = P.generatePlan({ ctx: fakeCtx(), goal: { distance_km: 10, time_s: 3000 }, runsPerWeek: 3, startedAt: NOW });
+  for (const s of plan.sessions) {
+    const st = P.sessionSteps(s);
+    assert.ok(st.length >= 1, s.type);
+    for (const x of st.flatMap((y) => (y.steps ? y.steps : [y]))) assert.ok(x.distance_m || x.duration_s || x.open, `${s.type} step has an end condition`);
+    assert.ok(P.watchWorkoutName(s).startsWith('Fit · W'));
+  }
+});

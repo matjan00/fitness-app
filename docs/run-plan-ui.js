@@ -7,6 +7,7 @@ import { push, page, sheet, confirmSheet, chooseSheet } from './nav.js';
 import * as C from './run-coach.js';
 import * as P from './run-plan.js';
 import { openRun } from './run-detail.js';
+import { SUPABASE_URL, SUPABASE_KEY } from './config.js';
 
 const KEY = 'run-plan';
 export const getPlan = () => { const { id, key, ...cfg } = store.getConfig(KEY, {}); return cfg.goal ? cfg : null; };
@@ -20,6 +21,105 @@ const PHASE_BLURB = {
   Taper: 'cutting volume while keeping a little sharpness, so you arrive fresh.',
   Test: 'race week — the goal-distance time trial.',
 };
+
+// ---------- send a planned session to the Garmin watch ----------
+// App -> edge function 'garmin-send' (saves the steps + starts a GitHub Action) -> the action uploads the workout to
+// Garmin Connect and writes a 'garmin-send' status record, which we pull (store.syncNow) and show here.
+const WATCH_POLL_MS = 10000;
+const WATCH_TIMEOUT_MS = 3 * 60 * 1000;
+const WATCH_SETUP_MSG = 'Sending to the watch needs a one-time setup — ask Claude.';
+const WATCH_OK_MSG = 'On your watch ✓ — open Garmin Connect on your phone to sync the watch, then find it under Training › Workouts / today\'s workout.';
+const watchUi = new Map(); // sessionId -> { phase: 'sending'|'error'|'timeout', text }
+
+const sendStatusFor = (sessionId) => {
+  const st = store.all('garmin-send')[0];
+  return st && st.session_id === sessionId ? st : null;
+};
+
+// The state line and button label for one session's watch block.
+function watchView(sessionId) {
+  const ui = watchUi.get(sessionId);
+  if (ui?.phase === 'sending') return { busy: true, label: 'Sending…', text: 'Sending… this takes about a minute.', tone: '' };
+  if (ui) return { busy: false, label: 'Try again', text: ui.text, tone: 'err' };
+  const st = sendStatusFor(sessionId);
+  if (st?.state === 'sent') return { busy: false, label: 'Send again', text: WATCH_OK_MSG, tone: 'ok' };
+  if (st?.state === 'error') return { busy: false, label: 'Try again', text: `Could not send it to the watch: ${st.error || 'unknown error'}`, tone: 'err' };
+  return { busy: false, label: 'Send to watch', text: '', tone: '' };
+}
+
+export function watchHtml(s) {
+  if (s.status !== 'planned' || !store.configured) return '';
+  const v = watchView(s.id);
+  return `<div class="rn-watch" data-watch="${esc(s.id)}" style="margin-top:12px">
+    <button class="ghost block" data-a="rn-watch"${v.busy ? ' disabled' : ''}>${icon('run')} ${esc(v.label)}</button>
+    <p class="small ${v.tone === 'err' ? '' : 'muted'} rn-watch-msg" style="margin-top:6px${v.tone === 'err' ? ';color:var(--danger,#c0392b)' : ''}">${esc(v.text)}</p></div>`;
+}
+
+function refreshWatch(sessionId) {
+  const v = watchView(sessionId);
+  document.querySelectorAll(`[data-watch="${CSS.escape(sessionId)}"]`).forEach((box) => {
+    const b = box.querySelector('button');
+    const p = box.querySelector('.rn-watch-msg');
+    if (b) { b.disabled = v.busy; b.lastChild.textContent = ` ${v.label}`; }
+    if (p) { p.textContent = v.text; p.classList.toggle('muted', v.tone !== 'err'); p.style.color = v.tone === 'err' ? 'var(--danger,#c0392b)' : ''; }
+  });
+}
+
+async function callSendFunction(session) {
+  let token = SUPABASE_KEY;
+  try { const s = await store.client?.auth.getSession(); if (s?.data?.session?.access_token) token = s.data.session.access_token; } catch { /* offline */ }
+  let r;
+  try {
+    r = await fetch(`${SUPABASE_URL}/functions/v1/garmin-send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: SUPABASE_KEY, Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ session_id: session.id, steps: P.sessionSteps(session), name: P.watchWorkoutName(session) }),
+    });
+  } catch {
+    throw new Error('No connection — check your internet and try again.');
+  }
+  let body = null;
+  try { body = await r.json(); } catch { /* not JSON */ }
+  if (r.ok) return body || {};
+  if (r.status === 404 || body?.error === 'not_configured') throw new Error(WATCH_SETUP_MSG);
+  if (r.status === 401) throw new Error('Log in to the app first (Me tab), then try again.');
+  if (r.status === 429) throw new Error(body?.message || 'Please wait a couple of minutes before sending again.');
+  throw new Error(body?.message || body?.error || 'Could not start the send. Try again in a minute.');
+}
+
+export async function sendToWatch(sessionId) {
+  const session = getPlan()?.sessions?.find((x) => x.id === sessionId);
+  if (!session || watchUi.get(sessionId)?.phase === 'sending') return;
+  watchUi.set(sessionId, { phase: 'sending' });
+  refreshWatch(sessionId);
+  try {
+    const { requested_at: requestedAt } = await callSendFunction(session);
+    const started = Date.now();
+    for (;;) {
+      await new Promise((res) => setTimeout(res, WATCH_POLL_MS));
+      try { await store.syncNow(); } catch { /* keep polling */ }
+      const st = sendStatusFor(sessionId);
+      if (st && (!requestedAt || st.requested_at === requestedAt)) {
+        watchUi.delete(sessionId);
+        if (st.state === 'error') watchUi.set(sessionId, { phase: 'error', text: `Could not send it to the watch: ${st.error || 'unknown error'}` });
+        else toast('On your watch');
+        break;
+      }
+      if (Date.now() - started > WATCH_TIMEOUT_MS) {
+        watchUi.set(sessionId, { phase: 'timeout', text: 'Still waiting for Garmin. It may just be slow — check again in a few minutes, or try once more.' });
+        break;
+      }
+    }
+  } catch (e) {
+    watchUi.set(sessionId, { phase: 'error', text: e.message || 'Could not send it to the watch.' });
+  }
+  refreshWatch(sessionId);
+}
+
+export function wireWatch(el) {
+  el.querySelectorAll('[data-watch] [data-a="rn-watch"]').forEach((btn) =>
+    btn.addEventListener('click', () => sendToWatch(btn.closest('[data-watch]').dataset.watch)));
+}
 
 // ---------- auto-matching new runs to the plan (fire-and-forget, called from run.js) ----------
 export async function syncPlanMatches(ctx) {
@@ -88,6 +188,7 @@ function nextSessionHtml(s, plan, ctx) {
     <div class="card-head"><h2>${esc(s.title)}</h2><span class="pill rn-pill-run">${C.kmShort(s.totalKm)} km</span></div>
     <p class="tiny muted">${esc(P.currentWeekLabel(plan, s))} · ${esc(s.phase)} phase</p>
     ${sessionBody(s)}
+    ${watchHtml(s)}
     <div class="row" style="gap:8px;margin-top:14px">
       <button class="ghost" style="flex:1" data-a="rn-skip-session" data-id="${esc(s.id)}">Skip</button>
       <button class="primary" style="flex:1" data-a="rn-mark-done" data-id="${esc(s.id)}">Mark done</button>
@@ -96,6 +197,7 @@ function nextSessionHtml(s, plan, ctx) {
 }
 
 export function wirePlanSection(el, ctx, plan, afterChange) {
+  wireWatch(el);
   el.querySelector('[data-a="rn-view-plan"]')?.addEventListener('click', () => openSchedule(ctx, plan, afterChange));
   el.querySelector('[data-a="rn-move"]')?.addEventListener('click', async () => {
     await savePlan(P.movePlan(plan, ctx.now));
@@ -173,11 +275,13 @@ function openSessionDetail(s, plan, ctx, afterChange) {
             <div class="grow"><b>${esc(run.name || 'Run')}</b><p class="sub">${niceDate(run.start)} · ${C.km(run.distance_m).toFixed(1)} km · ${C.fmtPace(C.paceOf(run))}/km</p></div></button>
           <ul class="rn-fb">${fb.map((f) => `<li class="rn-fb-${esc(f.tone)}"><span class="rn-fb-ic">${icon('info')}</span><p>${esc(f.text)}</p></li>`).join('')}</ul>
           <button class="ghost block" style="margin-top:10px" data-a="unlink">Unlink this run</button></div>` : ''}
+        ${watchHtml(s)}
         ${s.status === 'planned' ? `<div class="row" style="gap:8px;margin-top:16px">
           <button class="ghost" style="flex:1" data-a="skip">Skip</button><button class="primary" style="flex:1" data-a="done">Mark done</button></div>` : ''}
         ${s.status === 'skipped' ? '<p class="small muted" style="margin-top:12px">This session was skipped.</p>' : ''}
       `,
     });
+    wireWatch(el);
     el.querySelector('[data-open-run]')?.addEventListener('click', () => openRun(run, ctx));
     el.querySelector('[data-a="unlink"]')?.addEventListener('click', async () => { await savePlan(P.unlink(getPlan(), s.id)); afterChange(); });
     el.querySelector('[data-a="done"]')?.addEventListener('click', () => markDoneFlow(getPlan(), s.id, ctx, afterChange));

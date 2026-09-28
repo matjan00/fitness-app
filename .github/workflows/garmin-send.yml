@@ -1,9 +1,12 @@
-name: Garmin sync
+name: Garmin send workout
 
 on:
-  schedule:
-    - cron: "17 */3 * * *"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      session_id:
+        description: "Plan session id (the steps come from the app's request record)"
+        required: true
+        type: string
 
 # Sync and send never log in to Garmin at the same time.
 concurrency:
@@ -11,7 +14,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  sync:
+  send:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,13 +27,16 @@ jobs:
         run: pip install garminconnect==0.3.16
 
       - name: Run unit tests (no network)
-        run: python scripts/test_garmin_sync.py -v
+        run: |
+          python scripts/test_garmin_workouts.py
+          python scripts/test_garmin_send.py
 
-      - name: Sync Garmin runs
+      - name: Send workout to Garmin
         env:
           GARMIN_EMAIL: ${{ secrets.GARMIN_EMAIL }}
           GARMIN_PASSWORD: ${{ secrets.GARMIN_PASSWORD }}
           GARMIN_TOKENS: ${{ secrets.GARMIN_TOKENS }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
           SUPABASE_USER_ID: ${{ secrets.SUPABASE_USER_ID }}
-        run: python scripts/garmin_sync.py
+          SESSION_ID: ${{ inputs.session_id }}
+        run: python scripts/garmin_send.py

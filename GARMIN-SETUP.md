@@ -101,3 +101,39 @@ fresh token.
   data Strava did. They're marked as approximate internally and should still be close.
 - The sync only looks at running activities (including treadmill and trail runs) — other sports
   are skipped.
+
+---
+
+# Optional: "Send to watch" button (planned runs go to your Forerunner 55)
+
+The Send to watch button in the training plan uploads the session to Garmin Connect as a structured workout with
+pace targets, scheduled for today. It needs the Garmin sync above to work first (same Garmin login secrets), plus
+one extra one-time setup: a GitHub token that lets the app start the send job.
+
+## Step A - Create the GitHub token (free)
+
+1. Open github.com and sign in. Click your profile picture (top right) > **Settings**.
+2. Scroll the left menu to the bottom > **Developer settings** > **Personal access tokens** > **Fine-grained tokens**.
+3. Click **Generate new token**.
+4. Token name: `fitness-app garmin send`. **Expiration: 1 year** (pick "Custom" and a date one year ahead if needed).
+5. Repository access: choose **Only select repositories** and pick **matjan00/fitness-app**.
+6. Click **Repository permissions**, find **Actions** and set it to **Read and write**. Leave everything else as it is.
+7. Click **Generate token** and copy the token now (it starts with `github_pat_`; GitHub shows it only once).
+
+Write down the expiry date (in a year). When it expires the button shows the "needs a one-time setup" message:
+repeat Step A and B with a new token.
+
+## Step B - Add the token to Supabase
+
+1. Open the Supabase dashboard, open your project, then **Edge Functions** in the left menu > **Secrets**
+   (also called "Manage secrets").
+2. Add a new secret named exactly `GITHUB_DISPATCH_TOKEN` and paste the token as the value. Save.
+
+(The `garmin-send` edge function must also be deployed - Claude does that.)
+
+## Using it
+
+Open a planned session (next-session card or session detail) and tap **Send to watch**. After about a minute it says
+"On your watch". Then open **Garmin Connect** on your phone and let it sync the watch; the workout appears under
+**Training > Workouts** and as today's workout on the watch. Each send replaces the previous one this app sent, and
+you can send at most once every 2 minutes.

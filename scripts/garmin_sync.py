@@ -360,7 +360,13 @@ def garmin_login():
 
     if tokens:
         try:
-            import garth
+            try:
+                import garth
+            except ImportError:
+                # Newer garminconnect (0.3+) no longer uses garth: hand it the token JSON directly.
+                client = Garmin(email or "token-login")
+                client.login(tokenstore=tokens)
+                return client
             garth.client.loads(tokens)
             client = Garmin(email or "token-login")
             client.garth = garth.client

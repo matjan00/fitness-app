@@ -428,3 +428,92 @@ export function currentWeekLabel(plan, session) {
   const pos = weekSessions.findIndex((s) => s.id === session.id) + 1;
   return `Week ${session.week} · session ${pos} of ${weekSessions.length} this week`;
 }
+
+// ---------- structured steps (for sending a session to a watch) ----------
+// Device-neutral description of a session, derived from the session's own fields (so it also works for plans saved
+// before this existed). Step shapes:
+//   { kind: 'warmup'|'run'|'recovery'|'cooldown', distance_m | duration_s | open: true, pace_min_s_per_km?, pace_max_s_per_km? }
+//   { kind: 'repeat', reps, steps: [ …run/recovery steps ] }
+// pace_min = the FASTER end of the range (fewer seconds per km), pace_max = the slower end. No pace fields = no target.
+const num = (s) => parseFloat(String(s).replace(',', '.'));
+
+// "2 km easy", "1.5 km easy", "15 min easy jogging + strides" → { distance_m } | { duration_s } | null
+function parseAmount(text) {
+  const m = String(text || '').match(/(\d+(?:[.,]\d+)?)\s*(km|min)\b/i);
+  if (!m) return null;
+  const v = num(m[1]);
+  return /km/i.test(m[2]) ? { distance_m: Math.round(v * 1000) } : { duration_s: Math.round(v * 60) };
+}
+
+// "5 × 1 km" / "8 × 400 m" → { reps, distance_m }
+function parseReps(text) {
+  const m = String(text || '').match(/(\d+)\s*[×x]\s*(\d+(?:[.,]\d+)?)\s*(km|m)\b/i);
+  if (!m) return null;
+  const v = num(m[2]);
+  return { reps: Number(m[1]), distance_m: Math.round(/km/i.test(m[3]) ? v * 1000 : v) };
+}
+
+// "90 s jog", "160 m jog", "2–3 min jog recovery" → { duration_s } | { distance_m } (ranges use the midpoint)
+function parseRecovery(text) {
+  const t = String(text || '');
+  let m = t.match(/,\s*(\d+)(?:\s*[–-]\s*(\d+))?\s*(s|min)\b[^,.]*jog/i);
+  if (m) {
+    const a = Number(m[1]);
+    const b = m[2] ? Number(m[2]) : a;
+    return { duration_s: Math.round(((a + b) / 2) * (m[3].toLowerCase() === 'min' ? 60 : 1)) };
+  }
+  m = t.match(/,\s*(\d+)\s*m\s*jog/i);
+  if (m) return { distance_m: Number(m[1]) };
+  return null;
+}
+
+const withPace = (step, pace) => (pace && pace.length === 2 ? { ...step, pace_min_s_per_km: Math.round(Math.min(...pace)), pace_max_s_per_km: Math.round(Math.max(...pace)) } : step);
+
+export function sessionSteps(session) {
+  if (!session) return [];
+  const steps = [];
+  const pace = session.targetPace;
+  const warm = parseAmount(session.warmup);
+  const cool = parseAmount(session.cooldown);
+  const totalM = Math.round((session.totalKm || 0) * 1000);
+  const main = session.main || '';
+  if (warm) steps.push({ kind: 'warmup', ...warm });
+
+  if (session.type === 'intervals') {
+    const r = parseReps(main);
+    if (r) {
+      const rec = parseRecovery(main) || { duration_s: 90 };
+      steps.push({ kind: 'repeat', reps: r.reps, steps: [withPace({ kind: 'run', distance_m: r.distance_m }, pace), { kind: 'recovery', ...rec }] });
+    } else {
+      steps.push(withPace({ kind: 'run', open: true }, pace));
+    }
+  } else if (session.type === 'tempo') {
+    const a = parseAmount(main);
+    steps.push(withPace({ kind: 'run', ...(a || { open: true }) }, pace));
+  } else if (session.type === 'test5k' || session.type === 'test10k') {
+    const m = main.match(/^(\d+(?:[.,]\d+)?)\s*km/i);
+    const dist = m ? Math.round(num(m[1]) * 1000) : session.type === 'test5k' ? 5000 : 10000;
+    steps.push({ kind: 'run', distance_m: dist }); // all-out, evenly paced: deliberately no pace target
+  } else if (session.type === 'strides') {
+    const s = main.match(/(\d+)\s*[×x]\s*(\d+)\s*s\s+strides/i);
+    const easyM = Math.max(0, totalM - 600);
+    steps.push(withPace({ kind: 'run', distance_m: easyM || 1000 }, pace));
+    steps.push({ kind: 'repeat', reps: s ? Number(s[1]) : 6, steps: [{ kind: 'run', duration_s: s ? Number(s[2]) : 20 }, { kind: 'recovery', duration_s: 40 }] });
+  } else {
+    // easy / long / anything else: one run at the easy pace range
+    const body = totalM - (warm && warm.distance_m ? warm.distance_m : 0) - (cool && cool.distance_m ? cool.distance_m : 0);
+    steps.push(withPace(body > 0 ? { kind: 'run', distance_m: body } : { kind: 'run', open: true }, pace));
+  }
+  if (cool) steps.push({ kind: 'cooldown', ...cool });
+  return steps;
+}
+
+// Short workout name shown on the watch, e.g. "Fit · W3 VO2max intervals 5×1 km".
+export function watchWorkoutName(session) {
+  if (!session) return 'Fit · run';
+  let name = `Fit · W${session.week} ${session.title || 'Run'}`;
+  const r = session.type === 'intervals' ? parseReps(session.main) : null;
+  if (r) name += ` ${r.reps}×${r.distance_m >= 1000 ? `${round1(r.distance_m / 1000)} km` : `${r.distance_m} m`}`;
+  else if (session.totalKm) name += ` ${round1(session.totalKm)} km`;
+  return name.slice(0, 60);
+}
