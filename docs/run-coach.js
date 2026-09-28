@@ -361,7 +361,7 @@ export function buildContext({ runs = [], workouts = [], settings = {}, now = Da
   const maxHr = estimateMaxHr(runs, settings.max_hr);
   const ctx = {
     now, runs, workouts, isLeg, settings,
-    runsPerWeek: clamp(num(settings.runs_per_week) || 4, 3, 6),
+    runsPerWeek: clamp(num(settings.runs_per_week) || 4, 2, 6),
     focus: settings.focus === '10k' ? '10k' : '5k',
     est, olderEst, vdot: est?.vdot || olderEst?.vdot || null, zoneVdot, zoneSource, paces,
     maxHr: maxHr.hr, maxHrSource: maxHr.source, avgDist,
@@ -571,12 +571,14 @@ export function weeklyReview(ctx) {
 
 // ---------- plan ----------
 const DAY_SLOTS = {
+  2: [2, 5],
   3: [1, 3, 6],
   4: [1, 2, 4, 6],
   5: [0, 1, 3, 4, 6],
   6: [0, 1, 2, 3, 5, 6],
 };
 const LAYOUTS = {
+  2: ['quality', 'long'],
   3: ['quality', 'easy', 'long'],
   4: ['intervals', 'easy', 'tempo', 'long'],
   5: ['easy', 'intervals', 'tempo', 'strides', 'long'],

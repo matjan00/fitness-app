@@ -275,15 +275,15 @@ function planHtml(ctx) {
   return `<div class="card rn-plan">
     <div class="card-head"><h2>${nextWeek ? 'Next week' : "This week's plan"}</h2><span class="pill rn-pill-run">~${Math.round(plan.targetKm)} km · ${ctx.runsPerWeek} runs</span></div>
     <div class="seg rn-plan-seg"><button data-plan="this" class="${nextWeek ? '' : 'on'}">This week</button><button data-plan="next" class="${nextWeek ? 'on' : ''}">Next week</button></div>
-    ${nextWeek ? '' : todayBody}
-    <div class="rn-sessions">${plan.sessions.map((s) => `
+    
+    <div class="rn-sessions">${plan.sessions.map((s, i) => `
       <div class="rn-sess ${s.done ? 'done' : ''} ${next && s === next ? 'next' : ''}">
-        <span class="rn-day">${esc(s.day)}</span>
+        <span class="rn-day">Run ${i + 1}</span>
         <div class="grow"><b>${esc(s.title)}${s.hard ? ` <span class="rn-hard">${icon('bolt')}</span>` : ''}</b><p>${esc(s.detail)}</p></div>
         <span class="rn-sess-end">${s.done ? `<span class="rn-check">${icon('check')}</span>` : `<span class="rn-sess-km">${C.kmShort(s.km)} km</span>`}</span>
       </div>`).join('')}</div>
     ${plan.notes.map((n) => `<p class="tiny muted rn-note">${esc(n)}</p>`).join('')}
-    <p class="tiny muted rn-note">Days are a suggestion — move runs around your week, just keep hard days apart.</p>
+    <p class="tiny muted rn-note">Do the runs on any days you like — just keep at least one easy day between hard ones.</p>
   </div>`;
 }
 
@@ -493,7 +493,7 @@ function renderMe(el) {
         <div class="grow"><b>Garmin</b><p class="small muted" id="rn-st-text">${esc(store.configured ? (st ? garminStatusText(st) : 'Setup: add your Garmin login as GitHub secrets — ask Claude.') : 'Needs online sync, which isn’t set up yet.')}</p></div>
         <div id="rn-st-actions" class="row">${store.configured ? `<button class="icon-btn ${syncing ? 'rn-spin' : ''}" data-a="sync" aria-label="Refresh" ${syncing ? 'disabled' : ''}>${icon('sync')}</button>` : ''}</div>
       </div>
-      ${plan ? RP.meGoalPlanHtml(plan) : `<div><p class="rn-label">Runs per week</p><div class="seg" id="rn-rpw">${[3, 4, 5, 6].map((n) => `<button data-v="${n}" class="${ctx.runsPerWeek === n ? 'on' : ''}">${n}</button>`).join('')}</div></div>
+      ${plan ? RP.meGoalPlanHtml(plan) : `<div><p class="rn-label">Runs per week</p><div class="seg" id="rn-rpw">${[2, 3, 4, 5, 6].map((n) => `<button data-v="${n}" class="${ctx.runsPerWeek === n ? 'on' : ''}">${n}</button>`).join('')}</div></div>
       <div><p class="rn-label">Goal</p><div class="seg" id="rn-focus">${['5k', '10k'].map((f) => `<button data-v="${f}" class="${ctx.focus === f ? 'on' : ''}">${f === '5k' ? 'Faster 5k' : 'Faster 10k'}</button>`).join('')}</div></div>
       ${demo ? '' : '<button class="ghost" id="rn-goal-start">Set a race goal & plan</button>'}`}
       <label>Max heart rate (optional)
