@@ -8,6 +8,7 @@ import { sumEntries, suggestTargets, ACTIVITY, weightTrend, weeklyChange, latest
 import { MEALS, mealLabel, settings, targets, saveSettings, ring, bar, pickFood, amountSheet, snap, customFoodForm, img } from './food-ui.js';
 import { renderBook, openManual, blankDraft, logRecipe, recipePer, openRecipe, editRecipe } from './food-recipes.js';
 import { loadFoods } from './food-db.js';
+import { renderLearn, loadLessons } from './food-learn.js';
 
 export const tab = { id: 'food', title: 'Food', icon: 'food', render };
 
@@ -26,11 +27,11 @@ function render(el) {
   if (Date.now() - dayChosenAt > 3 * 3600 * 1000) { day = today(); dayChosenAt = Date.now(); }
   const v = view();
   el.innerHTML = `<div class="page-head row between"><h1>Food</h1>
-      <div class="seg fd-viewseg"><button data-v="diary" class="${v === 'diary' ? 'on' : ''}">Diary</button><button data-v="recipes" class="${v === 'recipes' ? 'on' : ''}">Recipes</button></div></div>
+      <div class="seg fd-viewseg"><button data-v="diary" class="${v === 'diary' ? 'on' : ''}">Diary</button><button data-v="recipes" class="${v === 'recipes' ? 'on' : ''}">Recipes</button><button data-v="learn" class="${v === 'learn' ? 'on' : ''}">Learn</button></div></div>
     <div id="fd-body"></div>`;
   $$('.fd-viewseg button', el).forEach((b) => { b.onclick = () => { local.set('fd-view', b.dataset.v); render(el); }; });
   const body = $('#fd-body', el);
-  if (v === 'recipes') renderBook(body); else renderDiary(body);
+  if (v === 'recipes') renderBook(body); else if (v === 'learn') renderLearn(body); else renderDiary(body);
 }
 
 function dayTitle(d) {
@@ -483,6 +484,7 @@ export function init() {
       setTimeout(() => openManual(url ? { url } : { text: all }), 60);
     }, 0);
   }
-  // Warm up the food table in the background so the first search is instant.
+  // Warm up the food table and lesson content in the background so the first search/open is instant.
   setTimeout(() => loadFoods().catch(() => {}), 1500);
+  setTimeout(() => loadLessons().catch(() => {}), 1800);
 }

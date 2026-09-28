@@ -1,15 +1,16 @@
 // Offline support. The app files are served "stale-while-revalidate": the saved copy opens instantly
 // (also with no signal at the gym) and a fresh copy is fetched in the background for next time.
 // Exercise pictures are cached the first time they are shown. Supabase/Strava calls are never cached.
-const VERSION = 'fit-v8';
+const VERSION = 'fit-v10';
 const CORE = ['./', 'index.html', 'style.css', 'gym.css', 'food.css', 'run.css', 'app.js', 'util.js', 'store.js', 'nav.js',
   'charts.js', 'config.js', 'me.js', 'gym.js', 'gym-calc.js', 'gym-data.js', 'gym-lib.js', 'gym-workout.js', 'gym-routines.js',
-  'food.js', 'food-parse.js', 'food-db.js', 'food-calc.js', 'food-cats.js', 'food-ui.js', 'food-recipes.js', 'food-photo.js', 'data/foods.json',
+  'food.js', 'food-parse.js', 'food-db.js', 'food-calc.js', 'food-cats.js', 'food-ui.js', 'food-recipes.js', 'food-photo.js', 'food-learn.js',
+  'data/foods.json', 'data/lessons.json',
   'run.js', 'run-coach.js', 'run-detail.js', 'run-strava.js', 'run-demo.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png',
   'vendor/supabase.js', 'vendor/chart.umd.min.js', 'data/exercises.json'];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(CORE).catch(() => {})).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(CORE.map((u) => new Request(u, { cache: 'reload' }))).catch(() => {})).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (e) => {
@@ -43,7 +44,7 @@ self.addEventListener('fetch', (e) => {
     }
     e.respondWith(caches.open(VERSION).then(async (c) => {
       const hit = await c.match(req, { ignoreSearch: url.origin === location.origin });
-      const net = fetch(req).then((res) => { if (res.ok) c.put(req, res.clone()); return res; }).catch(() => hit);
+      const net = fetch(req, url.origin === location.origin ? { cache: 'no-cache' } : undefined).then((res) => { if (res.ok) c.put(req, res.clone()); return res; }).catch(() => hit);
       return hit || net;
     }));
   }

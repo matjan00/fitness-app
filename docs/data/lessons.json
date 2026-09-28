@@ -1,0 +1,585 @@
+[
+  {
+    "id": "knife-mise",
+    "module": "Foundations",
+    "title": "Knife basics & mise en place",
+    "minutes": 6,
+    "summary": "A sharp knife and everything prepped before the pan goes on is what makes cooking feel calm instead of chaotic.",
+    "why": "Most of the stress in cooking comes from chopping an onion while something else is already burning. \"Mise en place\" (French for \"everything in its place\") means all ingredients are washed, chopped and measured before you turn on any heat. A sharp knife is also safer than a dull one — it needs less force, so it's less likely to slip.",
+    "steps": [
+      "Read the whole recipe once before you start so you know what happens when.",
+      "Wash and chop every ingredient first; put each one in its own small bowl or pile.",
+      "Grip the knife with your index finger and thumb pinching the blade just above the handle, not on top of it.",
+      "Curl your other hand's fingertips under, knuckles forward, to guide the knife and protect your fingertips.",
+      "Cut with a rocking or push-forward motion, keeping the knife tip on the board where possible.",
+      "Only then turn on the stove or oven."
+    ],
+    "mistakes": [
+      { "mistake": "Chopping as you go, mid-cook.", "fix": "Prep everything first — a burning pan doesn't wait for you to finish dicing." },
+      { "mistake": "Using a dull knife.", "fix": "A dull blade needs more force and slips more; a few strokes on a honing steel or a proper sharpening keeps it safe and easy." },
+      { "mistake": "Curling fingers away from the blade instead of tucking them under.", "fix": "Knuckles-forward grip keeps the blade away from fingertips even if it slips." },
+      { "mistake": "Cutting on an unstable board.", "fix": "Put a damp cloth or paper towel under the board so it can't slide." }
+    ],
+    "doneness": [],
+    "flavorTips": [
+      "Salt vegetables just before cooking, not long before — early salting draws out water and can make them steam instead of brown.",
+      "Uniform-sized pieces cook evenly; irregular pieces mean some are raw while others overcook."
+    ],
+    "practice": {
+      "task": "Before your next dinner, prep and portion every ingredient into bowls before touching the stove.",
+      "successCriteria": "You cook the whole meal without stopping mid-recipe to wash or chop something."
+    },
+    "techniques": [],
+    "videoQuery": "basic knife skills and mise en place for home cooks",
+    "levelUp": "Practise the rock-chop on an onion, aiming for evenly sized small dice in under a minute."
+  },
+  {
+    "id": "heat-pans",
+    "module": "Foundations",
+    "title": "Heat control & pans",
+    "minutes": 7,
+    "summary": "Which pan to use and how hot it should be before food goes in — the single biggest lever over how your food tastes.",
+    "why": "Stainless steel gives the best browning (\"fond\") for pan sauces but food sticks if the pan isn't hot enough first. Non-stick is easiest for eggs and fish skin but shouldn't be used on high heat — it damages the coating and its smoke point is lower. Cast iron holds heat well for searing but heats up slowly and needs to warm gradually. Smoke point is the temperature an oil starts burning and tasting bitter; use a higher smoke-point oil (rapeseed/canola, refined sunflower) for hot searing and save olive oil or butter for lower heat or finishing.",
+    "steps": [
+      "Choose the pan for the job: stainless or cast iron for a real sear, non-stick for eggs, fish skin, or delicate foods.",
+      "Preheat the empty pan for 1-2 minutes on medium-high before adding any oil.",
+      "Add oil and let it shimmer or ripple (a few seconds) — that's the sign it's hot enough.",
+      "For stainless steel, do the water-drop test: a droplet should skate around in beads, not evaporate instantly.",
+      "Add food only once the pan is properly hot, then don't rush — let it do its work."
+    ],
+    "mistakes": [
+      { "mistake": "Adding food to a cold or barely-warm pan.", "fix": "Preheat the empty pan first — this is the most common reason food sticks or steams instead of browning." },
+      { "mistake": "Using olive oil or butter alone for high-heat searing.", "fix": "Use a neutral, high smoke-point oil for the hot part; add butter at the end for flavour (basting), not at the start." },
+      { "mistake": "Cranking non-stick pans to maximum heat.", "fix": "Keep non-stick to low-medium; it's not designed for searing steak." },
+      { "mistake": "Overcrowding the pan.", "fix": "Cook in batches — too much food drops the pan's temperature and everything steams instead of browning." }
+    ],
+    "doneness": [],
+    "flavorTips": [
+      "Browning (the Maillard reaction) only happens once surface moisture is gone and the pan is hot — pat food dry first.",
+      "Deglazing (adding liquid to a hot pan after searing) lifts the browned bits into a sauce — don't wash that flavour down the drain."
+    ],
+    "practice": {
+      "task": "Cook the same cut of meat or block of tofu twice this week: once in a cold pan, once properly preheated. Compare the crust.",
+      "successCriteria": "You can describe the difference in browning and tell someone why it happened."
+    },
+    "techniques": ["pan"],
+    "videoQuery": "how to properly preheat a pan for searing",
+    "levelUp": "Try the same sear in stainless steel and cast iron and compare crust and evenness."
+  },
+  {
+    "id": "seasoning-basics",
+    "module": "Foundations",
+    "title": "Seasoning basics: salt, acid, fat, heat",
+    "minutes": 8,
+    "summary": "Four levers — salt, acid, fat, heat — explain almost every \"something's missing\" moment in home cooking.",
+    "why": "Most bland dishes are missing salt or acid, not a rare spice. Salt amplifies flavours that are already there. Acid (lemon, vinegar) brightens and cuts through richness or heaviness. Fat carries flavour and mouthfeel — this is why low-fat cooking needs extra help from acid, herbs and spice to not taste flat. Heat (chilli, pepper, mustard) adds a different kind of interest. Learning to taste and ask \"what's missing\" is more useful than memorising recipes.",
+    "steps": [
+      "Taste the dish before deciding what it needs — never season blind.",
+      "If it tastes flat or dull, add salt first, a little at a time, tasting after each addition.",
+      "If it tastes salty enough but still \"heavy\" or one-note, add acid — a squeeze of lemon, a splash of vinegar.",
+      "If it tastes thin or harsh even after salt and acid, a small amount of fat (olive oil, a knob of butter) often rounds it out.",
+      "If it still feels boring, reach for heat or a fresh herb at the end, not more salt.",
+      "Season in layers throughout cooking, not only at the very end."
+    ],
+    "mistakes": [
+      { "mistake": "Only salting at the end of cooking.", "fix": "Salt in stages — a little while cooking, a little at the end — it seasons more evenly and you need less overall." },
+      { "mistake": "Adding more salt when a dish tastes 'off' but is already salty enough.", "fix": "Try acid instead — a squeeze of lemon or vinegar fixes more dishes than an extra pinch of salt." },
+      { "mistake": "Skipping fat entirely in high-protein cooking and wondering why food tastes flat.", "fix": "A teaspoon of olive oil or a small amount of nuts/seeds/avocado goes a long way and barely moves your macros." },
+      { "mistake": "Never tasting as you go.", "fix": "Taste at least twice during cooking, not just once you plate it." }
+    ],
+    "doneness": [],
+    "flavorTips": [
+      "A pinch of salt in a fruit dessert or sweet sauce makes it taste more, not less, sweet.",
+      "Acid added at the very end (off the heat) tastes brighter than acid cooked in for a long time.",
+      "Finishing salt (flaky salt sprinkled on top just before serving) gives little bursts of seasoning that stirred-in salt can't."
+    ],
+    "practice": {
+      "task": "Cook one simple dish this week and deliberately taste-adjust it through salt, then acid, then fat, tasting after each step.",
+      "successCriteria": "You can say which of the three fixed the dish, and it tasted noticeably better after adjusting than the first bite."
+    },
+    "techniques": [],
+    "videoQuery": "salt fat acid heat explained for home cooks",
+    "levelUp": "Take a dish you always make the same way and try finishing it with an acid you don't normally use (lime instead of lemon, cider vinegar instead of wine vinegar)."
+  },
+  {
+    "id": "searing",
+    "module": "Proteins",
+    "title": "Searing meat & fish",
+    "minutes": 7,
+    "summary": "A hot pan, a dry surface, and patience — the three things that turn a grey, sweaty cutlet into a golden crust.",
+    "why": "A good sear needs the surface of the food to be dry (surface water has to evaporate before browning can start) and the pan hot enough. Moving the food around too early stops a crust forming — it needs contact time to release itself naturally, which is also how you know it's ready to flip.",
+    "steps": [
+      "Pat the meat or fish completely dry with paper towel — wet surfaces steam instead of brown.",
+      "Season with salt just before it goes in the pan.",
+      "Preheat the pan and oil until shimmering (see the heat-control lesson).",
+      "Lay the food away from you into the pan to avoid splashing yourself, then leave it alone.",
+      "Don't move or press it — it will release naturally from the pan once a crust has formed, usually after 2-4 minutes depending on thickness.",
+      "Flip once, sear the other side, then finish to the right internal temperature (in the oven for thicker cuts).",
+      "Rest the meat for a few minutes before cutting."
+    ],
+    "mistakes": [
+      { "mistake": "Putting wet meat/fish straight into the pan.", "fix": "Pat dry with paper towel first — always." },
+      { "mistake": "Moving or flipping too early.", "fix": "Wait until it releases on its own; forcing it off tears the crust and leaves it behind in the pan." },
+      { "mistake": "Pressing fish or burgers down with a spatula.", "fix": "Pressing squeezes out juices — let the food cook undisturbed." },
+      { "mistake": "Not resting meat before cutting.", "fix": "Rest 3-5 minutes so juices redistribute instead of running out onto the board." }
+    ],
+    "doneness": [
+      "Meat/fish releases from the pan on its own when a crust has formed — that's your cue to flip.",
+      "Use a thermometer for the final internal temperature rather than guessing from colour."
+    ],
+    "flavorTips": [
+      "Baste with a small knob of butter, garlic and thyme in the last minute for extra flavour with minimal added fat.",
+      "A squeeze of lemon at the end lifts a seared piece of fish or chicken more than extra salt would."
+    ],
+    "practice": {
+      "task": "Sear a chicken breast, piece of fish or tofu this week without touching it until it releases on its own.",
+      "successCriteria": "You get an even golden crust with no torn or stuck patches, and the food lifts cleanly off the pan."
+    },
+    "techniques": ["pan"],
+    "videoQuery": "how to sear meat and fish properly",
+    "levelUp": "Try searing a thicker cut and finishing it in the oven, checking internal temperature with a thermometer instead of cutting it open to check."
+  },
+  {
+    "id": "chicken-breast",
+    "module": "Proteins",
+    "title": "Chicken breast that stays juicy",
+    "minutes": 8,
+    "summary": "The most-cooked high-protein food in most kitchens, and the easiest to overcook — here's how to keep it juicy.",
+    "why": "Chicken breast is lean, so there's very little fat to keep it moist if it's overcooked — every extra minute past done dries it out. Brining or a simple salt-marinade helps it hold onto moisture. Pounding it to an even thickness means the whole piece finishes cooking at the same time, instead of the thin end drying out while the thick end is still raw.",
+    "steps": [
+      "If time allows, brine for 20-60 minutes in water with about 3-4% salt (30-40 g salt per litre), or simply salt the chicken 30+ minutes ahead.",
+      "Pound or butterfly thick breasts so the whole piece is an even thickness.",
+      "Pat dry, season, and sear in a hot pan for 4-6 minutes per side depending on thickness.",
+      "Or finish thicker pieces in a 180-200°C oven after searing until done.",
+      "Check temperature at the thickest part with a thermometer.",
+      "Pull the chicken off the heat at about 70-72°C — it will keep cooking a few more degrees as it rests (carry-over).",
+      "Rest for 5 minutes before slicing."
+    ],
+    "mistakes": [
+      { "mistake": "Cooking straight from the fridge.", "fix": "Let it sit at room temperature for 10-15 minutes first so it cooks more evenly." },
+      { "mistake": "Cooking an uneven piece (thin tip, thick middle).", "fix": "Pound it to an even thickness or butterfly it before cooking." },
+      { "mistake": "Cooking until it hits 74°C in the pan and only then pulling it off.", "fix": "Pull at ~70-72°C — carry-over heat finishes the job while it rests, keeping it juicier." },
+      { "mistake": "Cutting into it straight off the heat.", "fix": "Rest 5 minutes so the juices stay in the meat instead of on the board." }
+    ],
+    "doneness": [
+      "Safe internal temperature: 74°C at the thickest point (Polish/EU and US food-safety guidance).",
+      "Pull from the heat around 70-72°C and let carry-over cooking finish it during the rest.",
+      "Juices should run clear, and the flesh should be opaque white, not pink, all the way through."
+    ],
+    "flavorTips": [
+      "A simple brine (salt water) does more for juiciness than most marinades — you can still marinate for flavour afterward.",
+      "Slice against the grain (across the muscle fibres) for a more tender bite."
+    ],
+    "practice": {
+      "task": "Cook a chicken breast using a meat thermometer and pull it at 70-72°C instead of guessing.",
+      "successCriteria": "The chicken is fully cooked (juices clear, no pink) but still visibly juicy when sliced, not dry or stringy."
+    },
+    "techniques": ["pan", "oven"],
+    "videoQuery": "how to cook juicy chicken breast every time",
+    "levelUp": "Try a quick 30-minute yoghurt-based marinade (yoghurt, lemon, garlic, paprika) before cooking — the acid and enzymes tenderise the meat."
+  },
+  {
+    "id": "lean-beef-pork",
+    "module": "Proteins",
+    "title": "Lean beef & pork, cooked with confidence",
+    "minutes": 8,
+    "summary": "Steak doneness temperatures, pork's real safe temperature (lower than most people think), and why slicing direction matters.",
+    "why": "Whole cuts of pork are safe at 63°C with a rest — much lower than the old \"well done\" advice, and far juicier. Beef steak doneness is a matter of taste once it's from a safe source, but hitting a target temperature reliably needs a thermometer, not guessing by touch. For both, cutting against the grain (perpendicular to the muscle fibres) shortens the fibres your teeth have to work through, making lean cuts feel far more tender.",
+    "steps": [
+      "Bring meat closer to room temperature for 15-20 minutes before cooking so it cooks more evenly.",
+      "Pat dry, season with salt (and pepper if you like), and sear in a hot pan.",
+      "For steak, use a thermometer inserted into the thickest part to check doneness rather than cutting into it.",
+      "For pork chops or loin, cook to 63°C internal, then rest — it's safe and far juicier than well-done.",
+      "For thicker cuts, sear on the stove then finish in a 180-200°C oven until target temperature.",
+      "Rest all meat for 5 minutes minimum before slicing — longer for bigger cuts.",
+      "Always slice against the grain (look at the direction of the muscle fibres and cut across them)."
+    ],
+    "mistakes": [
+      { "mistake": "Cooking pork chops until grey and dry out of old \"well-done pork\" habits.", "fix": "63°C with a rest is the current safe target for whole cuts — it stays pink-ish and juicy." },
+      { "mistake": "Slicing steak or pork with the grain.", "fix": "Turn the meat and slice across the visible muscle fibres — it makes a real difference to tenderness." },
+      { "mistake": "Guessing doneness by pressing the meat.", "fix": "Use a thermometer — it's cheap, fast, and removes the guesswork." },
+      { "mistake": "Skipping the rest.", "fix": "Resting lets juices redistribute; cutting immediately loses them onto the board." },
+      { "mistake": "Browning mince in an overcrowded pan so it boils instead of browns.", "fix": "Cook mince in batches with space between it, and don't stir constantly — let it sit to brown." }
+    ],
+    "doneness": [
+      "Beef steak: rare ~50-52°C, medium-rare ~55-57°C, medium ~60-63°C, well done 71°C+.",
+      "Whole-cut pork (chops, loin, tenderloin): 63°C internal, then rest 3 minutes — safe and juicy.",
+      "Ground/minced pork and beef, and poultry: cook to 71-74°C all the way through (no pink, juices run clear)."
+    ],
+    "flavorTips": [
+      "A dry rub of salt, pepper and paprika 30-60 minutes ahead builds a better crust than seasoning right before cooking.",
+      "Finish steak with a small pat of butter, crushed garlic and a herb sprig, basted over the meat in the last minute."
+    ],
+    "practice": {
+      "task": "Cook a pork chop to exactly 63°C using a thermometer, then rest and slice against the grain.",
+      "successCriteria": "The pork is pale pink in the centre (not grey throughout), juicy, and easy to cut through."
+    },
+    "techniques": ["pan", "oven", "grill"],
+    "videoQuery": "correct internal temperature for pork and beef steak",
+    "levelUp": "Try reverse-searing a thicker steak or pork chop: cook low in the oven first, then sear hard at the end for an even edge-to-edge doneness with a great crust."
+  },
+  {
+    "id": "fish-doneness",
+    "module": "Proteins",
+    "title": "Fish: salmon, cod, tuna",
+    "minutes": 7,
+    "summary": "Fish cooks fast and keeps cooking after it leaves the heat — knowing the cues stops it going from perfect to dry in a minute.",
+    "why": "Fish has delicate proteins that firm up and dry out quickly once overcooked, and there's no fat cushion like in a fatty cut of meat to hide the mistake (except in fattier fish like salmon). Cooking skin-side-down first and leaving it alone gets you crisp skin instead of skin that tears and sticks.",
+    "steps": [
+      "Pat the fish completely dry, especially the skin, and season with salt just before cooking.",
+      "Heat the pan well, add oil, and place fish skin-side down first if it has skin.",
+      "Press gently with a spatula for the first 20-30 seconds so the skin doesn't curl and lift away from the pan.",
+      "Leave it mostly undisturbed — fish releases from the pan once the skin is crisp, usually 3-5 minutes for a fillet.",
+      "Flip and cook the flesh side briefly (often just 1-2 minutes) or finish in the oven for thicker pieces.",
+      "Check doneness with a thermometer or by gently flaking with a fork at the thickest point.",
+      "Remove from heat slightly before fully done — it keeps cooking from residual heat."
+    ],
+    "mistakes": [
+      { "mistake": "Flipping too early, before the skin has released.", "fix": "Wait — the skin will lift cleanly from the pan once it's properly crisp; forcing it tears the skin." },
+      { "mistake": "Cooking fish all the way to fully opaque in the pan.", "fix": "Pull it slightly underdone — carry-over heat finishes it, and it stays moist instead of chalky." },
+      { "mistake": "Skipping the pat-dry step.", "fix": "Wet fish skin steams instead of crisping — always dry it thoroughly first." },
+      { "mistake": "Cooking tuna steaks all the way through like other fish.", "fix": "Tuna is often best seared hot and fast, left pink/rare in the middle, unlike salmon or white fish." }
+    ],
+    "doneness": [
+      "Salmon: opaque and just firm, flakes gently; medium ~52-55°C internal, more well-done ~60°C.",
+      "Cod, tilapia, other white fish: opaque throughout, flakes easily with a fork; roughly 55-60°C internal.",
+      "Tuna steaks are commonly served seared on the outside and pink/rare in the middle if very fresh — cook to your comfort and the fish's quality."
+    ],
+    "flavorTips": [
+      "A squeeze of lemon or a spoon of yoghurt-dill sauce adds brightness without needing extra fat.",
+      "Fresh dill, parsley or a caper-lemon mix are classic low-fat finishes for fish."
+    ],
+    "practice": {
+      "task": "Cook a skin-on salmon or trout fillet skin-side down, without flipping until the skin releases on its own.",
+      "successCriteria": "The skin is crisp and comes away from the pan cleanly, and the flesh is just opaque, not dry or chalky."
+    },
+    "techniques": ["pan", "oven"],
+    "videoQuery": "how to cook fish skin crispy pan",
+    "levelUp": "Try oven-roasting a whole fillet at 200°C for a hands-off method and compare texture to pan-searing."
+  },
+  {
+    "id": "eggs-5-ways",
+    "module": "Proteins",
+    "title": "Eggs 5 ways",
+    "minutes": 8,
+    "summary": "Boiled, poached, scrambled, omelette, and a shakshuka-style bake — cheap, fast, high-protein, and easy to get wrong.",
+    "why": "Eggs cook in seconds, not minutes, so most egg mistakes come from too much heat for too long. Low, gentle heat gives soft, creamy scrambled eggs; high heat gives rubbery ones. Timing from the moment water returns to a simmer is the reliable way to hit a boiled-egg texture you want every time.",
+    "steps": [
+      "Boiled: lower eggs into already-simmering water (or start in cold water and time from boiling); time from when the water is at a gentle simmer.",
+      "Poached: simmering water with a splash of vinegar, create a gentle swirl, crack the egg into a small bowl first, then slide it in.",
+      "Scrambled: low-medium heat, a small knob of butter, stir slowly and constantly, remove from heat just before fully set (residual heat finishes them).",
+      "Omelette: hot pan, beaten eggs poured in, pull the edges toward the centre with a spatula while tilting the pan to let raw egg flow to the edge, fold when just set.",
+      "Shakshuka-style: simmer a tomato/pepper sauce, make wells in it, crack eggs into the wells, cover and cook until whites are set but yolks are still soft."
+    ],
+    "mistakes": [
+      { "mistake": "Boiling eggs on high heat the whole time.", "fix": "Bring to a boil, then drop to a gentle simmer — a rolling boil cracks shells and toughens the white." },
+      { "mistake": "Scrambling eggs on high heat.", "fix": "Low-medium heat and slow stirring gives soft curds; high heat gives dry, rubbery eggs fast." },
+      { "mistake": "Cooking scrambled eggs until they look done in the pan.", "fix": "Pull them off just before fully set — residual heat finishes them on the plate." },
+      { "mistake": "Adding vinegar-free, fully boiling, turbulent water for poaching.", "fix": "A gentle simmer with a splash of vinegar and a swirl holds the egg together better." }
+    ],
+    "doneness": [
+      "Soft-boiled (jammy yolk): about 6-7 minutes at a gentle simmer from cold-start boiling, then into cold water.",
+      "Medium-boiled: about 8-9 minutes.",
+      "Hard-boiled: about 10-12 minutes, then straight into cold water to stop cooking and ease peeling.",
+      "Scrambled/omelette: eggs are safely cooked once no visibly runny liquid egg remains."
+    ],
+    "flavorTips": [
+      "A pinch of salt in the pan before scrambled eggs firm up too much helps season them evenly (some cooks salt at the very start for creamier eggs).",
+      "Fresh herbs (chives, dill, parsley) stirred in at the end add flavour without any fat or calories.",
+      "A spoon of twaróg or skyr stirred through warm scrambled eggs off the heat adds extra protein and creaminess."
+    ],
+    "practice": {
+      "task": "Cook a soft-boiled egg timed at 6-7 minutes from a simmer and check the yolk texture.",
+      "successCriteria": "The yolk is jammy/soft, not chalky or fully liquid, and the white is fully set."
+    },
+    "techniques": ["boiled", "pan"],
+    "videoQuery": "how to cook eggs 5 ways",
+    "levelUp": "Make a shakshuka-style bake from scratch — build the sauce, control the simmer, and get soft-set yolks under a lid."
+  },
+  {
+    "id": "legumes-tofu",
+    "module": "Proteins",
+    "title": "Legumes & tofu",
+    "minutes": 7,
+    "summary": "Cheap, high-protein and easy to make genuinely crispy — soaking, cooking times, and the tofu/chickpea crisping trick.",
+    "why": "Dried legumes need soaking to cook evenly and in a reasonable time; canned ones just need a rinse. Tofu is mostly water, so pressing it out first is what lets it actually crisp instead of steam. The same principle — remove surface moisture, then use enough heat — that applies to meat and fish applies here too.",
+    "steps": [
+      "For dried legumes: soak beans (not usually needed for red lentils) for 6-12 hours or overnight in plenty of water, then drain and rinse.",
+      "Cook soaked beans in fresh water at a gentle simmer (not a hard boil) until tender — times vary widely by type and age of the bean.",
+      "For canned legumes: drain and rinse well to remove excess sodium and the canning liquid taste.",
+      "For crispy chickpeas: pat canned, drained chickpeas completely dry, toss with a little oil and salt, and roast at 200-220°C or air-fry until crisp, shaking partway through.",
+      "For tofu: press between paper towel and something flat/heavy for 15-30 minutes to remove water.",
+      "Cube or slice pressed tofu, toss lightly in oil and cornflour/cornstarch if you want extra crispness, then pan-fry, oven-bake or air-fry until golden on multiple sides."
+    ],
+    "mistakes": [
+      { "mistake": "Skipping the soak for dried beans.", "fix": "Unsoaked beans take far longer and cook unevenly — soak overnight, or do a quick-soak (boil 2 minutes, sit 1 hour)." },
+      { "mistake": "Adding salt to the cooking water for dried beans right at the start.", "fix": "Some cooks find it's fine, but if beans stay tough, salt later in the cook or after — acidic or very hard water can also slow softening." },
+      { "mistake": "Not pressing tofu before cooking.", "fix": "Unpressed tofu is full of water and will steam rather than crisp no matter how hot the pan is." },
+      { "mistake": "Crowding chickpeas or tofu on the tray/pan.", "fix": "Give pieces space so steam escapes instead of trapping moisture around the food." }
+    ],
+    "doneness": [
+      "Legumes are done when they're tender all the way through with no chalky centre, not just soft on the outside.",
+      "Crispy chickpeas/tofu: golden-brown and firm on the outside, with an audible light crunch."
+    ],
+    "flavorTips": [
+      "Toast spices (cumin, smoked paprika) in the oil before adding legumes for a deeper flavour base.",
+      "A splash of acid (lemon, vinegar) at the end brightens bean dishes, which can taste flat or heavy otherwise.",
+      "Marinate pressed tofu in soy sauce, garlic and a little sesame oil for 15+ minutes before cooking for real flavour."
+    ],
+    "practice": {
+      "task": "Make crispy oven or air-fryer chickpeas or tofu this week, pressing/drying thoroughly first.",
+      "successCriteria": "The outside is genuinely crisp (not just golden and soft), because the surface moisture was removed first."
+    },
+    "techniques": ["boiled", "oven", "airfryer"],
+    "videoQuery": "how to make crispy chickpeas and crispy tofu",
+    "levelUp": "Cook dried beans from scratch (soak + simmer) instead of canned, and compare texture and flavour."
+  },
+  {
+    "id": "dairy-protein",
+    "module": "Proteins",
+    "title": "Twaróg, skyr & yoghurt in cooking",
+    "minutes": 6,
+    "summary": "High-protein dairy staples from a Polish fridge, used in both savoury and sweet cooking — and why they can split if you're not careful.",
+    "why": "Twaróg, skyr and high-protein yoghurt are some of the cheapest, highest-protein foods available in a Polish supermarket. They're great cold, but heated carelessly at high temperature they can curdle or split (the proteins seize up and squeeze out water), which looks unappetising even though it's still edible. Using gentle heat and adding them at the end of cooking keeps them smooth.",
+    "steps": [
+      "For sauces: stir yoghurt or blended twaróg into a dish off the heat, or over very low heat, once the pan isn't at a hard simmer.",
+      "If a sauce needs to be hot, temper the dairy first — stir a spoonful of the hot liquid into the yoghurt/twaróg before adding it back to the pan, to bring its temperature up gradually.",
+      "For pancakes: blend twaróg with eggs and a little flour or oats for a high-protein batter; cook on medium-low heat like a normal pancake.",
+      "For a quick savoury sauce: blend twaróg or skyr with garlic, lemon, herbs and a splash of water or milk to loosen it — no cooking needed.",
+      "For a light dessert: fold soft fruit, a little honey or cinnamon into whipped skyr/twaróg — no heat needed at all."
+    ],
+    "mistakes": [
+      { "mistake": "Adding yoghurt or twaróg to a hard-boiling sauce.", "fix": "Take the pan off the heat, or turn it right down, before stirring dairy in." },
+      { "mistake": "Adding cold dairy straight to a hot pan.", "fix": "Temper it first with a spoonful of the hot liquid, or let it come closer to room temperature before adding." },
+      { "mistake": "Using very low-fat (0%) yoghurt in a sauce that needs to hold together at higher heat.", "fix": "A little more fat (2-3%) is more heat-stable; full-fat Greek-style yoghurt is the most forgiving if you need to heat it more." },
+      { "mistake": "Over-blending twaróg with a stick blender for too long on high speed.", "fix": "Blend gently just until smooth — overworking can make it slightly grainy or watery." }
+    ],
+    "doneness": [],
+    "flavorTips": [
+      "Twaróg takes on savoury flavour well: garlic, dill, chives, black pepper, or sweet: honey, vanilla, cinnamon, berries.",
+      "A spoon of mustard or horseradish stirred into a yoghurt sauce gives it a savoury kick without extra fat.",
+      "Skyr is thicker and tangier than regular yoghurt and holds up well as a near 1:1 swap for sour cream in most recipes."
+    ],
+    "practice": {
+      "task": "Make a quick no-cook garlic-herb twaróg or skyr sauce and use it over a warm dish (potatoes, chicken, vegetables) this week.",
+      "successCriteria": "The sauce is smooth (not split or grainy) and you added it off the direct heat."
+    },
+    "techniques": ["nocook", "pan"],
+    "videoQuery": "cooking with twarog and skyr high protein",
+    "levelUp": "Make high-protein twaróg pancakes and get the pan temperature right so they don't burn before the centre cooks through."
+  },
+  {
+    "id": "roasting-veg",
+    "module": "Flavour",
+    "title": "Roasting vegetables that actually caramelise",
+    "minutes": 6,
+    "summary": "The difference between soft, pale, steamed-tasting vegetables and browned, sweet, caramelised ones is heat and space.",
+    "why": "Vegetables are mostly water. In a crowded tray at a low oven temperature, that water turns to steam and has nowhere to go, so the vegetables boil in their own moisture instead of browning. High heat and enough space between pieces let the surface dry out and caramelise (the natural sugars browning), which is where most of the flavour comes from.",
+    "steps": [
+      "Preheat the oven properly, hot — usually 200-220°C for most vegetables.",
+      "Cut vegetables into even-sized pieces so they cook at the same rate.",
+      "Toss with enough oil to lightly coat every piece — too little and they dry out and stick; too much and they turn greasy.",
+      "Spread them in a single layer on the tray with space between pieces — use two trays if needed rather than crowding one.",
+      "Salt before roasting; season with a fresh herb or acid (lemon, vinegar) after, not before, if it's delicate.",
+      "Roast until the edges are browned and caramelised, flipping once partway through.",
+      "Don't cover the tray with foil unless you specifically want them to steam-soften (e.g. for very dense root vegetables first)."
+    ],
+    "mistakes": [
+      { "mistake": "Crowding the tray.", "fix": "Give vegetables space — a crowded tray traps steam and stops browning; use a second tray." },
+      { "mistake": "Roasting at too low a temperature.", "fix": "Most vegetables want 200°C+ for real caramelisation, not a gentle 160°C." },
+      { "mistake": "Using too little oil.", "fix": "Oil helps conduct heat to the surface and stops sticking — a light, even coating on every piece." },
+      { "mistake": "Cutting pieces unevenly.", "fix": "Similarly sized pieces finish cooking together instead of some burning while others are still raw." }
+    ],
+    "doneness": [],
+    "flavorTips": [
+      "Toss roasted vegetables with a little balsamic vinegar, lemon juice or a spoon of mustard right after they come out — acid wakes them up.",
+      "A sprinkle of toasted spices (cumin, smoked paprika, za'atar) before roasting adds a lot of flavour for almost no extra calories.",
+      "Fresh herbs (parsley, dill) stirred in after roasting stay bright; herbs roasted the whole time can turn bitter and dry."
+    ],
+    "practice": {
+      "task": "Roast a tray of vegetables this week at 210-220°C with space between pieces, and finish with an acid or fresh herb.",
+      "successCriteria": "The vegetables have visibly browned, caramelised edges, not just softened and pale."
+    },
+    "techniques": ["oven"],
+    "videoQuery": "how to roast vegetables so they caramelize",
+    "levelUp": "Try roasting a dense vegetable (like whole cauliflower or a hard squash) at a lower temp first to cook through, then blast it hot at the end to brown the surface."
+  },
+  {
+    "id": "spices-aromatics",
+    "module": "Flavour",
+    "title": "Spices & aromatics",
+    "minutes": 8,
+    "summary": "Blooming spices in fat, toasting whole spices, and a few reliable Polish-pantry combinations to build flavour fast.",
+    "why": "Many ground spices are largely fat-soluble in their aroma compounds — cooking them briefly in oil (\"blooming\") before adding other ingredients releases far more flavour than sprinkling them into a watery dish at the end. Whole spices (cumin seed, coriander seed, mustard seed) release even more aroma when dry-toasted or bloomed in oil first, because heat unlocks oils that are otherwise locked inside the seed.",
+    "steps": [
+      "Heat a small amount of oil in the pan over medium heat.",
+      "Add ground spices (paprika, cumin, curry powder, etc.) and stir constantly for 20-40 seconds until fragrant — watch closely, they burn fast.",
+      "For whole spices, toast them dry in the pan first (no oil) until they smell fragrant and darken slightly, then either grind them or add oil and continue.",
+      "Add aromatics like garlic and ginger after the spices, briefly, since garlic burns even faster than spices.",
+      "Then add the rest of the ingredients (onion, tomatoes, liquid) to stop the spices from burning further.",
+      "Taste and adjust — a pinch more of a spice near the end can sharpen a dish that tastes muddy."
+    ],
+    "mistakes": [
+      { "mistake": "Adding ground spices straight into a simmering sauce.", "fix": "Bloom them in oil first for a fuller, rounder flavour — a huge difference for very little extra effort." },
+      { "mistake": "Letting spices or garlic burn in the pan.", "fix": "Keep the heat moderate and stir constantly during blooming — burnt spice tastes bitter, not just \"toasted\"." },
+      { "mistake": "Using old, stale ground spices.", "fix": "Ground spices lose potency after about a year — buy smaller amounts more often, or toast/grind whole spices fresh." },
+      { "mistake": "Using the same one or two spices in everything.", "fix": "Build a small \"combo\" list (below) and rotate — it makes meals taste different without much extra work." }
+    ],
+    "doneness": [],
+    "flavorTips": [
+      "Reliable Polish-pantry combos: sweet paprika + caraway + marjoram (classic Polish savoury base); cumin + coriander + smoked paprika (warm, earthy); dill + garlic + lemon (fresh, light).",
+      "A pinch of sugar can balance out a spice blend that tastes harsh or too smoky.",
+      "Fresh herbs added at the very end (dill, parsley, coriander) give a different, brighter layer than dried herbs cooked in early."
+    ],
+    "practice": {
+      "task": "Cook one dish this week where you bloom ground spices in oil for 30 seconds before adding anything else, instead of adding them later.",
+      "successCriteria": "You notice a stronger, rounder spice flavour compared to your usual method."
+    },
+    "techniques": ["pan"],
+    "videoQuery": "how to bloom spices in oil for more flavor",
+    "levelUp": "Build your own spice blend from 4-5 spices for a dish you cook often, adjusting ratios by taste over a couple of attempts."
+  },
+  {
+    "id": "marinades-rubs",
+    "module": "Flavour",
+    "title": "Marinades & dry rubs",
+    "minutes": 7,
+    "summary": "Ratios of acid, salt, sugar and oil, how long to marinate each protein, and the safety rules that matter.",
+    "why": "A marinade's acid (lemon, vinegar, yoghurt) and salt help tenderise and flavour the surface of meat or fish, while oil helps carry fat-soluble flavours and stops the surface from drying. Too much acid or too long a soak can actually turn the surface mushy or mealy, especially with fish and seafood — more time is not always better. A dry rub (just salt, spices, sometimes a little sugar) skips the liquid and builds a stronger crust when seared or grilled.",
+    "steps": [
+      "Pick a base ratio: roughly 3 parts oil, 1 part acid, plus salt and spices/herbs to taste — adjust as needed.",
+      "For a wet marinade, combine everything in a bag or bowl, submerge the protein, and refrigerate.",
+      "For a dry rub, mix salt, spices and a little sugar (optional, helps browning) and pat it onto the dry surface of the protein.",
+      "Marinate in the fridge, not at room temperature, for food safety.",
+      "Pat the protein mostly dry before cooking even after a wet marinade — excess surface liquid stops it browning.",
+      "Never reuse marinade that touched raw meat or fish as a sauce unless you boil it first for a few minutes."
+    ],
+    "mistakes": [
+      { "mistake": "Marinating fish or seafood for hours like you would a steak.", "fix": "Keep fish/seafood marinades short — 15-30 minutes; acid can start 'cooking' and turn the texture mushy if left too long." },
+      { "mistake": "Marinating at room temperature.", "fix": "Always marinate in the fridge for food safety, especially in a warm kitchen." },
+      { "mistake": "Reusing the marinade that touched raw meat as a finishing sauce.", "fix": "Either set some marinade aside before adding raw meat, or boil the used marinade for at least a few minutes before using it as a sauce." },
+      { "mistake": "Marinating tough cuts for only 15 minutes expecting a big tenderising effect.", "fix": "For real tenderising on tougher cuts, several hours to overnight works better; short marinades are mostly about surface flavour." }
+    ],
+    "doneness": [],
+    "flavorTips": [
+      "Rough marinating times: fish/seafood 15-30 min, chicken pieces 30 min-4 hours, pork chops 1-4 hours, beef steak 1-8 hours, tougher cuts overnight.",
+      "A little sugar or honey in a rub helps browning and balances a very acidic or spicy marinade.",
+      "Yoghurt-based marinades (with garlic, lemon, spices) are gentler than pure vinegar/citrus and work well for chicken."
+    ],
+    "practice": {
+      "task": "Marinate a protein this week using a roughly 3:1 oil-to-acid ratio plus salt and spices, timed appropriately for that protein.",
+      "successCriteria": "You can state your ratio and marinating time before you start, and the result tastes seasoned through, not just on the surface."
+    },
+    "techniques": [],
+    "videoQuery": "how to make a marinade ratio oil acid salt",
+    "levelUp": "Make a dry rub from scratch for grilling or pan-searing and compare the crust it gives versus a wet marinade on the same protein."
+  },
+  {
+    "id": "pan-sauces",
+    "module": "Flavour",
+    "title": "Quick pan sauces & low-fat sauces",
+    "minutes": 8,
+    "summary": "Turning the browned bits left in the pan into a sauce, plus yoghurt, mustard and lemon sauces that add flavour without much fat.",
+    "why": "After searing meat or fish, the browned bits stuck to the pan (\"fond\") are concentrated flavour, not leftover mess. Deglazing — adding a liquid like stock, wine or even water and scraping the pan — dissolves that fond into a fast sauce. For lower-fat sauces, acid (mustard, lemon, vinegar) and a little dairy (yoghurt, a splash of milk) can do the work that a big glug of cream or butter usually does.",
+    "steps": [
+      "After searing meat or fish, remove it from the pan and set aside to rest.",
+      "With the pan still hot (off the highest heat, but still warm), add a splash of liquid — stock, wine, or even water.",
+      "Scrape the bottom of the pan with a wooden spoon or spatula to lift the browned bits into the liquid.",
+      "Let it bubble and reduce for a minute or two to concentrate the flavour.",
+      "For a low-fat creamy sauce, stir in a spoon of mustard, a squeeze of lemon, or a spoonful of yoghurt off the direct heat (see the twaróg/skyr lesson for how to avoid splitting).",
+      "Taste and adjust — a pinch of salt or another splash of acid at the end often finishes it.",
+      "Pour over the rested meat or fish just before serving."
+    ],
+    "mistakes": [
+      { "mistake": "Throwing away the browned bits in the pan instead of deglazing.", "fix": "That fond is flavour — always deglaze with a splash of liquid rather than wiping it out." },
+      { "mistake": "Adding dairy to a still-boiling pan.", "fix": "Pull the pan off high heat before stirring in yoghurt or a similar dairy sauce component." },
+      { "mistake": "Reducing the sauce for too long and making it too salty or thick.", "fix": "Taste as it reduces — concentration means saltiness and intensity go up fast." },
+      { "mistake": "Relying on cream or butter as the only way to make a sauce feel rich.", "fix": "Mustard, lemon, a little reduced stock and a touch of yoghurt can give a 'finished' sauce feel with far less fat." }
+    ],
+    "doneness": [],
+    "flavorTips": [
+      "Classic low-fat sauce combos: lemon + mustard + a little olive oil; yoghurt + dill + garlic; balsamic reduction + a touch of honey.",
+      "A splash of the pasta or vegetable cooking water (starchy) can help a sauce cling and feel silkier without adding fat.",
+      "Finish a pan sauce with a small amount of cold butter or olive oil stirred in off the heat for shine and body — a little goes a long way."
+    ],
+    "practice": {
+      "task": "After searing a protein this week, deglaze the pan and build a 2-minute pan sauce instead of serving the meat plain.",
+      "successCriteria": "You can taste the browned, savoury depth from the fond in the finished sauce, not just the raw liquid you added."
+    },
+    "techniques": ["pan"],
+    "videoQuery": "how to make a quick pan sauce deglazing",
+    "levelUp": "Make a proper reduction pan sauce (stock or wine reduced by half, finished with a small amount of butter) and taste how texture changes as it thickens."
+  },
+  {
+    "id": "herbs-acid-finishing",
+    "module": "Flavour",
+    "title": "Herbs, acid & finishing touches",
+    "minutes": 6,
+    "summary": "The small moves added in the last 30 seconds of cooking that separate a home-cooked plate from a restaurant one.",
+    "why": "Most of a dish's flavour is built during cooking, but the very last additions — a squeeze of citrus, fresh herbs, a drizzle of good oil, a crunchy topping — wake the whole plate up because they haven't been dulled by heat. Herbs cooked from the start lose most of their aroma; the same herb added at the end tastes noticeably brighter.",
+    "steps": [
+      "Taste the finished dish before plating — check salt, acid and richness one more time.",
+      "Chop fresh, delicate herbs (parsley, dill, coriander, basil) just before serving, not in advance — they oxidise and dull quickly once cut.",
+      "Add a squeeze of citrus or splash of vinegar off the heat if the dish tastes flat or heavy.",
+      "Add texture where there's none — toasted seeds/nuts, a few crumbled crispy chickpeas, thin-sliced spring onion.",
+      "A light drizzle of good olive oil over the finished plate adds aroma and mouthfeel for very few calories.",
+      "Plate and serve promptly — many of these finishing touches fade if the food sits."
+    ],
+    "mistakes": [
+      { "mistake": "Adding fresh herbs at the start of cooking instead of the end.", "fix": "Use dried or hardy herbs (rosemary, thyme, bay) early for slow dishes; save soft fresh herbs for the very end." },
+      { "mistake": "Forgetting a final taste check before serving.", "fix": "Always taste right before plating — flavours change as a dish cools slightly or reduces further." },
+      { "mistake": "Thinking 'finishing touches' always means more fat.", "fix": "Acid, herbs, crunch and spice all add interest without necessarily adding calories." },
+      { "mistake": "Over-garnishing to the point it hides the food.", "fix": "A small, purposeful amount of a finishing touch beats a heavy-handed pile." }
+    ],
+    "doneness": [],
+    "flavorTips": [
+      "A little citrus zest (not just juice) adds aromatic oil without the sourness of juice — try it on roasted vegetables or fish.",
+      "Toasted seeds (sesame, sunflower, pumpkin) add crunch and a little healthy fat for very few extra calories.",
+      "Flaky finishing salt on top of a dish gives bursts of seasoning that mixed-in salt can't replicate."
+    ],
+    "practice": {
+      "task": "Cook a dish you normally consider 'finished' straight from the pan, and add one deliberate finishing touch (herb, acid, crunch) before serving.",
+      "successCriteria": "You can identify what the finishing touch specifically added to the dish."
+    },
+    "techniques": [],
+    "videoQuery": "finishing touches that make food taste like a restaurant",
+    "levelUp": "Make a quick herb-oil or gremolata (chopped herbs, garlic, citrus zest) from scratch and use it to finish two different meals this week."
+  },
+  {
+    "id": "meal-prep-proteins",
+    "module": "Putting it together",
+    "title": "Meal-prep proteins that reheat well",
+    "minutes": 7,
+    "summary": "Cooking a batch of protein once and having it taste good three days later, not dry and sad.",
+    "why": "Some cooking methods and proteins hold up to reheating far better than others. Very lean, thin, quickly-seared cuts (like a thin chicken breast cooked medium) tend to dry out badly on reheat because there's no fat or sauce to protect them. Slightly fattier cuts, sauced dishes, stews, and proteins slightly undercooked before storage (then finished on reheat) tend to stay moister across several days.",
+    "steps": [
+      "Choose forgiving methods for batch cooking: braises/stews, oven-baked chicken thighs, or protein cooked in a sauce.",
+      "If batch-cooking lean chicken breast, slightly undercook it (a couple of degrees under target) before cooling — it'll finish cooking gently on reheat.",
+      "Cool cooked food quickly (within about 2 hours) before refrigerating, in shallow containers so it cools evenly.",
+      "Store protein with a little sauce, marinade or oil where possible — it protects against drying out.",
+      "Reheat gently — lower heat for longer, adding a splash of water or stock, rather than blasting on full power.",
+      "Eat refrigerated cooked meat and fish within about 3-4 days; freeze portions if you need longer.",
+      "Reheat food to steaming hot all the way through before eating, not just warm."
+    ],
+    "mistakes": [
+      { "mistake": "Batch-cooking very lean chicken breast cooked fully to temperature, meant to be reheated later.", "fix": "Slightly undercook lean proteins destined for reheating, or add sauce/oil, so the reheat doesn't dry them out further." },
+      { "mistake": "Reheating on full-power microwave with no cover or liquid.", "fix": "Cover the container and add a splash of water; use a lower power setting with more time." },
+      { "mistake": "Leaving cooked food out to cool for hours before refrigerating.", "fix": "Get it into the fridge within about 2 hours, using shallow containers so it cools quickly." },
+      { "mistake": "Keeping meal-prepped meat/fish for a week or more in the fridge.", "fix": "Use within 3-4 days, or freeze extra portions right after cooking and cooling." }
+    ],
+    "doneness": [
+      "On reheating, food should reach steaming hot all the way through (roughly 74°C again) before eating."
+    ],
+    "flavorTips": [
+      "Sauced or stewed dishes (curries, chilli, stews) often taste better a day or two later as flavours meld — great meal-prep choices.",
+      "Keep a fresh finishing touch (herbs, a squeeze of lemon) separate and add it after reheating, not before storing — it fades in the fridge."
+    ],
+    "practice": {
+      "task": "Batch-cook one protein this week using a forgiving method (thighs, stew, or sauced dish) intended for 3 days of leftovers.",
+      "successCriteria": "On day 3, the reheated protein is still moist and tastes good, not dry or rubbery."
+    },
+    "techniques": ["oven", "stew"],
+    "videoQuery": "meal prep chicken that doesn't dry out reheated",
+    "levelUp": "Batch-cook two different proteins with two different methods (e.g. seared lean vs. braised) and compare how each holds up by day 3."
+  }
+]

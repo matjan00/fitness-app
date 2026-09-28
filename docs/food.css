@@ -5,7 +5,7 @@
 .fd-f { color: var(--fat); }
 
 /* header segmented switch */
-.fd-viewseg { width: 186px; flex: none; }
+.fd-viewseg { width: 250px; flex: none; }
 
 /* ---------- images ---------- */
 .fd-img { position: relative; overflow: hidden; background: linear-gradient(135deg, var(--food-soft), var(--card-2)); display: grid; place-items: center; }
@@ -140,8 +140,27 @@
 .fd-home-w { margin-top: 10px; display: flex; align-items: center; gap: 6px; }
 .fd-home-w svg { width: 16px; height: 16px; flex: none; }
 
+/* ---------- learn to cook ---------- */
+.fd-learn-hero { display: block; }
+.fd-learn-list { padding: 4px 12px; }
+.fd-learn-item { padding: 12px 2px; }
+.fd-learn-meta { display: grid; justify-items: end; gap: 4px; flex: none; margin-left: 8px; }
+.fd-learn-status { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 99px; background: var(--card-2); color: var(--text-2); }
+.fd-learn-status.fd-learn-learned { background: var(--food-soft); color: var(--food); }
+.fd-learn-status.fd-learn-practised { background: var(--up-soft); color: var(--up); }
+.fd-learn-summary { font-size: 15px; margin: 12px 2px 0; color: var(--text-2); }
+.fd-learn-mistake { padding: 8px 0; border-bottom: 1px solid var(--line); }
+.fd-learn-mistake:last-child { border-bottom: none; }
+.fd-learn-ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
+.fd-learn-ul li { line-height: 1.5; }
+.fd-learn-stars { display: flex; gap: 6px; justify-content: center; margin: 4px 0 14px; }
+.fd-learn-stars button { color: var(--text-3); }
+.fd-learn-stars button svg { width: 30px; height: 30px; }
+.fd-learn-stars button.on { color: var(--down); }
+.fd-learn-pill { cursor: pointer; }
+
 @media (max-width: 380px) {
   .fd-sum-top { gap: 12px; }
   .fd-sum-top .fd-ring { width: 112px !important; height: 112px !important; }
-  .fd-viewseg { width: 164px; }
+  .fd-viewseg { width: 220px; }
 }

@@ -10,6 +10,7 @@ import { recipeTotals, perServing, macrosFor, ingredientStatus } from './food-ca
 import { CATEGORIES, suggestCategories, catLabel } from './food-cats.js';
 import { getIndex, snap, rememberMatch, remembered, pickFood, macroLine, img, MEALS, mealLabel } from './food-ui.js';
 import { compressFile, compressRemote } from './food-photo.js';
+import { practisesChipsHtml, bindPractisesChips } from './food-learn.js';
 
 const CAT_DIMS = ['meal', 'technique', 'main'];
 
@@ -490,6 +491,7 @@ export function openRecipe(id) {
       <div class="fd-meta">${time ? `<span>${icon('timer')} ${time} min</span>` : ''}<span>${icon('food')} ${rec.servings} serving${rec.servings > 1 ? 's' : ''}</span>
         ${src ? `<a href="${esc(rec.source.url)}" target="_blank" rel="noopener noreferrer">${esc(rec.source.type === 'tiktok' ? 'TikTok' : rec.source.type === 'youtube' ? 'YouTube' : src)}${rec.source.author ? ` · ${esc(rec.source.author)}` : ''}</a>` : ''}</div>
       ${cats.length ? `<div class="fd-chipwrap" style="margin:10px 0 0">${cats.map((c) => `<span class="pill">${esc(c)}</span>`).join('')}</div>` : ''}
+      ${practisesChipsHtml(rec)}
       <div class="card fd-totals" style="margin-top:14px"><div class="row between"><div><p class="tiny muted">Per serving${ps.grams ? ` (${n0(ps.grams)} g)` : ''}</p><div class="fd-big">${n0(ps.kcal)} <span>kcal</span></div></div>
         <div class="fd-pcf"><span class="fd-p">P ${n0(ps.p)} g</span><span class="fd-c">C ${n0(ps.c)} g</span><span class="fd-f">F ${n0(ps.f)} g</span></div></div>
         ${t.missing ? `<p class="fd-warn small">${icon('info')} ${t.missing} ingredient${t.missing > 1 ? 's' : ''} not counted — tap edit to fix.</p>` : ''}
@@ -502,6 +504,7 @@ export function openRecipe(id) {
       ${rec.notes ? `<h3 class="section-title">Notes</h3><div class="card"><p style="white-space:pre-wrap">${esc(rec.notes)}</p></div>` : ''}` });
     $('#fd-edit', el).onclick = () => editRecipe(rec, { id });
     $('#fd-log', el).onclick = () => logRecipe(rec);
+    bindPractisesChips(el);
   });
 }
 

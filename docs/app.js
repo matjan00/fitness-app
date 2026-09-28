@@ -111,7 +111,13 @@ async function start() {
   store.syncNow().catch(() => {});
 
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    // When a new version of the app takes over, reload once so the new files are used straight away.
+    const hadController = Boolean(navigator.serviceWorker.controller);
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (hadController && !reloaded && !depth()) { reloaded = true; location.reload(); }
+    });
+    navigator.serviceWorker.register('sw.js').then((r) => r.update()).catch(() => {});
   }
 }
 
