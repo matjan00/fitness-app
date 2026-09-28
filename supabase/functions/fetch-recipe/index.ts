@@ -33,9 +33,25 @@ async function hostCheck(hostname: string) {
   if (addrs.some((a) => isPrivateAddress(a))) throw new FetchError('That address is not allowed.', 400);
 }
 
+// Only the app's logged-in user may use this function (otherwise anyone with the public key could use it
+// as a free web proxy). The platform's JWT check accepts the public key too, so check the user here.
+async function isLoggedIn(req: Request) {
+  const auth = req.headers.get('authorization') || '';
+  const url = Deno.env.get('SUPABASE_URL');
+  const key = Deno.env.get('SUPABASE_ANON_KEY') || req.headers.get('apikey') || '';
+  if (!auth.startsWith('Bearer ') || !url) return false;
+  try {
+    const r = await fetch(`${url}/auth/v1/user`, { headers: { authorization: auth, apikey: key } });
+    return r.ok;
+  } catch {
+    return false;
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return json({ error: 'Use POST with {"url": "…"}' }, 405);
+  if (!(await isLoggedIn(req))) return json({ error: 'Please log in to import recipes from links.' }, 401);
 
   let body: { url?: unknown };
   try {
