@@ -1,14 +1,15 @@
-// Recipe LIBRARY: one recipe format for every source (TheMealDB, rewritten public-domain classics, USDA MyPlate).
+// Recipe LIBRARY: one recipe format for every source (TheMealDB, later imports; own recipes are shown through the same shape by food-estimate.js).
 // Pure logic + data loading (no DOM). The screens live in food-library-ui.js. Tests: tests/food-library.test.js.
 //
 // -- Library recipe format (all units metric: g, ml, deg C; text in English) --
 // {
-//   id            'mealdb-52982' | 'classic-it-risotto-milanese' | 'myplate-...'   (unique, stable)
+//   id            'mealdb-52982' | 'myplate-...'   (unique, stable)
 //   title, title_local?            (title_local = original-language name, e.g. Polish)
 //   cuisine       'italian' | 'french' | 'polish' | 'american' | 'international' | ...
 //   course        'breakfast' | 'starter' | 'soup' | 'main' | 'side' | 'dessert' | 'snack' | 'baking'
 //   servings      number >= 1
-//   prep_min, cook_min   minutes (time_est: true when guessed from the method text)
+//   prep_min, cook_min   minutes (total = prep + cook)
+//   est           { main?, time?, servings? } true where the value was ESTIMATED, not stated by the source (food-estimate.js)
 //   difficulty    'easy' | 'medium' | 'hard'
 //   vegetarian    boolean
 //   main_ingredient      a food-cats "main" id (chicken, beef, pasta, rice, veggies, ...) or null
@@ -20,7 +21,7 @@
 //   per_serving   { kcal, p, c, f }  computed with the app's own food table - same method for every source
 //   checks        number of ingredients flagged 'check' (quality signal)
 //   image, video  urls or null
-//   source        { type: 'themealdb'|'classic'|'myplate', name, url, author?, year?, license }
+//   source        { type: 'themealdb'|'myplate', name, url, author?, year?, license }
 //   source_nutrition?  published nutrition of the source (kept only for comparison)
 //   notes?
 // }
@@ -41,8 +42,8 @@ export const COURSES = [
 ];
 export const courseLabel = (k) => COURSES.find((c) => c.key === k)?.label || k;
 export const DIFFICULTIES = ['easy', 'medium', 'hard'];
-export const SOURCE_TYPES = ['themealdb', 'classic', 'myplate'];
-export const SOURCE_LABEL = { themealdb: 'TheMealDB', classic: 'Classic', myplate: 'MyPlate' };
+export const SOURCE_TYPES = ['themealdb', 'myplate'];
+export const SOURCE_LABEL = { themealdb: 'TheMealDB', myplate: 'MyPlate', own: 'My recipes' };
 
 // ---------- validation (used by tests for every JSON file, and by the build script) ----------
 export function validateRecipe(r) {
@@ -68,6 +69,7 @@ export function validateRecipe(r) {
   need(Array.isArray(r.steps) && r.steps.length > 0 && r.steps.every((s) => typeof s === 'string' && s), 'steps');
   const p = r.per_serving;
   need(p && ['kcal', 'p', 'c', 'f'].every((k) => Number.isFinite(p[k]) && p[k] >= 0), 'per_serving');
+  need(r.est === undefined || (r.est && typeof r.est === 'object'), 'est');
   need(r.image === null || typeof r.image === 'string', 'image');
   need(r.video === null || typeof r.video === 'string', 'video');
   const s = r.source;
@@ -89,15 +91,17 @@ export function displayIngredient(ing, k) {
 
 // ---------- filtering ----------
 export const totalMin = (r) => (r.prep_min || 0) + (r.cook_min || 0);
-// f: { q, cuisine, course, maxTime, difficulty, main, veg, maxKcal, minP, fav }; favs: Set of ids
+// f: { q, cuisine, course, maxTime, difficulty, mains: [ids] (any of), source, veg, maxKcal, minP, fav }; favs: Set of ids
 export function filterRecipes(list, f = {}, favs = new Set()) {
   const q = fold(f.q || '').trim();
+  const mains = f.mains?.length ? f.mains : f.main ? [f.main] : [];
   return list.filter((r) => {
     if (f.cuisine && r.cuisine !== f.cuisine) return false;
     if (f.course && r.course !== f.course) return false;
     if (f.maxTime && totalMin(r) > f.maxTime) return false;
     if (f.difficulty && r.difficulty !== f.difficulty) return false;
-    if (f.main && r.main_ingredient !== f.main) return false;
+    if (mains.length && !mains.includes(r.main_ingredient)) return false;
+    if (f.source && r.source?.type !== f.source) return false;
     if (f.veg && !r.vegetarian) return false;
     if (f.maxKcal && r.per_serving.kcal > f.maxKcal) return false;
     if (f.minP && r.per_serving.p < f.minP) return false;

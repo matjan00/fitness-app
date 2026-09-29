@@ -5,7 +5,8 @@ import { sheet, push } from './nav.js';
 import { loadFoods, unitOptions } from './food-db.js';
 import { macrosFor } from './food-calc.js';
 import { applyFix, ignoreWarning } from './food-check.js';
-import { replaceIngredient, removeIngredient, amountPatch } from './food-copy.js';
+import { replaceIngredient, removeIngredient, amountPatch, metaPatch } from './food-copy.js';
+import { CATEGORIES, catLabel } from './food-cats.js';
 import { pickFood, snap, rememberMatch, macroLine } from './food-ui.js';
 
 let mapCache = null;
@@ -128,4 +129,49 @@ export function ingredientSheet(ing, servings = 1) {
 export function foodsCached(onReady) {
   if (!mapCache) foodsMap().then(() => onReady?.());
   return mapCache;
+}
+
+// ---------- time / servings / main ingredient: tappable chips with "(est.)" hint + small edit sheet ----------
+// v: { prep_min, cook_min, servings, main_ingredient, est: { time, servings, main } } (a library recipe, or ownView())
+export function metaChipsHtml(v) {
+  const e = v.est || {};
+  const chip = (kind, ic, text, est) => `<button type="button" class="fd-metabtn${est ? ' est' : ''}" data-meta="${kind}">${ic ? icon(ic) : ''}${text}${est ? ' (est.)' : ''}</button>`;
+  const t = (v.prep_min || 0) + (v.cook_min || 0);
+  return chip('time', 'timer', `${t} min`, e.time) + chip('servings', 'food', `${v.servings} serving${v.servings === 1 ? '' : 's'}`, e.servings)
+    + chip('main', '', `Main: ${v.main_ingredient ? esc(catLabel('main', v.main_ingredient)) : 'none'}`, e.main);
+}
+
+function metaSheet(kind, v) {
+  return new Promise((resolve) => {
+    let result;
+    push((el, s) => {
+      let main = v.main_ingredient || null;
+      const paint = () => {
+        const body = kind === 'time'
+          ? `<div class="form-row"><label>Prep (min)<input id="mt-prep" inputmode="numeric" value="${v.prep_min || 0}"></label><label>Cooking (min)<input id="mt-cook" inputmode="numeric" value="${v.cook_min || 0}"></label></div>`
+          : kind === 'servings' ? `<div class="form-row"><label>Servings this recipe makes<input id="mt-srv" inputmode="numeric" value="${v.servings}"></label></div>`
+            : `<div class="chips" style="flex-wrap:wrap"><button class="chip ${!main ? 'on' : ''}" data-m="">None</button>${CATEGORIES.main.items.map((i) => `<button class="chip ${main === i.key ? 'on' : ''}" data-m="${i.key}">${esc(i.label)}</button>`).join('')}</div>`;
+        el.innerHTML = sheet({ title: kind === 'time' ? 'Total time' : kind === 'servings' ? 'Servings' : 'Main ingredient', body: `${body}
+          <div class="sheet-actions"><button class="ghost" data-a="no">Cancel</button><button class="primary" data-a="ok">Save</button></div>` });
+        $$('[data-m]', el).forEach((b) => { b.onclick = () => { main = b.dataset.m || null; paint(); }; });
+        $('[data-a=no]', el).onclick = () => s.close();
+        $('[data-a=ok]', el).onclick = () => {
+          result = kind === 'time' ? { prep: $('#mt-prep', el).value, cook: $('#mt-cook', el).value } : kind === 'servings' ? $('#mt-srv', el).value : main;
+          if (kind === 'main') result = { main };
+          s.close();
+        };
+      };
+      paint();
+    }, { sheet: true, onClose: () => resolve(result) });
+  });
+}
+
+// current() -> the view values shown on the chips; commit(fn) as in bindEditing (saves / creates "Your version").
+export function bindMeta(el, { current, commit }) {
+  $$('[data-meta]', el).forEach((b) => { b.onclick = async () => {
+    const kind = b.dataset.meta;
+    const res = await metaSheet(kind, current());
+    if (res === undefined) return;
+    await commit((r) => metaPatch(r, kind, kind === 'main' ? res.main : res));
+  }; });
 }

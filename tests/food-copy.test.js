@@ -8,7 +8,7 @@ import { dbSnap } from '../docs/food-check.js';
 
 const dir = path.join(import.meta.dirname, '..', 'docs', 'data');
 const foods = Object.fromEntries(JSON.parse(fs.readFileSync(path.join(dir, 'foods.json'), 'utf8')).foods.map((f) => [f.id, { ...f, src: 'db' }]));
-const lib = ['mealdb', 'classics'].flatMap((f) => JSON.parse(fs.readFileSync(path.join(dir, 'library', `${f}.json`), 'utf8')).recipes);
+const lib = ['mealdb'].flatMap((f) => JSON.parse(fs.readFileSync(path.join(dir, 'library', `${f}.json`), 'utf8')).recipes);
 
 test('every library recipe converts to an own recipe with the same per-serving macros', () => {
   for (const r of lib) {

@@ -11,7 +11,8 @@ import { CATEGORIES, suggestCategories, catLabel } from './food-cats.js';
 import { getIndex, snap, rememberMatch, remembered, pickFood, macroLine, img, MEALS, mealLabel } from './food-ui.js';
 import { compressFile, compressRemote } from './food-photo.js';
 import { practisesChipsHtml, bindPractisesChips } from './food-learn.js';
-import { checkCardHtml, ingListHtml, bindEditing, foodsCached } from './food-edit-ui.js';
+import { checkCardHtml, ingListHtml, bindEditing, foodsCached, metaChipsHtml, bindMeta } from './food-edit-ui.js';
+import { ownView } from './food-estimate.js';
 import { checkRecipe } from './food-check.js';
 import { withTotals } from './food-copy.js';
 
@@ -411,6 +412,8 @@ export function editRecipe(draft, opts = {}) {
         totals: { kcal: t2.kcal, p: t2.p, c: t2.c, f: t2.f, grams: t2.grams, missing: t2.missing },
         created: draft.created || new Date().toISOString(),
         ...(r.from_library ? { from_library: r.from_library } : {}),
+        ...(r.main_ingredient !== undefined ? { main_ingredient: r.main_ingredient } : {}),
+        ...(r.est ? { est: { ...r.est, ...((r.prepMin || null) !== (draft.prepMin || null) || (r.cookMin || null) !== (draft.cookMin || null) ? { time: false } : {}), ...(r.servings !== draft.servings ? { servings: false } : {}) } } : {}),
       };
       const saved = await store.put('recipe', item);
       toast(id ? 'Recipe saved' : 'Recipe added to your book');
@@ -481,6 +484,16 @@ function promptLine(value) {
 // ---------- detail ----------
 export const recipePer = (rec) => perServing(rec.totals || recipeTotals(rec.ingredients || []), rec.servings);
 
+// Delete an own recipe (or a "Your version" copy = back to the library original), after a confirm sheet.
+export async function deleteRecipeFlow(id, done) {
+  const rec = store.get(id);
+  if (!rec) return;
+  const copy = !!rec.from_library;
+  if (await confirmSheet(copy ? `Delete your version of "${rec.title}" and go back to the original?` : `Delete "${rec.title}"? This cannot be undone.`, { ok: copy ? 'Delete my version' : 'Delete recipe', danger: true })) {
+    await store.remove(id); toast(copy ? 'Back to the original' : 'Recipe deleted'); done?.();
+  }
+}
+
 export function openRecipe(id) {
   push((el, s) => {
     const rec = store.get(id);
@@ -489,14 +502,14 @@ export function openRecipe(id) {
     const warns = foods ? checkRecipe(rec.ingredients || [], rec.servings, foods) : [];
     const ps = recipePer(rec);
     const t = rec.totals || recipeTotals(rec.ingredients);
-    const time = (rec.prepMin || 0) + (rec.cookMin || 0);
+    const view = ownView(rec, recipePer, foods || {});
     const src = rec.source?.url ? (() => { try { return new URL(rec.source.url).hostname.replace(/^www\./, ''); } catch { return 'source'; } })() : null;
     const cats = Object.entries(rec.cats || {}).flatMap(([dim, keys]) => (keys || []).map((k) => catLabel(dim, k)));
-    el.innerHTML = page({ title: rec.title, right: `<button class="icon-btn" id="fd-edit" aria-label="Edit">${icon('edit')}</button>`, body: `
+    el.innerHTML = page({ title: rec.title, right: `<button class="icon-btn" id="fd-edit" aria-label="Edit">${icon('edit')}</button><button class="icon-btn" id="fd-del" aria-label="Delete recipe">${icon('trash')}</button>`, body: `
       ${img(rec.image, 'fd-hero-img')}
       <h2 class="fd-rtitle">${esc(rec.title)}</h2>
       ${rec.from_library ? `<div class="row between" style="margin:4px 0 8px"><span class="fd-badge mine">Your version of a library recipe</span><button class="link small" id="fd-reset">Reset to original</button></div>` : ''}
-      <div class="fd-meta">${time ? `<span>${icon('timer')} ${time} min</span>` : ''}<span>${icon('food')} ${rec.servings} serving${rec.servings > 1 ? 's' : ''}</span>
+      <div class="fd-meta">${metaChipsHtml(view)}
         ${src ? `<a href="${esc(rec.source.url)}" target="_blank" rel="noopener noreferrer">${esc(rec.source.type === 'tiktok' ? 'TikTok' : rec.source.type === 'youtube' ? 'YouTube' : src)}${rec.source.author ? ` · ${esc(rec.source.author)}` : ''}</a>` : ''}</div>
       ${cats.length ? `<div class="fd-chipwrap" style="margin:10px 0 0">${cats.map((c) => `<span class="pill">${esc(c)}</span>`).join('')}</div>` : ''}
       ${practisesChipsHtml(rec)}
@@ -511,6 +524,13 @@ export function openRecipe(id) {
       ${rec.notes ? `<h3 class="section-title">Notes</h3><div class="card"><p style="white-space:pre-wrap">${esc(rec.notes)}</p></div>` : ''}` });
     $('#fd-edit', el).onclick = () => editRecipe(rec, { id });
     $('#fd-log', el).onclick = () => logRecipe(rec);
+    $('#fd-del', el).onclick = async () => {
+      const copy = !!rec.from_library;
+      if (await confirmSheet(copy ? 'Delete your version and go back to the original library recipe?' : `Delete "${rec.title}"? This cannot be undone.`, { ok: copy ? 'Delete my version' : 'Delete recipe', danger: true })) {
+        await store.remove(id); toast(copy ? 'Back to the original' : 'Recipe deleted'); s.close();
+      }
+    };
+    bindMeta(el, { current: () => ownView(store.get(id), recipePer, foods || {}), commit: async (fn) => { await store.put('recipe', withTotals(fn(store.get(id)))); s.render(); } });
     $('#fd-reset', el)?.addEventListener('click', async () => {
       if (await confirmSheet('Delete your version and go back to the original library recipe?', { ok: 'Reset to original', danger: true })) { await store.remove(id); toast('Back to the original'); s.close(); }
     });
@@ -609,7 +629,15 @@ export function renderBook(box) {
     local.set('fd-filter', { ...f, [d]: f[d] === b.dataset.key ? null : b.dataset.key });
     renderBook(box);
   }; });
-  $$('[data-rid]', box).forEach((b) => { b.onclick = () => openRecipe(b.dataset.rid); });
+  $$('[data-rid]', box).forEach((b) => {
+    // long-press a recipe (or right-click) to delete it
+    let timer2 = null; let fired = false;
+    const cancel = () => { clearTimeout(timer2); };
+    b.addEventListener('pointerdown', () => { fired = false; timer2 = setTimeout(() => { fired = true; deleteRecipeFlow(b.dataset.rid, () => renderBook(box)); }, 600); });
+    ['pointerup', 'pointerleave', 'pointercancel', 'pointermove'].forEach((ev) => b.addEventListener(ev, cancel));
+    b.addEventListener('contextmenu', (e) => { e.preventDefault(); });
+    b.onclick = () => { if (fired) { fired = false; return; } openRecipe(b.dataset.rid); };
+  });
   $('#fd-import', box).onclick = () => editRecipe(blankDraft());
   $('#fd-import2', box)?.addEventListener('click', () => editRecipe(blankDraft()));
 }

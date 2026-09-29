@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { parseIngredient, fold } from '../../docs/food-parse.js';
 import { buildIndex, bestMatch, toGrams } from '../../docs/food-db.js';
 import { macrosFor } from '../../docs/food-calc.js';
-import { CATEGORIES } from '../../docs/food-cats.js';
+import { estimateMain, estimateTime, estimateServings } from '../../docs/food-estimate.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 export const DOCS = path.join(here, '..', '..', 'docs');
@@ -57,20 +57,20 @@ export function convertRecipe(raw, ctx) {
     rows.push(c.row);
     if (c.macros) tot = { kcal: tot.kcal + c.macros.kcal, p: tot.p + c.macros.p, c: tot.c + c.macros.c, f: tot.f + c.macros.f };
   }
-  const servings = Math.max(1, raw.servings || 1);
+  const stated = raw.servings > 0;
+  const est = {};
+  const servings = stated ? Math.max(1, raw.servings) : estimateServings(tot.kcal, raw.course);
+  if (!stated) est.servings = true;
   const ingText = fold(rows.map((r) => `${r.name} ${r.food_id || ''}`).join(' | '));
   const title = fold(raw.title);
   const vegetarian = typeof raw.vegetarian === 'boolean' ? raw.vegetarian : !(MEAT.test(ingText) || MEAT.test(title) || STOCK_MEAT.test(ingText));
   let main = raw.main_ingredient;
-  if (main === undefined) {
-    const keys = CATEGORIES.main.items.filter((it) => it.re.test(title) || it.re.test(ingText)).map((it) => it.key);
-    const pri = ['chicken', 'turkey', 'beef', 'pork', 'seafood', 'fish', 'pasta', 'rice', 'potatoes', 'groats', 'legumes', 'twarog', 'eggs', 'veggies', 'oats', 'vege'];
-    main = pri.find((k) => keys.includes(k)) || keys[0] || null;
-  }
+  if (main === undefined) { main = estimateMain({ title: raw.title, ingredients: rows, course: raw.course }, Object.fromEntries([...ctx.byId])); est.main = true; }
+  if (raw.time_est) est.time = true;
   const out = {
     id: raw.id, title: raw.title, ...(raw.title_local ? { title_local: raw.title_local } : {}),
     cuisine: raw.cuisine, course: raw.course, servings, prep_min: raw.prep_min, cook_min: raw.cook_min,
-    ...(raw.time_est ? { time_est: true } : {}),
+    ...(Object.keys(est).length ? { est } : {}),
     difficulty: raw.difficulty, vegetarian, main_ingredient: main,
     ingredients: rows, steps: raw.steps,
     per_serving: { kcal: Math.round(tot.kcal / servings), p: r1(tot.p / servings), c: r1(tot.c / servings), f: r1(tot.f / servings) },
@@ -103,17 +103,7 @@ export function splitSteps(instr) {
   return parts.map(fToC).filter(Boolean);
 }
 
-export function estimateTimes(steps) {
-  let mins = 0;
-  for (const s of steps) {
-    for (const m of s.matchAll(/(\d+)(?:\s?(?:-|to)\s?(\d+))?\s*(hours?|hrs?|minutes?|mins?)\b/gi)) {
-      const n = Number(m[2] || m[1]);
-      mins += /^h/i.test(m[3]) ? n * 60 : n;
-    }
-  }
-  const cook = Math.min(Math.max(mins, 10), 240);
-  return { prep_min: 15, cook_min: cook };
-}
+export function estimateTimes(steps) { return estimateTime(steps); }
 
 export function estimateDifficulty(nIngredients, nSteps, totalMin) {
   const score = nIngredients / 6 + nSteps / 5 + totalMin / 90;
@@ -139,17 +129,16 @@ export function mealdbToRaw(meal, ov = {}) {
     if (ing) { const l = `${mea} ${ing}`.trim(); lines.push(ov.lines?.[l] || l); }
   }
   const steps = splitSteps(meal.strInstructions);
-  const t = estimateTimes(steps);
+  const t = estimateTime(steps, { nIngredients: lines.length, title: meal.strMeal });
   const course = mealCourse(meal);
-  const servings = ov.servings || (course === 'baking' ? 12 : 4);
   return {
     id: `mealdb-${meal.idMeal}`, title: meal.strMeal.replace(/\s*\(.*\)\s*$/, '').trim(),
     ...(/\(.*\)/.test(meal.strMeal) ? { title_local: meal.strMeal.match(/\((.*)\)/)[1] } : {}),
-    cuisine: AREA_CUISINE[fold(meal.strArea)] || 'international', course, servings, ...t, time_est: true,
+    cuisine: AREA_CUISINE[fold(meal.strArea)] || 'international', course, ...(ov.servings ? { servings: ov.servings } : {}), ...t, time_est: true,
     difficulty: estimateDifficulty(lines.length, steps.length, t.prep_min + t.cook_min),
     ingredients: lines, steps,
     image: meal.strMealThumb || null, video: meal.strYoutube || null,
-    source: { type: 'themealdb', name: 'TheMealDB', url: `https://www.themealdb.com/meal/${meal.idMeal}`, license: 'TheMealDB free API (test key). Recipe text and photos are user-contributed; personal use. TheMealDB gives no serving count: servings are assumed (4, or 12 for cakes/bread).' },
+    source: { type: 'themealdb', name: 'TheMealDB', url: `https://www.themealdb.com/meal/${meal.idMeal}`, license: 'TheMealDB free API (test key). Recipe text and photos are user-contributed; personal use. TheMealDB gives no serving count, prep/cook time or main ingredient: these are estimated by the app (marked est.).' },
     ...(meal.strSource ? { notes: `Original recipe: ${meal.strSource}` } : {}),
   };
 }

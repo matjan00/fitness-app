@@ -35,6 +35,7 @@ export function libToOwn(lib, foodsById = {}, now = new Date().toISOString()) {
     source: { type: 'library', url: lib.source?.url || null, name: lib.source?.name || null },
     prepMin: lib.prep_min || null, cookMin: lib.cook_min || null, ingredients, steps: [...(lib.steps || [])], notes: lib.notes || '',
     cats: suggestCategories({ title: lib.title, ingredients, steps: lib.steps || [] }), text: '', siteNutrition: null,
+    main_ingredient: lib.main_ingredient ?? null, est: { ...(lib.est || {}) },
     created: now, from_library: lib.id,
   };
   return withTotals(rec);
@@ -66,4 +67,17 @@ export function amountPatch(ing, amount, unitKey = 'g', unitGrams = 1, unitLabel
     grams, hint: grams, guess: false, toTaste: false, qty, unit: useUnit ? unitKey : 'g',
     raw: `${Math.round(qty * 100) / 100} ${useUnit ? unitLabel : 'g'} ${ing.name || ''}`.trim(),
   };
+}
+
+// Edit time / servings / main ingredient (the "(est.)" facts). Returns a new record; the edited fact is no longer an estimate.
+// kind: 'time' { prep, cook } | 'servings' number | 'main' id or null.
+export function metaPatch(rec, kind, value) {
+  const est = { ...(rec.est || {}) };
+  if (kind === 'time') {
+    est.time = false;
+    return { ...rec, prepMin: Math.max(0, Math.round(Number(value.prep) || 0)) || null, cookMin: Math.max(0, Math.round(Number(value.cook) || 0)) || null, est };
+  }
+  if (kind === 'servings') { est.servings = false; return withTotals({ ...rec, servings: Math.min(48, Math.max(1, Math.round(Number(value) || 1))), est }); }
+  if (kind === 'main') { est.main = false; return { ...rec, main_ingredient: value || null, est }; }
+  return rec;
 }

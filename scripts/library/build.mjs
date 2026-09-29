@@ -1,6 +1,6 @@
-// Builds docs/data/library/*.json + index.json.   Usage: node scripts/library/build.mjs [mealdb|classics|myplate ...]
+// Builds docs/data/library/*.json + index.json.   Usage: node scripts/library/build.mjs [mealdb|myplate ...]
 // mealdb: reads scripts/library/mealdb-ids.json ({cuisine: [ids]}), fetches each meal from TheMealDB (test key 1).
-// classics: scripts/library/classics.json (hand-written). myplate: scripts/library/myplate.json when present (see LIBRARY-PLAN.md).
+// myplate: scripts/library/myplate.json when present (see LIBRARY-PLAN.md).
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,10 +15,9 @@ const run = (k) => !want.length || want.includes(k);
 const readJson = (f) => JSON.parse(fs.readFileSync(path.join(here, f), 'utf8'));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-const SOURCES = { mealdb: 'TheMealDB', classics: 'Classic cookbooks (rewritten)', myplate: 'USDA MyPlate Kitchen' };
+const SOURCES = { mealdb: 'TheMealDB', myplate: 'USDA MyPlate Kitchen' };
 
 async function rawFor(key) {
-  if (key === 'classics') return readJson('classics.json').recipes;
   if (key === 'myplate') return fs.existsSync(path.join(here, 'myplate.json')) ? readJson('myplate.json').recipes : [];
   const ids = readJson('mealdb-ids.json');
   const ovs = readJson('mealdb-overrides.json');

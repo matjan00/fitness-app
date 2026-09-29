@@ -198,3 +198,20 @@
 .fd-chk-btns button { padding: 8px 12px; font-size: 13px; }
 .fd-ingtap { width: 100%; text-align: left; background: none; }
 .fd-badge.mine { background: var(--gold-soft); color: var(--text); }
+
+/* --- no sideways shift on recipe screens: grid/flex children may shrink, long text wraps, media never exceeds the screen --- */
+.scroll:has(.fd-hero-img, .fd-ingtap) { overflow-x: hidden; touch-action: pan-y; }
+.scroll .list { grid-template-columns: minmax(0, 1fr); }
+.scroll .list-item > .grow, .scroll .list-item > div:first-child { min-width: 0; }
+.fd-ingtap .sub, .fd-ingtap .grow > div { overflow-wrap: anywhere; }
+.fd-meta > *, .fd-steps li, .fd-rtitle, .fd-warn, .fd-chk p { min-width: 0; overflow-wrap: anywhere; }
+.scroll img, .scroll iframe, .scroll video, .scroll table { max-width: 100%; }
+.scroll .fd-meta { max-width: 100%; }
+.fd-metabtn { background: var(--card-2); border-radius: 99px; padding: 3px 10px; font-size: 13px; color: var(--text-2); display: inline-flex; align-items: center; gap: 5px; }
+.fd-metabtn:active { filter: brightness(.95); }
+.fd-metabtn.est { border: 1px dashed var(--line); }
+.fd-fsrc { display: flex; gap: 6px; flex-wrap: wrap; }
+.fd-heart { position: absolute; top: 6px; right: 6px; width: 34px; height: 34px; border-radius: 50%; background: rgba(255,255,255,.9); color: #d33; display: grid; place-items: center; font-size: 17px; }
+.fd-rcard-wrap { position: relative; display: flex; flex-direction: column; min-width: 0; }
+.fd-rcard-wrap > .fd-rcard { flex: 1; }
+.scroll:has(.fd-hero-img) :is(p, li, a, h2, h3) { overflow-wrap: anywhere; }

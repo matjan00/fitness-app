@@ -21,7 +21,7 @@ test('units convert to grams through the food table', () => {
 
 test('recipe conversion gives per-serving macros and flags', () => {
   const r = convertRecipe({ id: 't1', title: 'Chicken and rice', cuisine: 'international', course: 'main', servings: 2, prep_min: 5, cook_min: 20, difficulty: 'easy',
-    ingredients: ['200 g chicken breast', '100 g rice'], steps: ['Cook.'], source: { type: 'classic', name: 'x', url: 'https://x.org', license: 'PD' } }, ctx);
+    ingredients: ['200 g chicken breast', '100 g rice'], steps: ['Cook.'], source: { type: 'themealdb', name: 'x', url: 'https://x.org', license: 'PD' } }, ctx);
   assert.equal(r.vegetarian, false);
   assert.equal(r.main_ingredient, 'chicken');
   assert.ok(r.per_serving.kcal > 250 && r.per_serving.kcal < 450);

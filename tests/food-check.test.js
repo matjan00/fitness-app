@@ -123,7 +123,7 @@ test('ignoring a warning stops that kind for that ingredient only', () => {
 });
 
 test('pilot library: known problems are caught', () => {
-  const lib = ['mealdb', 'classics'].flatMap((f) => JSON.parse(fs.readFileSync(path.join(dir, 'library', `${f}.json`), 'utf8')).recipes);
+  const lib = ['mealdb'].flatMap((f) => JSON.parse(fs.readFileSync(path.join(dir, 'library', `${f}.json`), 'utf8')).recipes);
   const run = (id) => { const r = lib.find((x) => x.id === id); const own = libToOwn(r, foods); return { own, w: checkRecipe(own.ingredients, own.servings, foods) }; };
   const coq = run('mealdb-52832');
   assert.ok(coq.w.length >= 1 && coq.w.length <= 3);
@@ -132,6 +132,5 @@ test('pilot library: known problems are caught', () => {
   for (const w of coq.w) if (w.fix) rec = { ...rec, ingredients: rec.ingredients.map((g, j) => (j === w.i ? applyFix(g, w.fix, foods) : g)) };
   assert.notEqual(recipeTotals(rec.ingredients).kcal, coq.own.totals.kcal);
   assert.ok(!checkRecipe(rec.ingredients, rec.servings, foods).some((x) => x.kind === 'cut'));
-  assert.deepEqual(run('classic-it-frittata-spinaci').w, []);
   for (const r of lib) assert.ok(run(r.id).w.length <= 3);
 });
