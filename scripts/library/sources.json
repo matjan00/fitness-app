@@ -1,29 +1,56 @@
 {
-  "exclude": ["seafood"],
+  "exclude": [
+    "seafood",
+    "fish"
+  ],
   "sources": [
-    { "source": "mealdb", "mealdb_ids": ["52982", "52811", "52961", "52903", "52908", "52832", "53019", "53020", "53292"] },
-    { "source": "bbcgoodfood", "urls": [
-      "https://www.bbcgoodfood.com/recipes/chicken-stroganoff",
-      "https://www.bbcgoodfood.com/recipes/bean-enchiladas",
-      "https://www.bbcgoodfood.com/recipes/mexican-chicken-stew-quinoa-beans",
-      "https://www.bbcgoodfood.com/recipes/crispy-chilli-turkey-noodles" ] },
-    { "source": "skinnytaste", "urls": [
-      "https://www.skinnytaste.com/harissa-chicken-meatballs/",
-      "https://www.skinnytaste.com/slow-cooker-chicken-tacos/",
-      "https://www.skinnytaste.com/baked-chicken-parmesan/",
-      "https://www.skinnytaste.com/chicken-shawarma-sheet-pan-dinner/" ] },
-    { "source": "budgetbytes", "urls": [
-      "https://www.budgetbytes.com/creamy-salsa-chicken-skillet/",
-      "https://www.budgetbytes.com/sauteed-beef-cabbage-and-rice/",
-      "https://www.budgetbytes.com/moroccan-lentil-vegetable-stew/" ] },
-    { "source": "pinchofyum", "urls": [
-      "https://pinchofyum.com/chickpea-curry",
-      "https://pinchofyum.com/chicken-tacos",
-      "https://pinchofyum.com/broccoli-cheese-soup" ] },
-    { "source": "ethan", "html_fallback": true, "urls": [
-      "https://www.ethanchlebowski.com/cooking-techniques-recipes/thai-basil-chicken-stir-fry",
-      "https://www.ethanchlebowski.com/cooking-techniques-recipes/braised-beef-quesadilla",
-      "https://www.ethanchlebowski.com/cooking-techniques-recipes/chicken-amp-tortilla-strip-salad",
-      "https://www.ethanchlebowski.com/cooking-techniques-recipes/steak-dinner-with-orzo-amp-broccolini" ] }
+    {
+      "source": "mealdb",
+      "mealdb_ids": [
+        "52982",
+        "52811",
+        "52961",
+        "52903",
+        "52908",
+        "52832",
+        "53019",
+        "53020",
+        "53292"
+      ]
+    },
+    {
+      "source": "bbcgoodfood",
+      "urls": [
+        "https://www.bbcgoodfood.com/recipes/chicken-stroganoff",
+        "https://www.bbcgoodfood.com/recipes/bean-enchiladas",
+        "https://www.bbcgoodfood.com/recipes/mexican-chicken-stew-quinoa-beans",
+        "https://www.bbcgoodfood.com/recipes/crispy-chilli-turkey-noodles"
+      ]
+    },
+    {
+      "source": "skinnytaste",
+      "urls": [
+        "https://www.skinnytaste.com/harissa-chicken-meatballs/",
+        "https://www.skinnytaste.com/slow-cooker-chicken-tacos/",
+        "https://www.skinnytaste.com/baked-chicken-parmesan/",
+        "https://www.skinnytaste.com/chicken-shawarma-sheet-pan-dinner/"
+      ]
+    },
+    {
+      "source": "budgetbytes",
+      "urls": [
+        "https://www.budgetbytes.com/creamy-salsa-chicken-skillet/",
+        "https://www.budgetbytes.com/sauteed-beef-cabbage-and-rice/",
+        "https://www.budgetbytes.com/moroccan-lentil-vegetable-stew/"
+      ]
+    },
+    {
+      "source": "pinchofyum",
+      "urls": [
+        "https://pinchofyum.com/chickpea-curry",
+        "https://pinchofyum.com/chicken-tacos",
+        "https://pinchofyum.com/broccoli-cheese-soup"
+      ]
+    }
   ]
 }
