@@ -25,3 +25,7 @@ Everything is rebuilt with `node scripts/library/build.mjs [mealdb|classics|mypl
 - Library data is lazy loaded (index.json, then one file per source) and cached by the service worker; add each new data file to sw.js CORE.
 - Favourites/ratings: store config 'library' {favs, cooked}. Diary entries from the library use source {type: 'library', id}.
 - Later ideas: recipe photos for classics (none yet, cuisine placeholder tile), a "cooked it" history list, sorting by rating.
+
+## Also do with the full import (user request 2026-09-29)
+- Make classic recipes stand out: the card badge shows author + year (e.g. "Artusi 1891", "Escoffier 1907", "Ćwierczakiewiczowa 1871") instead of "Classic".
+- Add a Source filter to the Library: TheMealDB / Classic cookbooks / My recipes (and MyPlate if it gets added).
