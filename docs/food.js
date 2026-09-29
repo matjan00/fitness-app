@@ -9,6 +9,7 @@ import { MEALS, mealLabel, settings, targets, saveSettings, ring, bar, pickFood,
 import { renderBook, openManual, blankDraft, logRecipe, recipePer, openRecipe, editRecipe } from './food-recipes.js';
 import { loadFoods } from './food-db.js';
 import { renderLearn, loadLessons } from './food-learn.js';
+import { renderLibrary } from './food-library-ui.js';
 
 export const tab = { id: 'food', title: 'Food', icon: 'food', render };
 
@@ -25,13 +26,15 @@ const mealNow = () => { const h = new Date().getHours(); return h < 11 ? 'breakf
 function render(el) {
   // After a long pause (e.g. next morning) jump back to today.
   if (Date.now() - dayChosenAt > 3 * 3600 * 1000) { day = today(); dayChosenAt = Date.now(); }
-  const v = view();
+  const lessons = Boolean(settings().showLessons);
+  const v = view() === 'learn' && !lessons ? 'diary' : view();
+  const segs = [['diary', 'Diary'], ['library', 'Library'], ['recipes', 'My recipes'], ...(lessons ? [['learn', 'Learn']] : [])];
   el.innerHTML = `<div class="page-head row between"><h1>Food</h1>
-      <div class="seg fd-viewseg"><button data-v="diary" class="${v === 'diary' ? 'on' : ''}">Diary</button><button data-v="recipes" class="${v === 'recipes' ? 'on' : ''}">Recipes</button><button data-v="learn" class="${v === 'learn' ? 'on' : ''}">Learn</button></div></div>
+      <div class="seg fd-viewseg">${segs.map(([k, l]) => `<button data-v="${k}" class="${v === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
     <div id="fd-body"></div>`;
   $$('.fd-viewseg button', el).forEach((b) => { b.onclick = () => { local.set('fd-view', b.dataset.v); render(el); }; });
   const body = $('#fd-body', el);
-  if (v === 'recipes') renderBook(body); else if (v === 'learn') renderLearn(body); else renderDiary(body);
+  if (v === 'recipes') renderBook(body); else if (v === 'library') renderLibrary(body); else if (v === 'learn') renderLearn(body); else renderDiary(body);
 }
 
 function dayTitle(d) {
@@ -110,7 +113,7 @@ function mealCard(m, list) {
   </div>`;
 }
 function amountTxt(e) {
-  if (e.source?.type === 'recipe') return e.servings ? `${n1(e.servings)} serving${e.servings === 1 ? '' : 's'}` : `${n0(e.grams)} g`;
+  if (e.source?.type === 'recipe' || e.source?.type === 'library') return e.servings ? `${n1(e.servings)} serving${e.servings === 1 ? '' : 's'}` : `${n0(e.grams)} g`;
   if (e.source?.type === 'quick') return `Quick add · P ${n0(e.p)} · C ${n0(e.c)} · F ${n0(e.f)}`;
   if (e.unit && e.unit !== 'g' && e.qty) return `${n1(e.qty)} × ${e.unit} · ${n0(e.grams)} g`;
   return `${n0(e.grams)} g`;
@@ -217,6 +220,12 @@ async function editEntry(e) {
   if (!e) return;
   const type = e.source?.type;
   if (type === 'quick') return quickAdd(e.meal, e);
+  if (type === 'library') {
+    const v = await chooseSheet(e.label, [{ value: 'edit', label: 'Change amount or meal', icon: 'edit' }, { value: 'del', label: 'Remove from diary', icon: 'trash', danger: true }]);
+    if (v === 'edit') return logRecipe({ id: e.source.id, title: e.label, lib: true, servings: 1, totals: { ...e.per } }, { entry: e });
+    if (v === 'del') { await store.remove(e.id); toast('Removed'); }
+    return;
+  }
   if (type === 'recipe') {
     const rec = store.get(e.source.id);
     const v = await chooseSheet(rec ? e.label : `${e.label} (recipe deleted)`, [
@@ -416,9 +425,11 @@ export const meSection = {
         ${t ? `<div class="fd-tsum"><div><b>${n0(t.kcal)}</b><span>kcal</span></div><div class="fd-p"><b>${n0(t.p)}</b><span>protein g</span></div>
           <div class="fd-c"><b>${n0(t.c)}</b><span>carbs g</span></div><div class="fd-f"><b>${n0(t.f)}</b><span>fat g</span></div></div>`
           : '<p class="small muted">Calculate how much to eat for your goal (lose, keep or gain weight).</p>'}</div>
+      <div class="card" style="margin-top:12px"><label class="switch"><span>Show cooking lessons<span class="tiny muted" style="display:block;font-weight:400">The "Learn" tab in Food</span></span><input type="checkbox" id="fd-lessons" ${settings().showLessons ? 'checked' : ''}></label></div>
       <div id="fd-wbox" style="margin-top:12px"></div>
       <div class="card" style="margin-top:12px"><div class="card-head" style="margin-bottom:0"><div><h2>My foods</h2><p class="tiny muted">${store.all('food').length} saved · products you added from a label</p></div>
         <button class="link" id="fd-myfoods">Manage</button></div></div>`;
+    $('#fd-lessons', el).onchange = (e) => saveSettings({ showLessons: e.target.checked });
     $('#fd-tedit', el).onclick = () => openTargets();
     $('#fd-myfoods', el).onclick = openMyFoods;
     weightCard($('#fd-wbox', el));

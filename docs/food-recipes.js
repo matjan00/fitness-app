@@ -542,7 +542,7 @@ export function logRecipe(rec, { day = today(), meal = null, entry = null } = {}
         const a = parseNum($('#fd-amt', el).value);
         await store.put('meal', {
           ...(entry ? { id: entry.id, t: entry.t } : { t: new Date().toISOString() }), day: entry?.day || day, meal: m, label: rec.title,
-          source: { type: 'recipe', id: rec.id }, servings: mode === 'servings' ? a : null, grams: mode === 'grams' ? a : null,
+          source: { type: rec.lib ? 'library' : 'recipe', id: rec.id }, servings: mode === 'servings' ? a : null, grams: mode === 'grams' ? a : null,
           per: { kcal: ps.kcal, p: ps.p, c: ps.c, f: ps.f, grams: ps.grams },
           kcal: ps.kcal * f, p: ps.p * f, c: ps.c * f, f: ps.f * f,
         });

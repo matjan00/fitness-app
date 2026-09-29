@@ -1,0 +1,97 @@
+{
+  "_about": "Hand-written modern adaptations of public-domain cookbook recipes (grams, deg C, clear steps). Same raw shape as the converter input; run `node scripts/library/build.mjs` to convert. Do not paste long passages from the originals - rewrite.",
+  "recipes": [
+    {
+      "id": "classic-it-risotto-milanese", "title": "Risotto alla Milanese", "title_local": "Risotto alla milanese",
+      "cuisine": "italian", "course": "main", "servings": 5, "prep_min": 10, "cook_min": 25, "difficulty": "medium",
+      "ingredients": ["500 g arborio rice", "80 g butter", "0.5 onion, finely chopped", "1.5 l hot chicken or beef stock", "0.5 g saffron threads", "60 g parmesan, grated"],
+      "steps": [
+        "Crush the saffron and dissolve it in a ladle of the hot stock. Keep the rest of the stock simmering.",
+        "Melt half the butter in a wide pan over medium heat and soften the onion for 5 minutes without browning.",
+        "Add the rice and stir for 2 minutes until the grains are glossy.",
+        "Add the stock a ladle at a time, stirring often and letting each addition be absorbed before the next. After about 15 minutes stir in the saffron stock.",
+        "Cook until the rice is tender with a slight bite, about 18 minutes in total. The risotto should be creamy, not dry.",
+        "Off the heat, stir in the remaining butter and the parmesan. Rest 2 minutes and serve at once."
+      ],
+      "image": null, "video": null,
+      "source": { "type": "classic", "name": "La scienza in cucina e l'arte di mangiar bene, no. 78", "author": "Pellegrino Artusi", "year": 1891, "url": "https://www.gutenberg.org/ebooks/59047", "license": "Public domain (Project Gutenberg). Modern rewrite by this app." },
+      "notes": "Artusi uses 500 g rice, 80 g butter, half an onion and saffron for five people, and says stock makes it richer. Parmesan is served with it."
+    },
+    {
+      "id": "classic-it-frittata-spinaci", "title": "Spinach Frittata", "title_local": "Frittata di spinaci",
+      "cuisine": "italian", "course": "main", "servings": 2, "prep_min": 10, "cook_min": 12, "difficulty": "easy", "vegetarian": true,
+      "ingredients": ["200 g fresh spinach", "40 g butter", "4 eggs", "20 g parmesan, grated", "salt", "black pepper"],
+      "steps": [
+        "Boil the spinach for 1 minute, plunge it into cold water, squeeze out all the water and chop roughly.",
+        "Melt half the butter in a 24 cm non-stick pan. Add the spinach, season and stir for 2 minutes.",
+        "Beat the eggs with a pinch of salt and the parmesan and pour them over the spinach.",
+        "Cook over medium-low heat for about 4 minutes until the underside is golden.",
+        "Slide the frittata onto a plate, melt the rest of the butter in the pan and turn the frittata back in. Cook 3 more minutes and serve warm or cold."
+      ],
+      "image": null, "video": null,
+      "source": { "type": "classic", "name": "La scienza in cucina e l'arte di mangiar bene, no. 148", "author": "Pellegrino Artusi", "year": 1891, "url": "https://www.gutenberg.org/ebooks/59047", "license": "Public domain (Project Gutenberg). Modern rewrite by this app." },
+      "notes": "Artusi's proportions: 200 g spinach, 40 g butter and four eggs; a pinch of parmesan is optional."
+    },
+    {
+      "id": "classic-fr-soupe-poireaux-pommes-de-terre", "title": "Leek and Potato Soup", "title_local": "Soupe aux poireaux et pommes de terre",
+      "cuisine": "french", "course": "soup", "servings": 4, "prep_min": 15, "cook_min": 40, "difficulty": "easy", "vegetarian": false,
+      "ingredients": ["300 g leeks, white part only, finely sliced", "25 g butter", "400 g potatoes, peeled and thinly sliced", "570 ml white chicken stock", "570 ml whole milk", "40 g butter, cold, to finish", "salt", "30 g baguette, thinly sliced and toasted"],
+      "steps": [
+        "Melt 25 g butter in a large pot, add the leeks and stew gently for 15 minutes, covered, without colouring.",
+        "Add the potato slices and the stock, season lightly with salt and simmer for 20 minutes until the potatoes are soft.",
+        "Heat the milk to boiling in a separate pan and stir it into the soup.",
+        "Off the heat, stir in the cold butter so the soup turns silky. Taste for salt.",
+        "Serve in warm bowls with the toasted baguette slices floating on top."
+      ],
+      "image": null, "video": null,
+      "source": { "type": "classic", "name": "A Guide to Modern Cookery, no. 751 (Soupe aux poireaux et pommes de terre)", "author": "Auguste Escoffier", "year": 1907, "url": "https://www.gutenberg.org/ebooks/71395", "license": "Public domain (Project Gutenberg). Modern rewrite by this app." },
+      "notes": "Converted from Escoffier's pints and ounces (1 pint = 570 ml). Use vegetable stock to make it vegetarian."
+    },
+    {
+      "id": "classic-fr-omelette-mousseline", "title": "Fluffy Omelette (Mousseline)", "title_local": "Omelette mousseline",
+      "cuisine": "french", "course": "breakfast", "servings": 2, "prep_min": 5, "cook_min": 5, "difficulty": "medium", "vegetarian": true,
+      "ingredients": ["3 eggs, separated", "1 pinch salt", "1 tbsp double cream", "30 g butter"],
+      "steps": [
+        "Beat the yolks with the salt and the cream.",
+        "Whisk the whites to stiff peaks and fold them gently into the yolks.",
+        "Heat the butter in a 22 cm non-stick pan until foaming and pour in the mixture.",
+        "Cook over medium-high heat, drawing the set edges toward the centre, for about 2 minutes until just set but still soft on top.",
+        "Roll the omelette out of the pan onto a warm plate and serve immediately."
+      ],
+      "image": null, "video": null,
+      "source": { "type": "classic", "name": "A Guide to Modern Cookery, no. 510 (Omelet Mousseline)", "author": "Auguste Escoffier", "year": 1907, "url": "https://www.gutenberg.org/ebooks/71395", "license": "Public domain (Project Gutenberg). Modern rewrite by this app." },
+      "notes": "Escoffier uses three eggs, one tablespoon of thick cream and 1 oz (30 g) butter."
+    },
+    {
+      "id": "classic-pl-zupa-grochowa", "title": "Split Pea Soup with Smoked Pork", "title_local": "Zupa grochowa",
+      "cuisine": "polish", "course": "soup", "servings": 6, "prep_min": 15, "cook_min": 90, "difficulty": "easy",
+      "ingredients": ["300 g dried split peas", "1.5 l water", "400 g smoked pork ribs or hock", "1 tsp dried marjoram", "1 tsp salt", "2 slices white bread, cubed", "20 g butter"],
+      "steps": [
+        "Rinse the peas. Put them in a pot with the water and the smoked pork and bring to the boil.",
+        "Add the salt, cover and simmer for about 75 minutes, until the peas are soft and falling apart.",
+        "Lift out the meat. Purée the soup through a sieve or with a hand blender.",
+        "Cut the meat off the bones into small pieces, return it to the soup and heat through, stirring so it does not catch.",
+        "Fry the bread cubes in the butter until golden.",
+        "Stir the marjoram into the soup, taste for salt and serve with the croutons."
+      ],
+      "image": null, "video": null,
+      "source": { "type": "classic", "name": "365 obiadow za 5 zlotych, no. 18 (Zupa grochowa)", "author": "Lucyna Cwierczakiewiczowa", "year": 1871, "url": "https://pl.wikisource.org/wiki/365_obiad%C3%B3w_za_5_z%C5%82otych/Zupa_grochowa", "license": "Public domain (Wikisource). Modern rewrite by this app." },
+      "notes": "The original pea-to-water ratio is 1:3 by volume and also gives a meatless version (use more peas, no pork)."
+    },
+    {
+      "id": "classic-pl-kotlety-z-kartofli", "title": "Potato Cutlets", "title_local": "Kotlety z kartofli",
+      "cuisine": "polish", "course": "main", "servings": 4, "prep_min": 25, "cook_min": 25, "difficulty": "easy", "vegetarian": true,
+      "ingredients": ["800 g potatoes", "100 ml sweet cream", "2 eggs", "30 g butter", "1 tsp salt", "1 egg, beaten, for coating", "60 g breadcrumbs", "40 g butter, for frying"],
+      "steps": [
+        "Boil the potatoes in salted water until soft, drain and let them steam dry for 5 minutes.",
+        "Mash or rice the potatoes smooth, then mix in the cream, the 2 eggs, the 30 g butter and the salt.",
+        "Shape the mixture into 8 oval cutlets. Dip each in the beaten egg, then in the breadcrumbs.",
+        "Fry in the butter over medium heat for 3 to 4 minutes per side until golden brown.",
+        "Serve with mushroom sauce or, as the author recommends, a sharp pickled-cucumber sauce."
+      ],
+      "image": null, "video": null,
+      "source": { "type": "classic", "name": "365 obiadow za 5 zlotych, no. 19 (Kotlety z kartofli)", "author": "Lucyna Cwierczakiewiczowa", "year": 1871, "url": "https://pl.wikisource.org/wiki/365_obiad%C3%B3w_za_5_z%C5%82otych/Kotlety_z_kartofli", "license": "Public domain (Wikisource). Modern rewrite by this app." },
+      "notes": "Quantities are estimates: the original gives no weights, only 'a few eggs according to the amount of potatoes'."
+    }
+  ]
+}
