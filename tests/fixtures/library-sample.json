@@ -1,0 +1,353 @@
+{
+ "recipes": [
+  {
+   "id": "sample-stew",
+   "title": "Chicken and wine stew",
+   "cuisine": "french",
+   "course": "main",
+   "servings": 6,
+   "prep_min": 15,
+   "cook_min": 40,
+   "est": {
+    "main": true,
+    "time": true
+   },
+   "difficulty": "easy",
+   "vegetarian": false,
+   "main_ingredient": "chicken",
+   "ingredients": [
+    {
+     "text": "4 Chopped Chicken Legs",
+     "qty": 4,
+     "unit": null,
+     "name": "Chopped Chicken Legs",
+     "grams": 1088,
+     "food_id": "chicken-breast",
+     "conf": "medium"
+    },
+    {
+     "text": "2 large onions, sliced",
+     "qty": 2,
+     "unit": null,
+     "name": "onions",
+     "grams": 300,
+     "food_id": "onion",
+     "conf": "high"
+    },
+    {
+     "text": "3 carrots",
+     "qty": 3,
+     "unit": null,
+     "name": "carrots",
+     "grams": 183,
+     "food_id": "carrot",
+     "conf": "high"
+    },
+    {
+     "text": "300 ml red wine",
+     "qty": 300,
+     "unit": "ml",
+     "name": "red wine",
+     "grams": 300,
+     "food_id": "wine-red",
+     "conf": "high"
+    },
+    {
+     "text": "500 ml chicken stock",
+     "qty": 500,
+     "unit": "ml",
+     "name": "chicken stock",
+     "grams": 518.8,
+     "food_id": "broth-chicken",
+     "conf": "high"
+    },
+    {
+     "text": "2 tbsp flour",
+     "qty": 2,
+     "unit": "tbsp",
+     "name": "flour",
+     "grams": 15.6,
+     "food_id": "flour",
+     "conf": "high"
+    },
+    {
+     "text": "30 g butter",
+     "qty": 30,
+     "unit": "g",
+     "name": "butter",
+     "grams": 30,
+     "food_id": "butter",
+     "conf": "high"
+    },
+    {
+     "text": "2 cloves garlic",
+     "qty": 2,
+     "unit": "clove",
+     "name": "garlic",
+     "grams": 6,
+     "food_id": "garlic",
+     "conf": "high"
+    },
+    {
+     "text": "salt and pepper",
+     "qty": null,
+     "unit": null,
+     "name": "salt and pepper",
+     "grams": 0,
+     "food_id": "pepper",
+     "conf": "medium"
+    }
+   ],
+   "steps": [
+    "Brown the chicken.",
+    "Add onions, carrots and garlic.",
+    "Add wine and stock and simmer 40 minutes."
+   ],
+   "per_serving": {
+    "kcal": 345,
+    "p": 42.6,
+    "c": 11.5,
+    "f": 9.1
+   },
+   "checks": 0,
+   "image": null,
+   "video": null,
+   "source": {
+    "type": "themealdb",
+    "name": "Sample",
+    "url": "https://example.org/sample",
+    "license": "synthetic test fixture"
+   }
+  },
+  {
+   "id": "sample-pasta",
+   "title": "Simple tomato pasta",
+   "cuisine": "french",
+   "course": "main",
+   "servings": 2,
+   "prep_min": 15,
+   "cook_min": 40,
+   "est": {
+    "main": true,
+    "time": true
+   },
+   "difficulty": "easy",
+   "vegetarian": true,
+   "main_ingredient": "pasta",
+   "ingredients": [
+    {
+     "text": "200 g pasta",
+     "qty": 200,
+     "unit": "g",
+     "name": "pasta",
+     "grams": 200,
+     "food_id": "pasta",
+     "conf": "high"
+    },
+    {
+     "text": "400 g canned tomatoes",
+     "qty": 400,
+     "unit": "g",
+     "name": "canned tomatoes",
+     "grams": 400,
+     "food_id": "tomato-canned",
+     "conf": "high"
+    },
+    {
+     "text": "1 onion",
+     "qty": 1,
+     "unit": null,
+     "name": "onion",
+     "grams": 110,
+     "food_id": "onion",
+     "conf": "high"
+    },
+    {
+     "text": "2 tbsp olive oil",
+     "qty": 2,
+     "unit": "tbsp",
+     "name": "olive oil",
+     "grams": 27,
+     "food_id": "olive-oil",
+     "conf": "high"
+    },
+    {
+     "text": "30 g parmesan",
+     "qty": 30,
+     "unit": "g",
+     "name": "parmesan",
+     "grams": 30,
+     "food_id": "parmesan",
+     "conf": "high"
+    }
+   ],
+   "steps": [
+    "Boil the pasta.",
+    "Cook the sauce for 15 minutes.",
+    "Combine."
+   ],
+   "per_serving": {
+    "kcal": 603,
+    "p": 20.6,
+    "c": 87.3,
+    "f": 19.4
+   },
+   "checks": 0,
+   "image": null,
+   "video": null,
+   "source": {
+    "type": "themealdb",
+    "name": "Sample",
+    "url": "https://example.org/sample",
+    "license": "synthetic test fixture"
+   }
+  },
+  {
+   "id": "sample-pilaf",
+   "title": "Chicken rice pilaf",
+   "cuisine": "french",
+   "course": "main",
+   "servings": 2,
+   "prep_min": 15,
+   "cook_min": 40,
+   "est": {
+    "main": true,
+    "time": true
+   },
+   "difficulty": "easy",
+   "vegetarian": false,
+   "main_ingredient": "chicken",
+   "ingredients": [
+    {
+     "text": "300 g chicken breast",
+     "qty": 300,
+     "unit": "g",
+     "name": "chicken breast",
+     "grams": 300,
+     "food_id": "chicken-breast",
+     "conf": "high"
+    },
+    {
+     "text": "150 g rice",
+     "qty": 150,
+     "unit": "g",
+     "name": "rice",
+     "grams": 150,
+     "food_id": "rice",
+     "conf": "high"
+    },
+    {
+     "text": "1 onion",
+     "qty": 1,
+     "unit": null,
+     "name": "onion",
+     "grams": 110,
+     "food_id": "onion",
+     "conf": "high"
+    },
+    {
+     "text": "1 tbsp olive oil",
+     "qty": 1,
+     "unit": "tbsp",
+     "name": "olive oil",
+     "grams": 13.5,
+     "food_id": "olive-oil",
+     "conf": "high"
+    },
+    {
+     "text": "400 ml chicken stock",
+     "qty": 400,
+     "unit": "ml",
+     "name": "chicken stock",
+     "grams": 415,
+     "food_id": "broth-chicken",
+     "conf": "high"
+    }
+   ],
+   "steps": [
+    "Fry chicken.",
+    "Add rice and stock.",
+    "Cook 20 minutes."
+   ],
+   "per_serving": {
+    "kcal": 548,
+    "p": 40.9,
+    "c": 65.9,
+    "f": 11.6
+   },
+   "checks": 0,
+   "image": null,
+   "video": null,
+   "source": {
+    "type": "themealdb",
+    "name": "Sample",
+    "url": "https://example.org/sample",
+    "license": "synthetic test fixture"
+   }
+  },
+  {
+   "id": "sample-porridge",
+   "title": "Berry porridge",
+   "cuisine": "french",
+   "course": "breakfast",
+   "servings": 1,
+   "prep_min": 15,
+   "cook_min": 40,
+   "est": {
+    "main": true,
+    "time": true
+   },
+   "difficulty": "easy",
+   "vegetarian": true,
+   "main_ingredient": "oats",
+   "ingredients": [
+    {
+     "text": "60 g oats",
+     "qty": 60,
+     "unit": "g",
+     "name": "oats",
+     "grams": 60,
+     "food_id": "oats",
+     "conf": "high"
+    },
+    {
+     "text": "250 ml milk",
+     "qty": 250,
+     "unit": "ml",
+     "name": "milk",
+     "grams": 254.2,
+     "food_id": "milk",
+     "conf": "high"
+    },
+    {
+     "text": "80 g blueberries",
+     "qty": 80,
+     "unit": "g",
+     "name": "blueberries",
+     "grams": 80,
+     "food_id": "blueberries",
+     "conf": "high"
+    }
+   ],
+   "steps": [
+    "Simmer oats in milk for 5 minutes.",
+    "Top with berries."
+   ],
+   "per_serving": {
+    "kcal": 400,
+    "p": 16.9,
+    "c": 64.4,
+    "f": 9.2
+   },
+   "checks": 0,
+   "image": null,
+   "video": null,
+   "source": {
+    "type": "themealdb",
+    "name": "Sample",
+    "url": "https://example.org/sample",
+    "license": "synthetic test fixture"
+   }
+  }
+ ]
+}

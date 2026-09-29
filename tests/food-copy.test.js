@@ -8,7 +8,7 @@ import { dbSnap } from '../docs/food-check.js';
 
 const dir = path.join(import.meta.dirname, '..', 'docs', 'data');
 const foods = Object.fromEntries(JSON.parse(fs.readFileSync(path.join(dir, 'foods.json'), 'utf8')).foods.map((f) => [f.id, { ...f, src: 'db' }]));
-const lib = ['mealdb'].flatMap((f) => JSON.parse(fs.readFileSync(path.join(dir, 'library', `${f}.json`), 'utf8')).recipes);
+const lib = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'fixtures', 'library-sample.json'), 'utf8')).recipes;
 
 test('every library recipe converts to an own recipe with the same per-serving macros', () => {
   for (const r of lib) {
@@ -31,7 +31,7 @@ test('copy lookups', () => {
 });
 
 test('editing an amount and a food updates totals, immutably', () => {
-  const own = libToOwn(lib.find((r) => r.id === 'mealdb-52832'), foods);
+  const own = libToOwn(lib.find((r) => r.id === 'sample-stew'), foods);
   const i = own.ingredients.findIndex((g) => /Chicken Legs/.test(g.raw));
   const before = own.totals.kcal;
   const patch = amountPatch(own.ingredients[i], 300);

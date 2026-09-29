@@ -1,16 +1,36 @@
 # Recipe library - plan
 
-State: 9 TheMealDB recipes in docs/data/library/mealdb.json (classic cookbooks were removed, MyPlate is blocked). Format: top of docs/food-library.js.
-Rebuild: `node scripts/library/build.mjs [mealdb|myplate]` (converts, validates, rewrites docs/data/library/*.json + index.json). Then add NEW file names to docs/sw.js CORE, `node --test`, `node scripts/release.cjs`.
+State (built, pilot done): ALL third-party recipes are PRIVATE. They live in the user's Supabase table `records` (kind 'library'), written by a GitHub Action, and reach the app through the normal sync (docs/food-library.js: loadLibrary(store.all('library'))). Nothing third-party is committed (docs/data/library/index.json is an empty stub; tests use synthetic tests/fixtures/library-sample.json). Format: top of docs/food-library.js.
+
+## How to run / scale
+- List sources in scripts/library/sources.json: `{ "exclude": ["seafood"], "sources": [ { "source": "bbcgoodfood", "urls": [...] } ] }`. Per source: `urls` (recipe pages), `collections` (+ `link_pattern` regex on the path, `limit`) which are expanded to recipe links, `mealdb_ids`, `mealdb_categories` (Chicken, Beef, Pork, Lamb, Vegetarian, Breakfast...). `exclude`: 'seafood' (shellfish etc.) always; add 'fish' to drop regular fish too. `html_fallback: true` = parse "Ingredients/Instructions" text when a page has no schema.org Recipe (used for Ethan Chlebowski).
+- Local check (no Supabase, prints counts only, writes scripts/library/.out/library.json which is gitignored): `node scripts/library/import.mjs --dry-run [--verbose] [source ...]`.
+- Real run: push, then GitHub > Actions > "Recipe library import" > Run workflow (input `sources` empty = all). Uses the repo secret SUPABASE_SECRET_KEY, finds the single user via the Auth admin API, upserts records with deterministic ids (uuid5 of user:library:source:source_id), so re-runs update instead of duplicating. Logs are public: only counts and generic messages. ~1.5 s per recipe (a 300-recipe run is about 10 minutes).
+- Per recipe: published per-serving nutrition (JSON-LD) is preferred (`nutrition_basis: 'published'`, our computed numbers kept in `computed_per_serving`); otherwise computed. Missing servings/time/main are estimated and flagged in `est`. When servings are missing but nutrition is published, servings = computed total kcal / published kcal.
+- Recipes are hot-linked images, personal use only, source name + link on each; never publish the table.
+
+## Expected counts (collection URLs to list)
+- BBC Good Food: /recipes/collection/high-protein-recipes (~27 links per page, JSON-LD complete: nutrition, times, yield), plus high-protein dinner/breakfast/vegetarian, chicken-breast, healthy-chicken and family collections: ~150-250. link_pattern `^/recipes/[a-z0-9-]+$`.
+- Skinnytaste: /recipes/high-protein/ (paged /page/N/), main-ingredient/chicken-recipes, beef, turkey, pork, lamb: ~200-300 (seafood/fish/shrimp categories are skipped by the filter anyway). Recipe links are `^/[a-z0-9-]+/$` on the collection page (nav links also match: the importer drops pages with no Recipe data).
+- Pinch of Yum: /recipes/dinner and /recipes/quick-and-easy (paged /page/N), link_pattern `^/[a-z0-9-]+$`: ~100-200.
+- Budget Bytes: see below (blocked from scripts here).
+- TheMealDB: mealdb_categories Chicken, Beef, Pork, Lamb, Vegetarian, Breakfast, Pasta, Starter, Side, Dessert (Seafood is skipped): ~350. No servings/time/main published: all estimated.
+- Ethan Chlebowski: see below.
+
+## Source findings (pilot dry run 2026-09-29)
+- BBC Good Food, Skinnytaste, Pinch of Yum: schema.org Recipe with nutrition, times, yield, image: all fields present. Pinch of Yum has some quirks (no video, blog-style titles).
+- Budget Bytes: recipe pages (and its wp-json API) answer HTTP 403 with a Cloudflare "Just a moment" challenge to scripted requests from this machine, even with a browser User-Agent; only sitemap XML is open. Not bypassed (bot check). Its URLs stay in sources.json: the first Action run will show whether GitHub's network gets through (log line "budgetbytes #N: fetch/convert error"); if not, drop it.
+- Ethan Chlebowski (ethanchlebowski.com/cooking-techniques-recipes/<slug>, Squarespace): fetchable, photos in og:image, ~20 recipes listed on the index page, but NO schema.org Recipe (JSON-LD is only Article/Organization). Ingredients and Instructions are plain text under "Ingredients"/"Instructions" headings, so the html_fallback parser reads them. Quality is lower: amounts are often vague ("a handful", "a spoonful"), sub-headings become unmatched rows, no servings/time/nutrition (all estimated, ~60% of ingredients matched vs ~98% for the schema.org sources), and some pages are technique posts without a recipe. Verdict: usable as a small extra (mostly for photos and taste), not a bulk source. Every recipe page is titled with the dish name, which is handy for search.
+- Converter fixes made from the pilot: "one 14-ounce can X", "an 8-ounce block", "N-inch knob", "4 garlic cloves crushed", "3 finely chopped garlic clove", "4 chicken breasts (about 8 oz each)", stock cubes, sprig/pinch/handful/bunch, "to serve/for garnish/spray" lines (see normalizeLine in scripts/library/convert.mjs, tests/library-import.test.js).
+- Still imperfect: "1 pot sour cream", "2 chicken stock cubes" (no gram weight), vague "a handful of" without a food match; they stay flagged 'check' and are not counted in macros.
 
 ## Facts every recipe has (estimated when the source does not say)
 main_ingredient, prep_min + cook_min, servings, per_serving macros. Guessed values are flagged `est: {main, time, servings}` and the UI shows "(est.)" (docs/food-estimate.js: estimateMain / estimateTime / estimateServings; tests/food-estimate.test.js). Tap time / servings / main on a recipe to correct it: this saves "Your version" (own recipe with `from_library`) or updates your own recipe, and clears the est flag. Filters (Library > Filters): sort (protein per 100 kcal, kcal, time, name), source, time <=15/30/45/60, main ingredient (multi), protein >=20/30/40 g, kcal <=400/600/800, cuisine, course, vegetarian, favourites. Own recipes appear in the same list (source "My recipes").
 
-## TheMealDB (base, in the app)
-- Free test key "1": https://www.themealdb.com/api/json/v1/1/ . The 2026 catalogue is much bigger than the pilot: by category chicken 81, beef 95, seafood 84, pork 61, lamb 33, vegetarian 100, breakfast 19 (~350 high-protein mains). By area (filter.php?a=): British 60, Spanish 48, Turkish 30, Thai 27, Chinese 27, Japanese 9, Greek 8, Mexican 6, Moroccan 6 (American/Indian returned 0: check exact names with `list.php?a=list`, e.g. "France" not "French").
-- Import path: scripts/library/mealdb-ids.json ({cuisine: [ids]}) + `node scripts/library/build.mjs mealdb` (0.3 s per lookup). To pull whole categories use `filter.php?c=Chicken|Beef|Seafood|Pork|Lamb` and add new area names to AREA_CUISINE in convert.mjs.
-- MealDB has no servings, times or main ingredient: all three are estimated and flagged. Per-recipe fixes: scripts/library/mealdb-overrides.json ({"<id>": {"servings": 6, "lines": {"<original line>": "<replacement>"}}}).
-- Licensing: free test key for personal/educational use; recipes and photos are user-contributed; photos hot-linked. Public/commercial use needs the paid key. The small set is in the public repo today; for a large import use the private route below.
+## TheMealDB
+- Free test key "1": https://www.themealdb.com/api/json/v1/1/ . Listed in sources.json as `mealdb_ids` / `mealdb_categories`; the importer looks each meal up (1.5 s pause). Seafood category is skipped.
+- No servings, times or main ingredient in MealDB: all three are estimated and flagged. Per-recipe fixes: scripts/library/mealdb-overrides.json ({"<id>": {"servings": 6, "lines": {"<original line>": "<replacement>"}}}).
+- Licensing: free test key for personal/educational use; recipes and photos are user-contributed; photos hot-linked. Now private like every other source.
 
 ## Source research (2026-09-29; script check of JSON-LD schema.org/Recipe on 2-4 pages each)
 | Source | Fetchable | Photo | Nutrition | High-protein | Terms | Verdict |
@@ -29,23 +49,8 @@ main_ingredient, prep_min + cook_min, servings, per_serving macros. Guessed valu
 
 Pilot (pipeline proof; scratch file only, deleted): 2 recipes each from BBC Good Food, Skinnytaste, Budget Bytes and 1 Pinch of Yum went through convertRecipe (JSON-LD -> raw -> library format) with image, servings, times, macros, checks. Our computed macros vs the site's published per serving: stroganoff 530 vs 425 kcal (P 64 vs 43); salmon risotto 532 vs 806 (P 12 vs 40, salmon lines unmatched); Skinnytaste curry 273 vs 213; Budget Bytes chicken 292 vs 436 (P 10 vs 39). Gaps of 20-60% are common (raw vs cooked weights, unmatched lines). CONCLUSION: for imported sources use the source's published per-serving kcal/P/C/F as `per_serving` (that is what filters and sorting use), keep the app's own computation for the ingredient breakdown and "Check these".
 
-## Import design (next step, not built)
-- Private storage (repo is public; third-party text must not be committed): a GitHub Action (manual + weekly) runs `scripts/library/import.mjs`, upserting into the user's Supabase `records` table as kind 'library', one row per recipe (deterministic UUID from the source URL, like the Strava sync; data = library-format JSON incl. `source_nutrition`). Uses the existing SUPABASE_SECRET_KEY secret. Images stay hot-linked. The app loads its kind 'library' rows after login (RLS, own rows only) and merges them with the static TheMealDB file; add source keys ('bbcgoodfood', 'skinnytaste', 'budgetbytes') to SOURCE_TYPES / SOURCE_LABEL in food-library.js.
-- Fetch: sitemap.xml or collection page -> recipe URLs -> one GET each -> parse JSON-LD Recipe (recipeIngredient, recipeInstructions HowToStep/HowToSection, recipeYield, ISO 8601 times, nutrition, image). Rate limit 1 request per 2 s, honest UA naming the app, honour robots.txt, cache by URL + lastmod so re-runs fetch only new/changed pages, max ~150 pages per run.
-- Dedupe: by source URL (upsert) and by normalised title + first 3 ingredient names across sources (keep the one with published nutrition). Skip pages without Recipe JSON-LD and recipes with >= 4 'check' ingredients and no published nutrition.
-- Collections / expected counts: BBC Good Food `/recipes/collection/high-protein-recipes` plus high-protein dinner/breakfast/vegetarian and chicken-breast collections (~150-250); Skinnytaste high-protein, chicken, seafood, turkey categories (~150-250); Budget Bytes chicken/beef/bean + meal prep (~100-150); TheMealDB by category (~350, static file). Realistic total 600-900 recipes, ~5 KB each = 3-5 MB.
-- Legal: personal use only, private database, images hot-linked, source name + link on every recipe, never publish the table.
-
-## Recommended for next week
-1. BBC Good Food high-protein collections (nutrition + times + yield present).
-2. Skinnytaste high-protein / chicken / seafood.
-3. TheMealDB by category (chicken, beef, seafood, pork, lamb) via the existing build.
-4. Budget Bytes as filler; Polish sites later (microdata parser).
-
-## MyPlate
-- NOT FETCHABLE: www.myplate.gov returns HTTP 403 to scripted requests. Left out; build.mjs still reads scripts/library/myplate.json if someone creates it.
-
 ## App notes
-- Library data is lazy loaded (index.json, then one file per source) and cached by the service worker; add each new data file to sw.js CORE.
+- Library records are read with store.all('library') (id = record uuid, `key` = source:source_id). Existing favourites or "Your version" copies made on the old static ids (mealdb-52832 ...) no longer match; the 9 pilot recipes have new ids.
+- Empty library shows "Recipe library is being prepared". Optional static files data/library/index.json + <source>.json are still merged when present (none today).
 - Favourites/ratings: store config 'library' {favs, cooked}. Remove a favourite with the heart on the recipe or on the Favourites list.
-- Later ideas: a "cooked it" history list, sorting by rating.
+- Later ideas: a "cooked it" history list, sorting by rating, dedupe across sources by normalised title + first ingredients.

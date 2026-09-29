@@ -4,3 +4,4 @@ scripts/exercises-source.json
 *.local.*
 scripts/.food-usda/
 supabase/.temp/
+scripts/library/.out/

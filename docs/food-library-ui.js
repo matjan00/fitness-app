@@ -48,12 +48,14 @@ function card(r, favs, unfav) {
 export async function renderLibrary(box) {
   box.innerHTML = '<div class="card empty" style="margin-top:14px"><p class="small muted">Loading recipes…</p></div>';
   let lib;
-  try { lib = await loadLibrary(); } catch (e) {
+  try { lib = await loadLibrary(store.all('library')); } catch (e) {
     box.innerHTML = `<div class="card empty" style="margin-top:14px">${icon('info')}<h2>Library not available</h2><p class="small">Open the app once with a connection to download it.</p></div>`;
     return;
   }
   draw(box, lib);
 }
+
+const EMPTY = () => `<div class="card empty" style="margin-top:14px">${icon('info')}<h2>Recipe library is being prepared</h2><p class="small">Your private recipe collection is not here yet. It appears after the import has run and the app has synced - open the app with a connection and check back soon.</p></div>`;
 
 function draw(box, lib) {
   const nav = getNav();
@@ -61,6 +63,7 @@ function draw(box, lib) {
   const copies = copiesByLib(store.all('recipe'));
   const ownOnly = store.all('recipe').filter((r) => !r.from_library).map((r) => ownView(r, recipePer));
   const all = [...lib.recipes.map((r) => effectiveLib(r, copies.get(r.id), recipePer)), ...ownOnly];
+  if (!all.length) { box.innerHTML = EMPTY(); return; }
   const active = nav.cuisine || nav.q || nav.all || filterCount(nav);
   const fc = filterCount(nav);
   const list = sortRecipes(filterRecipes(all, nav, favs), nav.sort);
@@ -153,7 +156,7 @@ function openFilters(all, done) {
 
 // ---------- recipe detail ----------
 export async function openLibRecipe(id, onBack) {
-  const lib = await loadLibrary();
+  const lib = await loadLibrary(store.all('library'));
   const r = lib.recipes.find((x) => x.id === id);
   if (!r) return;
   const foods = await foodsMap();
@@ -178,7 +181,7 @@ export async function openLibRecipe(id, onBack) {
         ${copy ? `<div class="row between" style="margin:4px 0 8px"><span class="fd-badge mine">Your version</span><button class="link small" id="lib-reset">Reset to original</button></div>` : ''}
         <div class="fd-meta">${metaChipsHtml(view)}<span>${esc(r.difficulty)}</span><span>${cu.emoji} ${esc(cu.label)} · ${esc(courseLabel(r.course))}</span>${r.vegetarian ? '<span>Vegetarian</span>' : ''}
           ${r.video ? `<a href="${esc(r.video)}" target="_blank" rel="noopener noreferrer">${icon('play')} Video</a>` : ''}</div>
-        <div class="card fd-totals" style="margin-top:14px"><div class="row between"><div><p class="tiny muted">Per serving</p><div class="fd-big">${n0(p.kcal)} <span>kcal</span></div></div>
+        <div class="card fd-totals" style="margin-top:14px"><div class="row between"><div><p class="tiny muted">Per serving${!copy && r.nutrition_basis === 'published' ? ' · as published by the source' : ''}</p><div class="fd-big">${n0(p.kcal)} <span>kcal</span></div></div>
           <div class="fd-pcf"><span class="fd-p">P ${n0(p.p)} g</span><span class="fd-c">C ${n0(p.c)} g</span><span class="fd-f">F ${n0(p.f)} g</span></div></div>
           ${missing ? `<p class="fd-warn small">${icon('info')} ${missing} ingredient${missing > 1 ? 's' : ''} could not be counted exactly.</p>` : ''}
           <button class="primary block" id="lib-log" style="margin-top:14px">${icon('plus')} Add to diary</button>

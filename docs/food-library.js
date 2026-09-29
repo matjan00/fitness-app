@@ -3,7 +3,8 @@
 //
 // -- Library recipe format (all units metric: g, ml, deg C; text in English) --
 // {
-//   id            'mealdb-52982' | 'myplate-...'   (unique, stable)
+//   id            unique, stable. Private library records (Supabase kind 'library'): the record's uuid (uuid5 of user:library:source:source_id);
+//                 `key` 'source:source_id' is the human-readable form. Static files (none any more) used 'mealdb-52982'.
 //   title, title_local?            (title_local = original-language name, e.g. Polish)
 //   cuisine       'italian' | 'french' | 'polish' | 'american' | 'international' | ...
 //   course        'breakfast' | 'starter' | 'soup' | 'main' | 'side' | 'dessert' | 'snack' | 'baking'
@@ -21,8 +22,10 @@
 //   per_serving   { kcal, p, c, f }  computed with the app's own food table - same method for every source
 //   checks        number of ingredients flagged 'check' (quality signal)
 //   image, video  urls or null
-//   source        { type: 'themealdb'|'myplate', name, url, author?, year?, license }
-//   source_nutrition?  published nutrition of the source (kept only for comparison)
+//   source        { type: 'mealdb'|'bbcgoodfood'|'skinnytaste'|'budgetbytes'|'pinchofyum'|'ethan', name, url, author?, license }
+//   nutrition_basis?      'published' = per_serving is what the source site publishes (JSON-LD), 'computed' = from our ingredient table
+//   computed_per_serving? our computed { kcal, p, c, f } kept next to published numbers; source_nutrition? the published numbers
+//   key?          'source:source_id' (dedupe / debugging)
 //   notes?
 // }
 import { fold } from './food-parse.js';
@@ -42,8 +45,7 @@ export const COURSES = [
 ];
 export const courseLabel = (k) => COURSES.find((c) => c.key === k)?.label || k;
 export const DIFFICULTIES = ['easy', 'medium', 'hard'];
-export const SOURCE_TYPES = ['themealdb', 'myplate'];
-export const SOURCE_LABEL = { themealdb: 'TheMealDB', myplate: 'MyPlate', own: 'My recipes' };
+export const SOURCE_LABEL = { mealdb: 'TheMealDB', themealdb: 'TheMealDB', bbcgoodfood: 'BBC Good Food', skinnytaste: 'Skinnytaste', budgetbytes: 'Budget Bytes', pinchofyum: 'Pinch of Yum', ethan: 'Ethan Chlebowski', myplate: 'MyPlate', own: 'My recipes' };
 
 // ---------- validation (used by tests for every JSON file, and by the build script) ----------
 export function validateRecipe(r) {
@@ -73,7 +75,7 @@ export function validateRecipe(r) {
   need(r.image === null || typeof r.image === 'string', 'image');
   need(r.video === null || typeof r.video === 'string', 'video');
   const s = r.source;
-  need(s && SOURCE_TYPES.includes(s.type) && s.name && /^https?:\/\//.test(s.url || '') && s.license, 'source');
+  need(s && typeof s.type === 'string' && s.type && s.name && /^https?:\/\//.test(s.url || '') && s.license, 'source');
   return e;
 }
 
@@ -135,15 +137,36 @@ export function markCooked(state, id, rating, day) {
   return { ...state, cooked: { ...(state.cooked || {}), [id]: { rating, n: (prev.n || 0) + 1, last: day } } };
 }
 
-// ---------- loading (lazy: index first, one file per source) ----------
-let cache = null;
-export function loadLibrary(base = 'data/library/') {
-  if (!cache) {
-    cache = fetch(`${base}index.json`).then((r) => { if (!r.ok) throw new Error('Library index missing'); return r.json(); })
-      .then(async (idx) => {
-        const parts = await Promise.all(idx.sources.map((s) => fetch(`${base}${s.file}`).then((r) => (r.ok ? r.json() : { recipes: [] }))));
-        return { index: idx, recipes: parts.flatMap((p) => p.recipes || []) };
-      }).catch((err) => { cache = null; throw err; });
+// ---------- loading ----------
+// Third-party recipes are PRIVATE: they live in the user's Supabase table as records of kind 'library' (imported by
+// scripts/library/import.mjs from a GitHub Action) and reach the app through the normal sync (store.all('library')).
+// Optional static files under data/library/ (index.json + one file per source) are still merged in when present.
+const usable = (r) => r && typeof r.title === 'string' && r.title && Array.isArray(r.ingredients) && r.ingredients.length && Array.isArray(r.steps) && r.per_serving && r.source;
+export function mergeLibrary(staticRecipes = [], records = []) {
+  const seen = new Set();
+  const out = [];
+  for (const r of [...records, ...staticRecipes]) {
+    if (!usable(r)) continue;
+    const key = r.key || r.id;
+    if (seen.has(r.id) || seen.has(key)) continue;
+    seen.add(r.id); seen.add(key);
+    out.push(r);
   }
-  return cache;
+  return out;
+}
+let staticCache = null;
+function loadStatic(base) {
+  if (!staticCache) {
+    staticCache = fetch(`${base}index.json`).then((r) => (r.ok ? r.json() : { sources: [] })).catch(() => ({ sources: [] }))
+      .then(async (idx) => {
+        const parts = await Promise.all((idx.sources || []).map((s) => fetch(`${base}${s.file}`).then((r) => (r.ok ? r.json() : { recipes: [] })).catch(() => ({ recipes: [] }))));
+        return { index: idx, recipes: parts.flatMap((p) => p.recipes || []) };
+      });
+  }
+  return staticCache;
+}
+// records: store.all('library') (private, synced). Always resolves; an empty library means "not imported yet".
+export async function loadLibrary(records = [], base = 'data/library/') {
+  const st = await loadStatic(base);
+  return { index: st.index, recipes: mergeLibrary(st.recipes, records) };
 }

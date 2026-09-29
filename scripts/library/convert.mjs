@@ -22,11 +22,36 @@ const r1 = (x) => Math.round(x * 10) / 10;
 
 // One ingredient line -> { row, macros }. row follows the library format.
 const SEASONING = new RegExp('^(salt|sea salt|pepper|black pepper|white pepper|paprika|saffron|bay|rosemary|thyme|parsley|dill|cloves?|allspice|oregano|basil|sage|nutmeg|cinnamon|icing sugar|water|ice)( |$)', 'i');
+const WORDNUM = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4 };
+const CONTAINER = 'cans?|blocks?|chunks?|packages?|packs?|bags?|jars?|boxes?|bottles?';
+// Web recipe lines put words between the number and the unit ("3 finely chopped garlic clove", "4 garlic cloves crushed",
+// "one 14-ounce can chickpeas", "4 chicken breasts (about 8 oz each)"). Rewrite them into "qty unit name", which parseIngredient reads.
+export function normalizeLine(line) {
+  let t = String(line).replace(/\s+/g, ' ').trim();
+  t = t.replace(/^(an?|one|two|three|four)\s+(?=\d)/i, (_, w) => `${WORDNUM[w.toLowerCase()]} `);
+  t = t.replace(/^(an?|one|two|three|four)\s+(?=(?:\d+-)?\d*\s?(?:ounce|oz|pound|lb|gram|g)\b)/i, (_, w) => `${WORDNUM[w.toLowerCase()]} `);
+  // "1 14-ounce can chickpeas" / "2 8-ounce blocks cheddar" -> total weight
+  t = t.replace(new RegExp(`^(\\d+)\\s+(\\d+(?:\\.\\d+)?)[- ]?(ounces?|oz|pounds?|lbs?|grams?|g|ml)\\s+(?:${CONTAINER})\\b\\s+(?:of\\s+)?`, 'i'),
+    (_, n, w, u) => `${Math.round(Number(n) * Number(w) * 10) / 10} ${u} `);
+  t = t.replace(new RegExp(`^(\\d+(?:\\.\\d+)?)[- ](ounces?|oz|pounds?|lbs?)\\s+(?:${CONTAINER})\\b\\s+(?:of\\s+)?`, 'i'), '$1 $2 ');
+  t = t.replace(/^(\d+(?:\.\d+)?)\s?-?inch\s+(?:knob|piece|chunk)\s+(?:of\s+)?/i, (_, n) => `${Math.round(Number(n) * 5)} g `);
+  t = t.replace(/^(\d+(?:\.\d+)?)\s?cm\s+(?:knob|piece|chunk)\s+(?:of\s+)?/i, (_, n) => `${Math.round(Number(n) * 2)} g `);
+  // "4 chicken breasts (about 8 oz each ...)" -> "907 g chicken breasts"
+  t = t.replace(/^(\d+)\s+([^()]+?)\s*\((?:about|approx\.?|roughly)\s*(\d+(?:\.\d+)?)\s*(oz|ounces?|g|grams?)\s+each[^)]*\)/i,
+    (_, n, name, w, u) => `${Math.round(Number(n) * Number(w) * 10) / 10} ${u} ${name}`);
+  t = t.replace(/\b(boneless|skinless)\b,?\s*/gi, '').replace(/^(\d[\d./\s]*(?:g|oz|lb|ml)?)\s*,\s*/i, '$1 ');
+  // "4 garlic cloves crushed" -> "4 cloves garlic crushed"; "3 finely chopped garlic clove" -> "3 clove finely chopped garlic"
+  t = t.replace(/^(\d+(?:[./]\d+)?)\s+((?:[a-z-]+,?\s+){1,3}?)(cloves?|slices?|stalks?|sprigs?|cubes?)\b\s*(?:of\s+)?(.*)$/i, '$1 $3 $2$4');
+  t = t.replace(/^(\d+(?:[./]\d+)?)\s+(chicken|beef|vegetable|veg|fish)\s+stock\s+(cubes?)\b/i, '$1 $3 $2 stock');
+  return t.trim();
+}
+const TINY = { sprig: 2, pinch: 0.5, dash: 1, handful: 20, bunch: 30, knob: 15 };
+const NO_AMOUNT = /\b(spray|to serve|for serving|to taste|for garnish|for dressing|for topping|for frying|for brushing|for greasing|for drizzling|optional)\b/i;
 export function convertIngredient(line, index) {
-  const p = parseIngredient(line);
   const text = String(line).trim();
+  const p = parseIngredient(normalizeLine(text));
   if (p.head) return { row: { text, qty: null, unit: null, name: p.name, grams: 0, food_id: null, conf: 'high' }, macros: null, head: true };
-  p.name = (p.name || '').replace(/^(as required|to taste|sprink\w*|garnish|pinch of|for garnish)\s+/i, '').replace(/^pecorino( romano)?$/i, 'parmesan (pecorino)');
+  p.name = (p.name || '').replace(/^orzo$/i, 'pasta').replace(/^(as required|to taste|sprink\w*|garnish|pinch of|for garnish)\s+/i, '').replace(/^pecorino( romano)?$/i, 'parmesan (pecorino)');
   const m = p.name ? bestMatch(index, p.name) : null;
   const food = m?.food || null;
   const g = toGrams({ qty: p.qty, unit: p.unit, size: p.size, grams: p.grams, toTaste: p.toTaste }, food);
@@ -37,6 +62,11 @@ export function convertIngredient(line, index) {
   let grams = g.grams;
   if (food && grams == null && seasoning) { grams = 0; conf = 'medium'; }
   if (negligible) { grams = 0; conf = 'medium'; }
+  if (food && grams == null) {
+    const tiny = text.match(/\b(sprig|pinch|dash|handful|bunch|knob)\b/i);
+    if (tiny) { grams = TINY[tiny[1].toLowerCase()] * (p.qty || 1); conf = 'medium'; }
+    else if (p.qty == null && NO_AMOUNT.test(text)) { grams = 0; conf = 'medium'; }
+  }
   if ((grams == null || !food) && !negligible) conf = 'check';
   if (g.guess && conf === 'high') conf = 'medium';
   return {
@@ -60,7 +90,7 @@ export function convertRecipe(raw, ctx) {
   const stated = raw.servings > 0;
   const est = {};
   const servings = stated ? Math.max(1, raw.servings) : estimateServings(tot.kcal, raw.course);
-  if (!stated) est.servings = true;
+  if (!stated || raw.servings_est) est.servings = true;
   const ingText = fold(rows.map((r) => `${r.name} ${r.food_id || ''}`).join(' | '));
   const title = fold(raw.title);
   const vegetarian = typeof raw.vegetarian === 'boolean' ? raw.vegetarian : !(MEAT.test(ingText) || MEAT.test(title) || STOCK_MEAT.test(ingText));

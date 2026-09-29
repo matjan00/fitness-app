@@ -38,9 +38,9 @@ test('vegetarian names', () => {
   assert.equal(isVegetarianNames(['tomato', 'Chicken breast']), false);
 });
 
-const lib = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, '..', 'docs', 'data', 'library', 'mealdb.json'), 'utf8')).recipes;
-test('every TheMealDB recipe has time, servings, per-serving macros and est flags; no classics remain', () => {
-  assert.ok(lib.length >= 9);
+const lib = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'fixtures', 'library-sample.json'), 'utf8')).recipes;
+test('every sample recipe has time, servings, per-serving macros and est flags; no classics remain', () => {
+  assert.ok(lib.length >= 4);
   for (const r of lib) {
     assert.ok(r.prep_min + r.cook_min > 0 && r.servings >= 1 && r.per_serving.kcal > 0, r.id);
     assert.ok(r.est && r.est.time && r.est.main, r.id);

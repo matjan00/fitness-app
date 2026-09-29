@@ -122,12 +122,12 @@ test('ignoring a warning stops that kind for that ingredient only', () => {
   assert.deepEqual(w.map((x) => x.i), [1]);
 });
 
-test('pilot library: known problems are caught', () => {
-  const lib = ['mealdb'].flatMap((f) => JSON.parse(fs.readFileSync(path.join(dir, 'library', `${f}.json`), 'utf8')).recipes);
+test('sample library: known problems are caught', () => {
+  const lib = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'fixtures', 'library-sample.json'), 'utf8')).recipes;
   const run = (id) => { const r = lib.find((x) => x.id === id); const own = libToOwn(r, foods); return { own, w: checkRecipe(own.ingredients, own.servings, foods) }; };
-  const coq = run('mealdb-52832');
+  const coq = run('sample-stew');
   assert.ok(coq.w.length >= 1 && coq.w.length <= 3);
-  assert.ok(coq.w.some((x) => /leg|thigh/i.test(x.name)), 'Coq au vin: chicken legs/thighs flagged');
+  assert.ok(coq.w.some((x) => /leg|thigh/i.test(x.name)), 'stew: chicken legs/thighs flagged');
   let rec = coq.own;
   for (const w of coq.w) if (w.fix) rec = { ...rec, ingredients: rec.ingredients.map((g, j) => (j === w.i ? applyFix(g, w.fix, foods) : g)) };
   assert.notEqual(recipeTotals(rec.ingredients).kcal, coq.own.totals.kcal);

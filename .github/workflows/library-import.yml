@@ -1,0 +1,36 @@
+name: Recipe library import
+
+# Imports third-party recipes listed in scripts/library/sources.json into the user's PRIVATE Supabase table
+# (records, kind 'library'). Recipe text is never committed to this public repo.
+# Actions logs are public: the script prints only counts and generic messages.
+on:
+  workflow_dispatch:
+    inputs:
+      sources:
+        description: "Sources to import (space separated: mealdb bbcgoodfood skinnytaste budgetbytes pinchofyum ethan). Empty = all."
+        required: false
+        default: ""
+
+concurrency:
+  group: library
+  cancel-in-progress: false
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Run unit tests (no network)
+        run: node --test tests/library-import.test.js
+
+      - name: Import recipes
+        env:
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          SOURCES: ${{ github.event.inputs.sources }}
+        run: node scripts/library/import.mjs $SOURCES
