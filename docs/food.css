@@ -186,3 +186,15 @@
 .icon-btn.on { color: #d6455d; }
 .icon-btn.on svg { fill: currentColor; }
 .fd-viewseg button { white-space: nowrap; font-size: 12.5px; padding: 8px 9px; }
+
+/* "Check these" card + tappable ingredient rows + personal-copy badge */
+.fd-check { margin-top: 14px; border: 1px solid var(--gold); }
+.fd-check-h { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 6px; }
+.fd-check-h svg { color: var(--gold); width: 18px; height: 18px; margin-top: 2px; flex: none; }
+.fd-chk { padding: 10px 0; border-top: 1px solid var(--line, rgba(128,128,128,.2)); }
+.fd-chk:first-of-type { border-top: 0; }
+.fd-chk-k { color: var(--gold); margin: 4px 0 8px; font-weight: 650; }
+.fd-chk-btns { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.fd-chk-btns button { padding: 8px 12px; font-size: 13px; }
+.fd-ingtap { width: 100%; text-align: left; background: none; }
+.fd-badge.mine { background: var(--gold-soft); color: var(--text); }

@@ -11,6 +11,9 @@ import { CATEGORIES, suggestCategories, catLabel } from './food-cats.js';
 import { getIndex, snap, rememberMatch, remembered, pickFood, macroLine, img, MEALS, mealLabel } from './food-ui.js';
 import { compressFile, compressRemote } from './food-photo.js';
 import { practisesChipsHtml, bindPractisesChips } from './food-learn.js';
+import { checkCardHtml, ingListHtml, bindEditing, foodsCached } from './food-edit-ui.js';
+import { checkRecipe } from './food-check.js';
+import { withTotals } from './food-copy.js';
 
 const CAT_DIMS = ['meal', 'technique', 'main'];
 
@@ -336,6 +339,7 @@ export function editRecipe(draft, opts = {}) {
     $$('.fd-g', el).forEach((inp) => { inp.oninput = () => {
       const ing = r.ingredients[+inp.dataset.i];
       ing.grams = parseNum(inp.value);
+      if (ing.hint != null) ing.hint = ing.grams;
       ing.guess = false;
       const row = inp.closest('.fd-ing');
       row.querySelector('.fd-ing-k').textContent = ing.food && ing.grams != null ? `${n0(macrosFor(ing.food, ing.grams).kcal)} kcal` : '';
@@ -401,11 +405,12 @@ export function editRecipe(draft, opts = {}) {
       const item = {
         ...(id ? { id } : {}), title: r.title.trim(), image: r.image || null, source: r.source || null, servings: r.servings || 1,
         prepMin: r.prepMin || null, cookMin: r.cookMin || null,
-        ingredients: r.ingredients.map(({ raw, qty, unit, name, note, size, toTaste, head, hint, food, conf, grams, guess }) =>
-          ({ raw, qty, unit, name, note, size, toTaste, head, hint, food, conf, grams, guess })),
+        ingredients: r.ingredients.map(({ raw, qty, unit, name, note, size, toTaste, head, hint, food, conf, grams, guess, checkOk }) =>
+          ({ raw, qty, unit, name, note, size, toTaste, head, hint, food, conf, grams, guess, checkOk })),
         steps: r.steps, notes: r.notes || '', cats: r.cats, text: (r.text || '').slice(0, 5000), siteNutrition: r.siteNutrition || null,
         totals: { kcal: t2.kcal, p: t2.p, c: t2.c, f: t2.f, grams: t2.grams, missing: t2.missing },
         created: draft.created || new Date().toISOString(),
+        ...(r.from_library ? { from_library: r.from_library } : {}),
       };
       const saved = await store.put('recipe', item);
       toast(id ? 'Recipe saved' : 'Recipe added to your book');
@@ -480,6 +485,8 @@ export function openRecipe(id) {
   push((el, s) => {
     const rec = store.get(id);
     if (!rec) { el.innerHTML = page({ title: 'Recipe', body: '<div class="empty">This recipe was deleted.</div>' }); return; }
+    const foods = foodsCached(() => s.render());
+    const warns = foods ? checkRecipe(rec.ingredients || [], rec.servings, foods) : [];
     const ps = recipePer(rec);
     const t = rec.totals || recipeTotals(rec.ingredients);
     const time = (rec.prepMin || 0) + (rec.cookMin || 0);
@@ -488,6 +495,7 @@ export function openRecipe(id) {
     el.innerHTML = page({ title: rec.title, right: `<button class="icon-btn" id="fd-edit" aria-label="Edit">${icon('edit')}</button>`, body: `
       ${img(rec.image, 'fd-hero-img')}
       <h2 class="fd-rtitle">${esc(rec.title)}</h2>
+      ${rec.from_library ? `<div class="row between" style="margin:4px 0 8px"><span class="fd-badge mine">Your version of a library recipe</span><button class="link small" id="fd-reset">Reset to original</button></div>` : ''}
       <div class="fd-meta">${time ? `<span>${icon('timer')} ${time} min</span>` : ''}<span>${icon('food')} ${rec.servings} serving${rec.servings > 1 ? 's' : ''}</span>
         ${src ? `<a href="${esc(rec.source.url)}" target="_blank" rel="noopener noreferrer">${esc(rec.source.type === 'tiktok' ? 'TikTok' : rec.source.type === 'youtube' ? 'YouTube' : src)}${rec.source.author ? ` · ${esc(rec.source.author)}` : ''}</a>` : ''}</div>
       ${cats.length ? `<div class="fd-chipwrap" style="margin:10px 0 0">${cats.map((c) => `<span class="pill">${esc(c)}</span>`).join('')}</div>` : ''}
@@ -496,14 +504,17 @@ export function openRecipe(id) {
         <div class="fd-pcf"><span class="fd-p">P ${n0(ps.p)} g</span><span class="fd-c">C ${n0(ps.c)} g</span><span class="fd-f">F ${n0(ps.f)} g</span></div></div>
         ${t.missing ? `<p class="fd-warn small">${icon('info')} ${t.missing} ingredient${t.missing > 1 ? 's' : ''} not counted — tap edit to fix.</p>` : ''}
         <button class="primary block" id="fd-log" style="margin-top:14px">${icon('plus')} Log to diary</button></div>
+      ${checkCardHtml(warns)}
       <h3 class="section-title">Ingredients</h3>
-      <div class="card"><div class="list">${(rec.ingredients || []).map((ing) => ing.head ? `<div class="fd-li-head">${esc(ing.name)}</div>`
-        : `<div class="list-item"><div class="grow"><div>${esc(ing.raw || ing.name)}</div>${ing.food ? `<div class="sub ellipsis">${esc(ing.food.name)}${ing.grams == null ? ' · <span class="fd-guess">no grams, not counted</span>' : ''}</div>` : `<div class="sub ${ing.toTaste ? 'muted' : 'fd-guess'}">not counted</div>`}</div>
-          <div class="fd-li-g">${ing.food && ing.grams != null ? `${n0(ing.grams)} g<span>${n0(macrosFor(ing.food, ing.grams).kcal)} kcal</span>` : ''}</div></div>`).join('')}</div></div>
+      <div class="card"><div class="list">${ingListHtml(rec.ingredients || [])}</div></div>
       ${rec.steps?.length ? `<h3 class="section-title">Steps</h3><ol class="fd-steps">${rec.steps.map((st) => /:$/.test(st) && st.length < 50 ? `<li class="fd-step-head">${esc(st)}</li>` : `<li>${esc(st)}</li>`).join('')}</ol>` : ''}
       ${rec.notes ? `<h3 class="section-title">Notes</h3><div class="card"><p style="white-space:pre-wrap">${esc(rec.notes)}</p></div>` : ''}` });
     $('#fd-edit', el).onclick = () => editRecipe(rec, { id });
     $('#fd-log', el).onclick = () => logRecipe(rec);
+    $('#fd-reset', el)?.addEventListener('click', async () => {
+      if (await confirmSheet('Delete your version and go back to the original library recipe?', { ok: 'Reset to original', danger: true })) { await store.remove(id); toast('Back to the original'); s.close(); }
+    });
+    if (foods) bindEditing(el, { warns, foods, getRec: () => store.get(id), commit: async (fn) => { await store.put('recipe', withTotals(fn(store.get(id)))); s.render(); } });
     bindPractisesChips(el);
   });
 }
@@ -580,7 +591,7 @@ export function renderBook(box) {
       <p class="small" style="margin:6px 0 14px">Type it in, with smart help matching ingredients and macros as you go.</p>
       <button class="primary" id="fd-import2">Add your first recipe</button></div>`
       : list.length ? `<div class="fd-grid">${list.map((r) => { const ps = recipePer(r); return `<button class="fd-rcard" data-rid="${r.id}">${img(r.image)}
-        <div class="fd-rcard-body"><b class="fd-2l">${esc(r.title)}</b><span class="small muted">${n0(ps.kcal)} kcal · <span class="fd-p">${n0(ps.p)} g P</span></span></div></button>`; }).join('')}</div>`
+        <div class="fd-rcard-body"><b class="fd-2l">${esc(r.title)}</b>${r.from_library ? '<span class="fd-badge mine" style="align-self:flex-start">Your version</span>' : ''}<span class="small muted">${n0(ps.kcal)} kcal · <span class="fd-p">${n0(ps.p)} g P</span></span></div></button>`; }).join('')}</div>`
       : '<div class="card empty" style="margin-top:14px">No recipes match these filters.</div>'}`;
   const inp = $('#fd-rq', box);
   let timer;

@@ -2,10 +2,13 @@
 // Data + pure logic: food-library.js. Favourites and ratings live in one config object: store.getConfig('library').
 import { $, $$, esc, icon, toast, n0, local, today } from './util.js';
 import * as store from './store.js';
-import { push, page, sheet } from './nav.js';
+import { push, page, sheet, confirmSheet } from './nav.js';
 import { sumEntries } from './food-calc.js';
 import { targets, img } from './food-ui.js';
-import { logRecipe } from './food-recipes.js';
+import { logRecipe, editRecipe, recipePer } from './food-recipes.js';
+import { findCopy, copiesByLib, libToOwn, withTotals } from './food-copy.js';
+import { checkCardHtml, ingListHtml, bindEditing, foodsMap } from './food-edit-ui.js';
+import { checkRecipe } from './food-check.js';
 import { catLabel } from './food-cats.js';
 import {
   CUISINES, COURSES, cuisineOf, courseLabel, SOURCE_LABEL, loadLibrary, filterRecipes, fitsMyDay, displayIngredient, totalMin, toggleFav, markCooked,
@@ -29,12 +32,13 @@ function tile(r, cls = '') {
 const dayEntries = () => store.all('meal').filter((e) => e.day === today());
 const stars = (n) => '★'.repeat(n) + '☆'.repeat(5 - n);
 
-function card(r, favs) {
+function card(r, favs, copy) {
   const c = state().cooked?.[r.id];
+  const ps = copy ? recipePer(copy) : r.per_serving;
   return `<button class="fd-rcard" data-lid="${esc(r.id)}">${tile(r)}
     <div class="fd-rcard-body"><b class="fd-2l">${favs.has(r.id) ? '♥ ' : ''}${esc(r.title)}</b>
-      <span class="small muted">${n0(r.per_serving.kcal)} kcal · <span class="fd-p">${n0(r.per_serving.p)} g P</span></span>
-      <span class="tiny muted">${totalMin(r)} min${c ? ` · ${stars(c.rating)}` : ''} · <span class="fd-badge">${esc(SOURCE_LABEL[r.source.type] || r.source.name)}</span></span></div></button>`;
+      <span class="small muted">${n0(ps.kcal)} kcal · <span class="fd-p">${n0(ps.p)} g P</span></span>
+      <span class="tiny muted">${totalMin(r)} min${c ? ` · ${stars(c.rating)}` : ''} · ${copy ? '<span class="fd-badge mine">Your version</span>' : `<span class="fd-badge">${esc(SOURCE_LABEL[r.source.type] || r.source.name)}</span>`}</span></div></button>`;
 }
 
 export async function renderLibrary(box) {
@@ -50,6 +54,7 @@ export async function renderLibrary(box) {
 function draw(box, lib) {
   const nav = getNav();
   const favs = favSet();
+  const copies = copiesByLib(store.all('recipe'));
   const all = lib.recipes;
   const active = nav.cuisine || nav.q || filterCount(nav);
   const fc = filterCount(nav);
@@ -74,7 +79,7 @@ function draw(box, lib) {
         <button class="fd-rcard fd-cui" data-fav="1"><span class="fd-cui-e">♥</span><b>Favourites</b><span class="small muted">${favs.size} saved</span></button></div>`
       : `<div class="row" style="margin-top:12px;gap:8px"><button class="link" id="lib-back">‹ All cuisines</button><b class="grow" style="text-align:right">${nav.cuisine ? esc(cuisineOf(nav.cuisine).label) : 'Results'} · ${list.length}</b></div>
         <div class="chips" style="margin-top:6px"><button class="chip ${!nav.course ? 'on' : ''}" data-course="">All</button>${courseKeys.map((c) => `<button class="chip ${nav.course === c.key ? 'on' : ''}" data-course="${c.key}">${esc(c.label)}</button>`).join('')}</div>
-        ${list.length ? `<div class="fd-grid">${list.map((r) => card(r, favs)).join('')}</div>` : '<div class="card empty" style="margin-top:14px">No recipes match. Try fewer filters.</div>'}`}`;
+        ${list.length ? `<div class="fd-grid">${list.map((r) => card(r, favs, copies.get(r.id))).join('')}</div>` : '<div class="card empty" style="margin-top:14px">No recipes match. Try fewer filters.</div>'}`}`;
 
   const inp = $('#lib-q', box);
   let timer;
@@ -130,35 +135,63 @@ export async function openLibRecipe(id, onBack) {
   const lib = await loadLibrary();
   const r = lib.recipes.find((x) => x.id === id);
   if (!r) return;
-  let servings = r.servings;
+  const foods = await foodsMap();
+  const getCopy = () => findCopy(store.all('recipe'), r.id);
+  let servings = null;
   push((el, s) => {
     const paint = () => {
-      const k = servings / r.servings;
+      const copy = getCopy();
+      const rec = copy || libToOwn(r, foods); // one recipe shape: the personal copy, or an unsaved conversion of the original
+      if (servings == null) servings = rec.servings;
+      const k = servings / rec.servings;
       const fav = favSet().has(r.id);
       const c = state().cooked?.[r.id];
-      const p = r.per_serving;
+      const p = copy ? recipePer(copy) : r.per_serving;
+      const missing = copy ? (copy.totals?.missing || 0) : (r.checks || 0);
+      const warns = checkRecipe(rec.ingredients, rec.servings, foods);
       const cu = cuisineOf(r.cuisine);
-      el.innerHTML = page({ title: r.title, right: `<button class="icon-btn ${fav ? 'on' : ''}" id="lib-fav" aria-label="Favourite" aria-pressed="${fav}">${icon('heart')}</button>`, body: `
-        ${r.image ? img(r.image, 'fd-hero-img') : `<div class="fd-img fd-libph fd-hero-img" data-c="${esc(r.cuisine)}"><span>${cu.emoji}</span></div>`}
-        <h2 class="fd-rtitle">${esc(r.title)}</h2>${r.title_local ? `<p class="small muted">${esc(r.title_local)}</p>` : ''}
+      el.innerHTML = page({ title: rec.title, right: `<button class="icon-btn" id="lib-edit" aria-label="Edit">${icon('edit')}</button><button class="icon-btn ${fav ? 'on' : ''}" id="lib-fav" aria-label="Favourite" aria-pressed="${fav}">${icon('heart')}</button>`, body: `
+        ${rec.image ? img(rec.image, 'fd-hero-img') : `<div class="fd-img fd-libph fd-hero-img" data-c="${esc(r.cuisine)}"><span>${cu.emoji}</span></div>`}
+        <h2 class="fd-rtitle">${esc(rec.title)}</h2>${r.title_local ? `<p class="small muted">${esc(r.title_local)}</p>` : ''}
+        ${copy ? `<div class="row between" style="margin:4px 0 8px"><span class="fd-badge mine">Your version</span><button class="link small" id="lib-reset">Reset to original</button></div>` : ''}
         <div class="fd-meta"><span>${icon('timer')} ${totalMin(r)} min${r.time_est ? ' (est.)' : ''}</span><span>${esc(r.difficulty)}</span><span>${cu.emoji} ${esc(cu.label)} · ${esc(courseLabel(r.course))}</span>${r.vegetarian ? '<span>Vegetarian</span>' : ''}
           ${r.video ? `<a href="${esc(r.video)}" target="_blank" rel="noopener noreferrer">${icon('play')} Video</a>` : ''}</div>
         <div class="card fd-totals" style="margin-top:14px"><div class="row between"><div><p class="tiny muted">Per serving</p><div class="fd-big">${n0(p.kcal)} <span>kcal</span></div></div>
           <div class="fd-pcf"><span class="fd-p">P ${n0(p.p)} g</span><span class="fd-c">C ${n0(p.c)} g</span><span class="fd-f">F ${n0(p.f)} g</span></div></div>
-          ${r.checks ? `<p class="fd-warn small">${icon('info')} ${r.checks} ingredient${r.checks > 1 ? 's' : ''} could not be counted exactly.</p>` : ''}
+          ${missing ? `<p class="fd-warn small">${icon('info')} ${missing} ingredient${missing > 1 ? 's' : ''} could not be counted exactly.</p>` : ''}
           <button class="primary block" id="lib-log" style="margin-top:14px">${icon('plus')} Add to diary</button>
           <button class="ghost block" id="lib-cooked" style="margin-top:8px">${c ? `Cooked ${c.n}× · ${stars(c.rating)} · rate again` : 'I cooked it'}</button></div>
+        ${checkCardHtml(warns)}
         <div class="row between" style="margin:18px 0 6px"><h3 class="section-title" style="margin:0">Ingredients</h3>
           <div class="fd-stepper"><button id="lib-minus" aria-label="Fewer servings">−</button><span><b>${servings}</b> serving${servings === 1 ? '' : 's'}</span><button id="lib-plus" aria-label="More servings">+</button></div></div>
-        <div class="card"><div class="list">${r.ingredients.map((g) => `<div class="list-item"><div class="grow">${esc(displayIngredient(g, k))}${g.conf === 'check' ? ' <span class="fd-guess">check</span>' : ''}</div></div>`).join('')}</div></div>
-        <h3 class="section-title">Steps</h3><ol class="fd-steps">${r.steps.map((st) => `<li>${esc(st)}</li>`).join('')}</ol>
-        ${r.notes ? `<h3 class="section-title">Notes</h3><div class="card"><p style="white-space:pre-wrap">${esc(r.notes)}</p></div>` : ''}
+        <div class="card"><div class="list">${ingListHtml(rec.ingredients, k)}</div></div>
+        <p class="tiny muted" style="margin:6px 4px 0">Tap an ingredient to change the amount or the food${copy ? '' : ' - this saves your own version of the recipe'}.</p>
+        <h3 class="section-title">Steps</h3><ol class="fd-steps">${rec.steps.map((st) => `<li>${esc(st)}</li>`).join('')}</ol>
+        ${rec.notes ? `<h3 class="section-title">Notes</h3><div class="card"><p style="white-space:pre-wrap">${esc(rec.notes)}</p></div>` : ''}
         <p class="tiny muted" style="margin-top:16px">Source: <a href="${esc(r.source.url)}" target="_blank" rel="noopener noreferrer">${esc(r.source.name)}</a>${r.source.author ? ` · ${esc(r.source.author)}` : ''}${r.source.year ? `, ${r.source.year}` : ''}<br>${esc(r.source.license)}</p>` });
+      const commit = async (fn) => {
+        const existed = getCopy();
+        const cur = existed || libToOwn(r, foods);
+        await store.put('recipe', withTotals(fn(cur)));
+        if (!existed) toast('Saved as your version');
+        paint();
+      };
+      bindEditing(el, { warns, foods, getRec: () => getCopy() || libToOwn(r, foods), commit });
       $('#lib-fav', el).onclick = async () => { await saveState(toggleFav(state(), r.id)); paint(); };
       $('#lib-minus', el).onclick = () => { servings = Math.max(1, servings - 1); paint(); };
       $('#lib-plus', el).onclick = () => { servings = Math.min(48, servings + 1); paint(); };
       $('#lib-cooked', el).onclick = () => cookedSheet(r, paint);
-      $('#lib-log', el).onclick = () => logRecipe(asLogRecipe(r));
+      $('#lib-log', el).onclick = () => logRecipe(copy || asLogRecipe(r));
+      $('#lib-edit', el).onclick = async () => {
+        let cp = getCopy();
+        if (!cp) { cp = await store.put('recipe', libToOwn(r, foods)); toast('Saved as your version'); }
+        editRecipe(cp, { id: cp.id });
+      };
+      $('#lib-reset', el)?.addEventListener('click', async () => {
+        if (await confirmSheet('Delete your version and go back to the original recipe?', { ok: 'Reset to original', danger: true })) {
+          await store.remove(copy.id); servings = null; toast('Back to the original'); paint();
+        }
+      });
     };
     paint();
   }, { onClose: onBack });
