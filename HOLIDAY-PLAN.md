@@ -15,7 +15,7 @@ user reviews and merges when back. Run `node --test` and `node scripts/release.c
 - Copy a meal (all its entries) to another meal and/or another day; copy a whole day to another day.
 - Also: move food-search / quick-add entries between meals (old QA idea).
 
-## 2. Daily steps and calories burned from the phone/watch
+## 2. Daily steps and calories burned — POSTPONED (owner wears the Garmin only for runs; phone steps need a native app or a paid bridge such as Health Sync; decide later: manual field or skip)
 - A PWA can't read Android Health Connect / Google Fit directly. Use Garmin instead (the watch already counts
   steps and calories): extend scripts/garmin_sync.py to fetch daily summaries (steps, active + total kcal,
   resting HR, maybe sleep) → records kind 'daily' {day, steps, kcal_active, kcal_total, rhr}.
