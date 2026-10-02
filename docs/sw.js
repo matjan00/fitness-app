@@ -1,7 +1,7 @@
 // Offline support. The app files are served "stale-while-revalidate": the saved copy opens instantly
 // (also with no signal at the gym) and a fresh copy is fetched in the background for next time.
 // Exercise pictures are cached the first time they are shown. Supabase calls are never cached.
-const VERSION = 'fit-v24';
+const VERSION = 'fit-v25';
 const CORE = ['./', 'index.html', 'style.css', 'gym.css', 'food.css', 'run.css', 'stats.css', 'app.js', 'version.js', 'update.js', 'util.js', 'store.js', 'sync-cursor.js', 'sanitize.js', 'sync-line.js', 'nav.js',
   'charts.js', 'config.js', 'me.js', 'gym.js', 'gym-calc.js', 'gym-data.js', 'gym-lib.js', 'gym-workout.js', 'gym-routines.js',
   'food.js', 'food-parse.js', 'food-db.js', 'food-calc.js', 'food-cats.js', 'food-ui.js', 'food-recipes.js', 'food-photo.js', 'food-learn.js', 'food-library.js', 'food-estimate.js', 'food-library-ui.js', 'food-check.js', 'food-copy.js', 'diary-copy.js', 'diary-copy-ui.js', 'food-edit-ui.js',
