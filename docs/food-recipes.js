@@ -43,7 +43,7 @@ async function fetchLink(url) {
   } finally { clearTimeout(t); }
   let j = null;
   try { j = await r.json(); } catch { /* not json */ }
-  if (r.status === 401 || r.status === 403) throw new Error('Log in (Me tab) to import links — or paste the recipe text instead.');
+  if (r.status === 401 || r.status === 403) throw new Error('Log in (Settings, top-right on Home) to import links — or paste the recipe text instead.');
   if (!r.ok || !j) throw new Error(j?.error || `Import failed (${r.status}).`);
   return j;
 }

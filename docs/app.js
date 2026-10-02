@@ -3,7 +3,7 @@
 // Each feature module (gym.js, food.js, run.js) exports:
 //   tab       { id, title, icon, render(el) }       – its bottom tab
 //   homeCard  { order, render(el) } | null          – a card on the Home tab (el is an empty <div>)
-//   meSection { order, render(el) } | null          – a section on the Me tab
+//   meSection { order, render(el) } | null          – a section on the Me / settings screen
 //   banner    (el) => boolean | undefined           – optional strip above the tabs (e.g. workout in progress); return true if shown
 //   init()    optional, called once after data is loaded
 // Tabs re-render automatically whenever the store changes.
@@ -21,7 +21,7 @@ import * as update from './update.js';
 const modules = [gym, run, food, me];
 const tabs = [
   { id: 'home', title: 'Home', icon: 'home', render: renderHome },
-  gym.tab, run.tab, food.tab, stats.tab, me.tab,
+  gym.tab, run.tab, food.tab, stats.tab,
 ];
 let current = local.get('tab', 'home');
 if (!tabs.some((t) => t.id === current)) current = 'home';
@@ -40,11 +40,13 @@ async function checkForUpdate() {
 
 function renderHome(el) {
   el.innerHTML = `<div class="page-head"><p class="muted">${new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
-    <h1>${greeting()}</h1></div>
+    <h1>${greeting()}</h1>
+    <button class="icon-btn me-btn" id="app-me" aria-label="Me / settings">${icon('me')}</button></div>
     ${update.newerVersion() ? `<div class="card update-card"><div class="grow"><b>New version available</b>
       <p class="small muted">Get the latest features and fixes. Your data stays.</p></div>
       <button class="primary" id="app-update">${icon('sync')} Update</button></div>` : ''}
     <div class="home-cards"></div>`;
+  $('#app-me', el).onclick = () => me.openMe();
   $('#app-update', el)?.addEventListener('click', (e) => { e.currentTarget.disabled = true; update.applyUpdate(); });
   const wrap = $('.home-cards', el);
   modules.map((m) => m.homeCard).filter(Boolean).sort((a, b) => a.order - b.order).forEach((c) => {
@@ -163,7 +165,7 @@ function login() {
     $('#login-skip').onclick = () => {
       local.set('skipLogin', true);
       box.hidden = true;
-      toast('Working offline on this device only. Log in from the Me tab to sync.');
+      toast('Working offline on this device only. Log in from Settings (top-right on Home) to sync.');
       resolve();
     };
   });

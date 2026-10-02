@@ -1,4 +1,4 @@
-// "Me" tab: sections contributed by the feature modules (body weight, targets, Garmin sync status…),
+// "Me / settings" screen: sections contributed by the feature modules (body weight, targets, Garmin sync status…),
 // then account / sync and backup, which live here.
 
 import { $, esc, icon, toast, local, niceDate, niceTime } from './util.js';
@@ -7,12 +7,19 @@ import * as gym from './gym.js';
 import * as food from './food.js';
 import * as run from './run.js';
 import * as update from './update.js';
+import { push, page } from './nav.js';
 
-export const tab = { id: 'me', title: 'Me', icon: 'me', render };
+// Opened as a full-screen page from the icon at the top-right of Home (see app.js).
+export function openMe() {
+  push((el) => {
+    el.innerHTML = page({ title: 'Me / settings', body: '' });
+    render($('.scroll', el), false);
+  });
+}
 export const homeCard = null;
 
-function render(el) {
-  el.innerHTML = `<div class="page-head"><h1>Me</h1></div><div id="me-sections" class="stack"></div>
+function render(el, head = true) {
+  el.innerHTML = `${head ? '<div class="page-head"><h1>Me</h1></div>' : ''}<div id="me-sections" class="stack"></div>
     <h3 class="section-title">Account &amp; sync</h3><div class="card" id="me-sync"></div>
     <h3 class="section-title">Backup</h3>
     <div class="card stack-sm">

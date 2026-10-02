@@ -82,7 +82,7 @@ async function callSendFunction(session) {
   try { body = await r.json(); } catch { /* not JSON */ }
   if (r.ok) return body || {};
   if (r.status === 404 || body?.error === 'not_configured') throw new Error(WATCH_SETUP_MSG);
-  if (r.status === 401) throw new Error('Log in to the app first (Me tab), then try again.');
+  if (r.status === 401) throw new Error('Log in to the app first (Settings, top-right on Home), then try again.');
   if (r.status === 429) throw new Error(body?.message || 'Please wait a couple of minutes before sending again.');
   throw new Error(body?.message || body?.error || 'Could not start the send. Try again in a minute.');
 }
