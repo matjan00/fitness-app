@@ -383,7 +383,7 @@ const round25 = (kg) => Math.round(kg / 2.5) * 2.5;
 
 // Suggestion for the next session from the last one (sets of the last session, weight × reps mode).
 //  - all working sets at the top weight reached the top of the range → { kind: 'weight', kg + step, reps: lo }
-//  - otherwise → same weight, one more rep than the weakest set (never above the top of the range)
+//  - otherwise → same weight, aim for the top of the range on every set (reps = next target for the weakest set)
 // Returns { kind: 'weight'|'rep', kg, reps, text, why } or null when there is nothing to go on.
 export function suggestNext(sets, range = DEFAULT_RANGE, step = 2.5) {
   const work = (sets || []).filter((s) => isWorking(s) && Number(s.kg) > 0 && Number(s.reps) > 0);
@@ -394,10 +394,10 @@ export function suggestNext(sets, range = DEFAULT_RANGE, step = 2.5) {
   const minReps = Math.min(...top.map((s) => Number(s.reps)));
   if (minReps >= range2.hi) {
     const next = Math.round((kg + step) * 100) / 100;
-    return { kind: 'weight', kg: next, reps: range2.lo, text: `Try ${fmtNum(next)} × ${range2.lo}`, why: `All sets hit ${range2.hi} reps — time to add weight` };
+    return { kind: 'weight', kg: next, reps: range2.lo, text: `Go up: ${fmtNum(next)} kg × ${range2.lo}`, why: `All sets hit ${range2.hi} reps — time to add weight` };
   }
   const reps = Math.min(range2.hi, minReps + 1);
-  return { kind: 'rep', kg, reps, text: `Try ${fmtNum(kg)} × ${reps}`, why: `Beat last time by 1 rep, then add weight at ${range2.hi}` };
+  return { kind: 'rep', kg, reps, text: `${fmtNum(kg)} kg — aim for ${range2.hi} reps on every set, then go up`, why: `Last time your weakest set was ${minReps}` };
 }
 
 // Per-session "strength number" of a series row: est. 1RM for weights, reps / secs otherwise.

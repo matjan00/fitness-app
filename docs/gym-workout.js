@@ -215,7 +215,7 @@ function openSession(sess, kind, original = null) {
     </div>`;
   }
 
-  // "Try 62.5 × 8" from last time's sets and the routine's rep range (default 8-12); deload when stalled.
+  // "Go up: 62.5 kg × 8" from last time's sets and the routine's rep range (default 8-12); deload when stalled.
   function hintHtml(e) {
     if (e.mode !== 'wr') return '';
     const sess = prevMap.get(e.exercise_id);
