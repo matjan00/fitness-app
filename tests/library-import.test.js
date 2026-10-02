@@ -91,3 +91,19 @@ test('loader merges private records with static data, dedupes, skips broken reco
     assert.deepEqual((await loadLibrary([], 'nowhere/')).recipes, []);
   } finally { globalThis.fetch = oldFetch; }
 });
+
+test('pruning: only stale rows of the sources in this run, and never after a failed source', async () => {
+  const { pruneIds, canPrune } = await import('../scripts/library/import-lib.mjs');
+  const rows = [
+    { id: 'a', data: { key: 'mealdb:1' } }, { id: 'b', data: { key: 'mealdb:2' } },
+    { id: 'c', data: { key: 'bbcgoodfood:recipes/x' } }, { id: 'd', data: {} }, { id: 'e', data: { key: 'mealdb:3' } },
+  ];
+  const keep = new Set(['mealdb:1', 'mealdb:3']);
+  assert.deepEqual(pruneIds(rows, keep, new Set(['mealdb'])), ['b']); // other sources and keyless rows untouched
+  assert.deepEqual(pruneIds(rows, keep, new Set(['mealdb', 'bbcgoodfood'])), ['b', 'c']);
+  const ok = { tried: 5, ok: 4, seafood: 1, fish: 0 };
+  assert.ok(canPrune({ mealdb: ok }, false));
+  assert.ok(!canPrune({ mealdb: ok }, true)); // a list could not be read
+  assert.ok(!canPrune({ mealdb: ok, x: { tried: 3, ok: 0, seafood: 0, fish: 0 } }, false)); // one source failed entirely
+  assert.ok(!canPrune({}, false));
+});

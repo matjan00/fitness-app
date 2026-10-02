@@ -13,7 +13,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { fetchText } from '../../supabase/functions/fetch-recipe/extract.js';
 import { loadIndex, mealdbToRaw } from './convert.mjs';
-import { recordId, sourceIdOf, excluded, jsonLdToRaw, textToRaw, buildRecipe, SOURCE_NAMES, LICENSE } from './import-lib.mjs';
+import { recordId, sourceIdOf, excluded, pruneIds, canPrune, jsonLdToRaw, textToRaw, buildRecipe, SOURCE_NAMES, LICENSE } from './import-lib.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
@@ -71,6 +71,8 @@ async function expandCollection(url, pattern, limit) {
 const stats = {};
 const st = (s) => (stats[s] ||= { tried: 0, ok: 0, seafood: 0, fish: 0, failed: 0, image: 0, servings: 0, time: 0, published: 0, video: 0, ingr: 0, ingrMatched: 0 });
 const records = [];
+const failedKeys = new Set(); // listed but not fetched (transient errors): never pruned
+let listingFailed = false;
 const seen = new Set();
 
 function accept(source, sourceId, raw, published) {
@@ -99,28 +101,28 @@ for (const e of entries) {
   if (!SOURCE_NAMES[source]) { say(`unknown source in sources.json (skipped)`); continue; }
   const s = st(source);
   let n = 0;
-  const fail = (why, detail) => { s.failed++; say(`${source} #${n}: ${why}`); if (VERBOSE && detail) say(`  ${detail}`); };
+  const fail = (why, detail, key) => { s.failed++; if (key) failedKeys.add(`${source}:${key}`); say(`${source} #${n}: ${why}`); if (VERBOSE && detail) say(`  ${detail}`); };
   if (source === 'mealdb') {
     const ids = [...(e.mealdb_ids || [])];
     for (const c of e.mealdb_categories || []) {
-      try { ids.push(...((await getJson(`https://www.themealdb.com/api/json/v1/1/filter.php?c=${encodeURIComponent(c)}`)).meals || []).map((m) => m.idMeal)); } catch { say('mealdb category list failed'); }
+      try { ids.push(...((await getJson(`https://www.themealdb.com/api/json/v1/1/filter.php?c=${encodeURIComponent(c)}`)).meals || []).map((m) => m.idMeal)); } catch { listingFailed = true; say('mealdb category list failed'); }
     }
     for (const id of ids) {
       n++; s.tried++;
       try {
         const meal = (await getJson(`https://www.themealdb.com/api/json/v1/1/lookup.php?i=${id}`)).meals?.[0];
-        if (!meal) { fail('not found'); continue; }
+        if (!meal) { fail('not found', null, String(id)); continue; }
         const raw = { ...mealdbToRaw(meal, overrides[id] || {}), category: meal.strCategory };
         raw.source.license = LICENSE;
         accept(source, String(id), raw, null);
-      } catch (err) { fail('fetch/convert error', err.message); }
+      } catch (err) { fail('fetch/convert error', err.message, String(id)); }
       await polite();
     }
     continue;
   }
   let urls = [...(e.urls || [])];
   for (const c of e.collections || []) {
-    try { urls.push(...await expandCollection(c, e.link_pattern || '^/recipe', e.limit)); } catch (err) { say(`${source}: collection failed`); if (VERBOSE) say(`  ${err.message}`); }
+    try { urls.push(...await expandCollection(c, e.link_pattern || '^/recipe', e.limit)); } catch (err) { listingFailed = true; say(`${source}: collection failed`); if (VERBOSE) say(`  ${err.message}`); }
     await polite();
   }
   urls = [...new Set(urls)];
@@ -129,11 +131,11 @@ for (const e of entries) {
     try {
       const html = text(await getPage(url));
       const raw = jsonLdToRaw(html, url, source) || (e.html_fallback ? textToRaw(html, url, source) : null);
-      if (!raw) { fail('no recipe data on page', url); await polite(); continue; }
+      if (!raw) { fail('no recipe data on page', url, sourceIdOf(url)); await polite(); continue; }
       const published = raw.published;
       delete raw.published;
       accept(source, sourceIdOf(url), raw, published);
-    } catch (err) { fail('fetch/convert error', `${url} ${err.message}`); }
+    } catch (err) { fail('fetch/convert error', `${url} ${err.message}`, sourceIdOf(url)); }
     await polite();
   }
 }
@@ -174,4 +176,24 @@ if (DRY) {
     saved += Math.min(25, rows.length - i);
   }
   say(`saved ${saved} recipes to the private library`);
+
+  // Pruning: soft-delete library records that sources.json no longer produces (only after a complete, successful run).
+  if (!canPrune(stats, listingFailed)) say('pruning skipped (a source failed or a list could not be read)');
+  else {
+    const keep = new Set([...records.map((r) => `${r.source}:${r.sourceId}`), ...failedKeys]);
+    const existing = [];
+    for (let from = 0; ; from += 1000) {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/records?kind=eq.library&user_id=eq.${userId}&deleted=eq.false&select=id,data&order=id&offset=${from}&limit=1000`, { headers });
+      if (!r.ok) { console.error(`Could not read existing recipes for pruning (status ${r.status}).`); process.exit(1); }
+      const page = await r.json();
+      existing.push(...page);
+      if (page.length < 1000) break;
+    }
+    const ids = pruneIds(existing, keep, new Set(Object.keys(stats)));
+    for (let i = 0; i < ids.length; i += 50) {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/records?id=in.(${ids.slice(i, i + 50).join(',')})&user_id=eq.${userId}`, { method: 'PATCH', headers, body: JSON.stringify({ deleted: true, updated_at: new Date().toISOString() }) });
+      if (!res.ok) { console.error(`Could not remove old recipes (status ${res.status}).`); process.exit(1); }
+    }
+    say(`pruned ${ids.length} old recipes`);
+  }
 }
