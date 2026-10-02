@@ -7,11 +7,11 @@ import { $, $$, esc, icon, toast, uid, parseNum, clock, mins, bigKg, niceDate, n
 import * as store from './store.js';
 import { push, chooseSheet, confirmSheet } from './nav.js';
 import {
-  MODES, fmtNum, fmtDur, firstInt, previousSet, lastSessions, exerciseRecords, setMetric, kindsFor, isWorking,
+  MODES, fmtNum, fmtDur, firstInt, previousSet, parseRepRange, suggestNext, weightStep, isStalled, deloadKg, exerciseSeries, lastSessions, exerciseRecords, setMetric, kindsFor, isWorking,
   workoutVolume, workoutDuration, formatSet, bestSet, routineFromWorkout, routineChanged,
 } from './gym-calc.js';
 import {
-  loadDb, exName, modeFor, restFor, settings, saveSettings, workouts, last, prsOf, getActive, saveActive, clearActive,
+  loadDb, exName, groupsOf, modeFor, restFor, settings, saveSettings, workouts, last, prsOf, getActive, saveActive, clearActive,
 } from './gym-data.js';
 import { pickExercises, openExercise, thumb, handleImgErrors, setLabels, prListHtml } from './gym-lib.js';
 
@@ -215,6 +215,20 @@ function openSession(sess, kind, original = null) {
     </div>`;
   }
 
+  // "Try 62.5 × 8" from last time's sets and the routine's rep range (default 8-12); deload when stalled.
+  function hintHtml(e) {
+    if (e.mode !== 'wr') return '';
+    const sess = prevMap.get(e.exercise_id);
+    if (!sess || (sess.mode || 'wr') !== 'wr') return '';
+    if (isStalled(exerciseSeries(workouts(), e.exercise_id), 'wr')) {
+      const d = deloadKg(sess.sets);
+      return d ? `<p class="gx-hint">Stalled 3+ sessions — try a lighter week: ${esc(fmtNum(d))} kg <span>(about 10% less)</span></p>` : '';
+    }
+    const range = parseRepRange(e.sets.find((s) => s.tr)?.tr);
+    const sg = suggestNext(sess.sets, range, weightStep(groupsOf(e.exercise_id)));
+    return sg ? `<p class="gx-hint">${esc(sg.text)} <span>${esc(sg.why)}</span></p>` : '';
+  }
+
   function exHtml(e, ei) {
     const labels = setLabels(e.sets);
     const heads = e.mode === 't' ? '<span>MIN</span><span>SEC</span>' : e.mode === 'bw' ? '<span>+KG</span><span>REPS</span>' : '<span>KG</span><span>REPS</span>';
@@ -228,6 +242,7 @@ function openSession(sess, kind, original = null) {
         ${e.mode !== 'wr' ? `<button class="pill" data-act="mode">${esc(MODES[e.mode])}</button>` : ''}
       </div>
       ${e.note != null ? `<textarea class="gx-note" data-act="note" rows="1" placeholder="Add a note…">${esc(e.note)}</textarea>` : ''}
+      ${isActive ? hintHtml(e) : ''}
       <div class="gx-sets">
         <div class="gx-shead"><span>SET</span><span>PREVIOUS</span>${heads}<span class="gx-hchk">${icon('check')}</span></div>
         ${e.sets.map((_, i) => rowHtml(e, i, labels)).join('')}

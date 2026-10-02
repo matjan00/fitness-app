@@ -209,9 +209,9 @@ export function editCustomExercise(init = {}) {
 
 // ---------- exercise detail ----------
 const detailTab = { v: 'about' };
-export async function openExercise(id) {
+export async function openExercise(id, tabName = 'about') {
   await loadDb().catch(() => {});
-  detailTab.v = 'about';
+  detailTab.v = tabName;
   let timer = null;
   push((el, s) => {
     const ex = exById(id) || { id, n: exName(id), p: [], s: [], i: [], im: 0 };
