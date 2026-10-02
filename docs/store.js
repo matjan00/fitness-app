@@ -16,6 +16,7 @@
 
 import { uid } from './util.js';
 import { SUPABASE_URL, SUPABASE_KEY } from './config.js';
+import { startSince, nextCursor, afterFilter } from './sync-cursor.js';
 
 const DB_NAME = 'fitness-app';
 const mem = new Map();          // id → record
@@ -198,10 +199,11 @@ async function pull() {
   const changedKinds = new Set();
   // Start a minute before the last pull: a write that committed slightly late (e.g. a long server job)
   // could carry an earlier synced_at than rows we already saw. Re-reading a few rows is harmless.
-  let since = lastPull ? new Date(Date.parse(lastPull) - 60000).toISOString() : null;
+  let cursor = startSince(lastPull) ? { at: startSince(lastPull), id: null } : null;
   for (;;) {
     let q = client.from('records').select('id,kind,data,updated_at,deleted,synced_at').order('synced_at').order('id').limit(1000);
-    if (since) q = q.gt('synced_at', since);
+    const f = afterFilter(cursor);
+    if (f) q = q.or(f);
     const { data, error } = await q;
     if (error) throw new Error(error.message);
     if (!data.length) break;
@@ -217,7 +219,9 @@ async function pull() {
       changedKinds.add(rec.kind);
     }
     if (idb && toSave.length) await saveRecords(toSave);
-    lastPull = since = data[data.length - 1].synced_at;
+    cursor = nextCursor(data);
+    if (!cursor) break;
+    lastPull = cursor.at;
     if (idb) await metaSet('lastPull', lastPull);
     if (data.length < 1000) break;
   }
