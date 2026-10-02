@@ -215,3 +215,7 @@
 .fd-rcard-wrap { position: relative; display: flex; flex-direction: column; min-width: 0; }
 .fd-rcard-wrap > .fd-rcard { flex: 1; }
 .scroll:has(.fd-hero-img) :is(p, li, a, h2, h3) { overflow-wrap: anywhere; }
+.fd-row { display: flex; align-items: center; border-bottom: 1px solid var(--line); }
+.fd-row:last-child { border-bottom: 0; }
+.fd-row .list-item { border-bottom: 0; flex: 1; min-width: 0; }
+.fd-mv { width: 34px; height: 34px; flex: none; color: var(--text-2); }
