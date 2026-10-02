@@ -115,7 +115,9 @@ async function start() {
   renderTab();
 
   let pending = null;
-  store.onChange(() => {
+  store.onChange((kinds) => {
+    // Sync progress alone changes no data: skip it so a background sync doesn't redraw the tab under your thumb.
+    if (kinds.size === 1 && kinds.has('__sync')) return;
     // Batch bursts of changes into one redraw.
     if (pending) return;
     pending = requestAnimationFrame(() => {

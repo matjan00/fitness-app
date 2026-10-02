@@ -173,7 +173,7 @@ body:has(#banner:not([hidden])) #view { padding-bottom: calc(var(--tabbar-h) + 9
 .gx-rexh { display: flex; align-items: center; gap: 8px; }
 .gx-rexh b { font-size: 15px; min-width: 0; }
 .gx-rexh .icon-btn { flex: none; }
-.gx-rexh .icon-btn { width: 34px; height: 34px; color: var(--text-2); }
+.gx-rexh .icon-btn { width: 40px; height: 40px; color: var(--text-2); }
 .gx-rexh .icon-btn svg { width: 19px; height: 19px; }
 .gx-rfields { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
 .gx-rfields.c3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
