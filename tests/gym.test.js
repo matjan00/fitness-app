@@ -4,6 +4,7 @@ import {
   e1rm, muscleGroup, exGroups, defaultMode, computePRs, lastSessions, previousSet, weeklySeries, muscleSets,
   weekStreak, workoutVolume, workoutSetCount, bestSet, formatSet, parseDuration, fmtDur, firstInt, sortExercises,
   matchesSearch, recentUse, exerciseRecords, exerciseSeries, routineFromWorkout, routineChanged, weekKey,
+  parseRepRange, suggestNext, weightStep, trend, isStalled, deloadKg, progressList,
 } from '../docs/gym-calc.js';
 
 const W = (id, date, exercises) => ({ id, name: id, started_at: date, ended_at: new Date(Date.parse(date) + 3600e3).toISOString(), exercises });
@@ -177,4 +178,67 @@ test('routine update from a workout keeps rep ranges', () => {
   assert.deepEqual(ex2.map((x) => x.exercise_id), ['squat', 'bench', 'plank']);
   assert.deepEqual(ex2[0], old2.exercises[0]);
   assert.equal(formatSet(S(62.5, 6), 'wr', true), '62.5 kg × 6');
+});
+
+test('parseRepRange reads ranges and single targets', () => {
+  assert.deepEqual(parseRepRange('8-12'), { lo: 8, hi: 12 });
+  assert.deepEqual(parseRepRange('12 - 8'), { lo: 8, hi: 12 });
+  assert.deepEqual(parseRepRange('10'), { lo: 10, hi: 10 });
+  assert.equal(parseRepRange(''), null);
+});
+
+test('suggestNext: add weight at top of range, otherwise +1 rep', () => {
+  const r = { lo: 8, hi: 12 };
+  const up = suggestNext([S(60, 12), S(60, 12), S(60, 12)], r, 2.5);
+  assert.equal(up.kind, 'weight');
+  assert.equal(up.text, 'Try 62.5 × 8');
+  assert.equal(suggestNext([S(60, 12), S(60, 12)], r, 5).kg, 65);
+  const rep = suggestNext([S(60, 12), S(60, 10), S(60, 9)], r, 2.5);
+  assert.equal(rep.kind, 'rep');
+  assert.equal(rep.text, 'Try 60 × 10');
+  // warm-ups are ignored, lighter back-off sets don't block progress at the top weight
+  assert.equal(suggestNext([S(20, 12, 'w'), S(60, 12), S(50, 8)], r, 2.5).kind, 'weight');
+  assert.equal(suggestNext([], r), null);
+  assert.equal(suggestNext([S(0, 10)], r), null);
+  assert.equal(suggestNext([S(60, 12)], null, 2.5).kind, 'weight'); // default 8-12
+});
+
+test('weightStep: 5 kg lower body, 2.5 kg upper body', () => {
+  assert.equal(weightStep(['Legs']), 5);
+  assert.equal(weightStep(['Chest', 'Triceps']), 2.5);
+  assert.equal(weightStep([]), 2.5);
+});
+
+const row = (e1) => ({ e1rm: e1, kg: 0, reps: 0, secs: 0 });
+test('trend compares the latest session with the average of the previous ones', () => {
+  assert.equal(trend([row(100)]), null);
+  assert.equal(trend([row(100), row(100), row(110)]), 'up');
+  assert.equal(trend([row(100), row(100), row(101)]), 'flat');
+  assert.equal(trend([row(100), row(110), row(90)]), 'down');
+});
+
+test('isStalled needs 3 sessions without beating the earlier best', () => {
+  assert.equal(isStalled([row(100), row(100), row(99)]), false); // too few sessions
+  assert.equal(isStalled([row(100), row(99), row(100), row(98)]), true);
+  assert.equal(isStalled([row(100), row(99), row(101), row(98)]), false);
+});
+
+test('deloadKg is about 10% lighter in 2.5 kg steps', () => {
+  assert.equal(deloadKg([S(100, 5), S(100, 5)]), 90);
+  assert.equal(deloadKg([S(62.5, 5)]), 57.5);
+  assert.equal(deloadKg([]), null);
+});
+
+test('progressList summarises each exercise, newest first', () => {
+  const E = (id, ...sets) => ({ exercise_id: id, mode: 'wr', sets });
+  const ws = [
+    W('a', '2025-01-01T10:00:00Z', [E('bench', S(60, 10)), E('squat', S(100, 5))]),
+    W('b', '2025-01-08T10:00:00Z', [E('bench', S(62.5, 8))]),
+  ];
+  const list = progressList(ws);
+  assert.deepEqual(list.map((r) => r.exercise_id), ['bench', 'squat']);
+  assert.equal(list[0].kg, 62.5);
+  assert.equal(list[0].sessions, 2);
+  assert.equal(list[0].lastSets[0].kg, 62.5);
+  assert.equal(list[1].trend, null);
 });

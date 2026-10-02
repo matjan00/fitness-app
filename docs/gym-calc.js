@@ -363,3 +363,91 @@ export function routineChanged(oldExs = [], newExs = []) {
       || (Number(o.kg) || 0) !== (Number(n.kg) || 0) || String(o.reps ?? '') !== String(n.reps ?? '');
   });
 }
+
+// ---------- progression (double progression) ----------
+// Rep range from a routine target: "8-12" → { lo: 8, hi: 12 }, "10" → { lo: 10, hi: 10 }, otherwise null.
+export function parseRepRange(s) {
+  const m = String(s ?? '').match(/(\d+)\s*(?:-|–|to)\s*(\d+)/);
+  if (m) {
+    const a = Number(m[1]), b = Number(m[2]);
+    return { lo: Math.min(a, b), hi: Math.max(a, b) };
+  }
+  const n = firstInt(s);
+  return n > 0 ? { lo: n, hi: n } : null;
+}
+export const DEFAULT_RANGE = { lo: 8, hi: 12 };
+export const LOWER_BODY = ['Legs', 'Glutes', 'Calves'];
+// Weight jump when the top of the range is reached: 5 kg for lower body, 2.5 kg for upper body.
+export const weightStep = (groups = []) => (groups.some((g) => LOWER_BODY.includes(g)) ? 5 : 2.5);
+const round25 = (kg) => Math.round(kg / 2.5) * 2.5;
+
+// Suggestion for the next session from the last one (sets of the last session, weight × reps mode).
+//  - all working sets at the top weight reached the top of the range → { kind: 'weight', kg + step, reps: lo }
+//  - otherwise → same weight, one more rep than the weakest set (never above the top of the range)
+// Returns { kind: 'weight'|'rep', kg, reps, text, why } or null when there is nothing to go on.
+export function suggestNext(sets, range = DEFAULT_RANGE, step = 2.5) {
+  const work = (sets || []).filter((s) => isWorking(s) && Number(s.kg) > 0 && Number(s.reps) > 0);
+  if (!work.length) return null;
+  const range2 = range || DEFAULT_RANGE;
+  const kg = Math.max(...work.map((s) => Number(s.kg)));
+  const top = work.filter((s) => Number(s.kg) === kg);
+  const minReps = Math.min(...top.map((s) => Number(s.reps)));
+  if (minReps >= range2.hi) {
+    const next = Math.round((kg + step) * 100) / 100;
+    return { kind: 'weight', kg: next, reps: range2.lo, text: `Try ${fmtNum(next)} × ${range2.lo}`, why: `All sets hit ${range2.hi} reps — time to add weight` };
+  }
+  const reps = Math.min(range2.hi, minReps + 1);
+  return { kind: 'rep', kg, reps, text: `Try ${fmtNum(kg)} × ${reps}`, why: `Beat last time by 1 rep, then add weight at ${range2.hi}` };
+}
+
+// Per-session "strength number" of a series row: est. 1RM for weights, reps / secs otherwise.
+const seriesValue = (row, mode) => (mode === 't' ? row.secs : mode === 'bw' ? row.reps : row.e1rm);
+
+// Recent trend of a series (oldest first): the latest session against the average of up to 3 before it.
+// Returns 'up' | 'flat' | 'down' (±2 % counts as flat), or null with fewer than 2 sessions.
+export function trend(series, mode = 'wr') {
+  const v = (series || []).map((r) => seriesValue(r, mode)).filter((x) => x > 0);
+  if (v.length < 2) return null;
+  const cur = v[v.length - 1];
+  const before = v.slice(-4, -1);
+  const avg = before.reduce((a, b) => a + b, 0) / before.length;
+  if (cur > avg * 1.02) return 'up';
+  if (cur < avg * 0.98) return 'down';
+  return 'flat';
+}
+
+// Stalled: at least `n` + 1 sessions and none of the last `n` beat the best of the sessions before them.
+export function isStalled(series, mode = 'wr', n = 3) {
+  const v = (series || []).map((r) => seriesValue(r, mode)).filter((x) => x > 0);
+  if (v.length < n + 1) return false;
+  const bestBefore = Math.max(...v.slice(0, -n));
+  return Math.max(...v.slice(-n)) <= bestBefore;
+}
+
+// Deload suggestion: about 10 % lighter than the heaviest recent working weight, in 2.5 kg steps.
+export function deloadKg(sets) {
+  const kgs = (sets || []).filter(isWorking).map((s) => Number(s.kg) || 0);
+  const top = Math.max(0, ...kgs);
+  return top > 0 ? Math.max(2.5, round25(top * 0.9)) : null;
+}
+
+// One row per exercise ever done (most recently done first):
+// { exercise_id, mode, sessions, e1rm, kg, reps, secs, last, trend, stalled, lastSets }
+export function progressList(workouts) {
+  const ids = new Map(); // exercise_id → mode (from the newest entry)
+  const sorted = [...workouts].sort((a, b) => byStart(b, a));
+  for (const w of sorted) for (const e of w.exercises || []) if (!ids.has(e.exercise_id) && e.sets?.length) ids.set(e.exercise_id, e.mode || 'wr');
+  const last = lastSessions(workouts);
+  const rows = [];
+  for (const [id, mode] of ids) {
+    const series = exerciseSeries(workouts, id);
+    if (!series.length) continue;
+    const row = { exercise_id: id, mode, sessions: series.length, last: series[series.length - 1].date };
+    for (const k of ['e1rm', 'kg', 'reps', 'secs']) row[k] = Math.max(...series.map((r) => r[k]));
+    row.trend = trend(series, mode);
+    row.stalled = isStalled(series, mode);
+    row.lastSets = last.get(id)?.sets || [];
+    rows.push(row);
+  }
+  return rows.sort((a, b) => Date.parse(b.last) - Date.parse(a.last));
+}

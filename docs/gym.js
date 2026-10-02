@@ -11,7 +11,7 @@ import { push, page, chooseSheet, confirmSheet } from './nav.js';
 import { chart, cssVar } from './charts.js';
 import {
   MUSCLE_GROUPS, workoutVolume, workoutDuration, bestSet, formatSet, weeklySeries, muscleSets, weekStreak, weekKey,
-  isWorking, e1rm, fmtNum,
+  isWorking, e1rm, fmtNum, progressList, suggestNext, weightStep, deloadKg, formatMetric,
 } from './gym-calc.js';
 import {
   loadDb, exName, groupsOf, workouts, routines, prsOf, settings, saveSettings, refreshTab, routineLastUsed,
@@ -217,6 +217,34 @@ export function openWorkout(id) {
 }
 
 // ---------- progress ----------
+const TREND = { up: ['↑', 'up', 'Going up'], flat: ['→', 'flat', 'Holding steady'], down: ['↓', 'down', 'Going down'] };
+// One row per exercise: best numbers, trend arrow, last done and a hint for next time. Tap → Records.
+function progressRows(ws) {
+  const rows = progressList(ws);
+  if (!rows.length) return '<p class="small muted">Log an exercise to see it here.</p>';
+  return rows.map((r) => {
+    const best = r.mode === 't' ? `Longest ${formatMetric('secs', r.secs)}`
+      : r.mode === 'bw' ? `Most ${r.reps} reps`
+        : `1RM ${fmtNum(r.e1rm)} kg · Max ${fmtNum(r.kg)} kg`;
+    let hint = '';
+    if (r.mode === 'wr') {
+      if (r.stalled) {
+        const d = deloadKg(r.lastSets);
+        hint = `Stalled — try a lighter week${d ? ` (${fmtNum(d)} kg)` : ''}`;
+      } else {
+        const sg = suggestNext(r.lastSets, null, weightStep(groupsOf(r.exercise_id)));
+        if (sg) hint = sg.text;
+      }
+    }
+    const t = TREND[r.trend];
+    return `<button class="gx-xp" data-x="${esc(r.exercise_id)}">
+      <span class="grow"><b class="ellipsis">${esc(exName(r.exercise_id))}</b>
+      <span class="sub ellipsis">${esc(best)}</span>
+      <span class="sub ellipsis">Last ${esc(relDay(r.last))}${hint ? ` · ${esc(hint)}` : ''}</span></span>
+      ${t ? `<span class="gx-tr ${t[1]}" title="${t[2]}" aria-label="${t[2]}">${t[0]}</span>` : ''}</button>`;
+  }).join('');
+}
+
 function renderProgress(el) {
   const ws = workouts();
   if (!ws.length) {
@@ -239,6 +267,8 @@ function renderProgress(el) {
       <div class="stat"><b>${mins(totalTime)}</b><span>Total time</span></div>
       <div class="stat"><b>${ws.reduce((a, w) => a + prsOf(w.id).length, 0)}</b><span>Records</span></div>
     </div>
+    <h3 class="section-title">Exercise progress</h3>
+    <div class="card gx-xplist">${progressRows(ws)}</div>
     <h3 class="section-title">Workouts per week</h3>
     <div class="card"><div class="chart-box short"><canvas class="gx-c1"></canvas></div></div>
     <h3 class="section-title">Weekly volume</h3>
@@ -254,6 +284,10 @@ function renderProgress(el) {
           <div class="gx-mfill ${cls}" style="width:${pct(n)}%"></div></div><b class="gx-mn">${n}</b></div>`;
       }).join('')}
     </div>`;
+  $('.gx-xplist', el).onclick = (e) => {
+    const b = e.target.closest('[data-x]');
+    if (b) openExercise(b.dataset.x, 'records');
+  };
   const labels = weeks.map((w) => new Date(`${w.week}T12:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }));
   const color = cssVar('--gym') || '#f2542d';
   const bg = weeks.map((_, i) => (i === weeks.length - 1 ? color : `${color}88`));
