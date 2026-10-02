@@ -44,7 +44,7 @@
 .rn-hero-stats span { font-size: 11.5px; opacity: .85; }
 
 /* ---------- fitness ---------- */
-.rn-info { width: 32px; height: 32px; color: var(--text-3); margin: -6px -6px -6px 0; }
+.rn-info { width: 40px; height: 40px; color: var(--text-3); margin: -10px -10px -10px 0; }
 .rn-info svg { width: 20px; height: 20px; }
 .rn-fit-row { display: flex; align-items: center; gap: 14px; }
 .rn-vdot { display: grid; flex: none; }
