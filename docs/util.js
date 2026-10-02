@@ -95,6 +95,7 @@ const ICONS = {
   run: '<circle cx="14" cy="4.5" r="2"/><path d="M8 21l3-6 3 2v5M6 12l3-4h5l2 4 3 1M11 15l-1-4"/>',
   food: '<path d="M7 3v8M5 3v5a2 2 0 0 0 4 0V3M7 11v10M17 21V3c-2 0-4 3-4 7s2 4 4 4"/>',
   me: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/>',
+  stats: '<path d="M3 4v16h18"/><path d="M6 15l4-5 3 3 5-7"/>',
   back: '<path d="M15 5l-7 7 7 7"/>',
   down: '<path d="M6 9l6 6 6-6"/>',
   close: '<path d="M6 6l12 12M18 6L6 18"/>',

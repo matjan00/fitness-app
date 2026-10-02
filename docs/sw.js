@@ -2,11 +2,11 @@
 // (also with no signal at the gym) and a fresh copy is fetched in the background for next time.
 // Exercise pictures are cached the first time they are shown. Supabase calls are never cached.
 const VERSION = 'fit-v21';
-const CORE = ['./', 'index.html', 'style.css', 'gym.css', 'food.css', 'run.css', 'app.js', 'version.js', 'update.js', 'util.js', 'store.js', 'nav.js',
+const CORE = ['./', 'index.html', 'style.css', 'gym.css', 'food.css', 'run.css', 'stats.css', 'app.js', 'version.js', 'update.js', 'util.js', 'store.js', 'nav.js',
   'charts.js', 'config.js', 'me.js', 'gym.js', 'gym-calc.js', 'gym-data.js', 'gym-lib.js', 'gym-workout.js', 'gym-routines.js',
   'food.js', 'food-parse.js', 'food-db.js', 'food-calc.js', 'food-cats.js', 'food-ui.js', 'food-recipes.js', 'food-photo.js', 'food-learn.js', 'food-library.js', 'food-estimate.js', 'food-library-ui.js', 'food-check.js', 'food-copy.js', 'diary-copy.js', 'diary-copy-ui.js', 'food-edit-ui.js',
   'data/foods.json', 'data/lessons.json', 'data/library/index.json',
-  'run.js', 'run-coach.js', 'run-detail.js', 'run-demo.js', 'run-plan.js', 'run-plan-ui.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png',
+  'stats.js', 'stats-calc.js', 'run.js', 'run-coach.js', 'run-detail.js', 'run-demo.js', 'run-plan.js', 'run-plan-ui.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png',
   'vendor/supabase.js', 'vendor/chart.umd.min.js', 'data/exercises.json'];
 
 self.addEventListener('install', (e) => {

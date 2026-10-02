@@ -14,13 +14,14 @@ import { setRevealHandler, depth } from './nav.js';
 import * as gym from './gym.js';
 import * as food from './food.js';
 import * as run from './run.js';
+import * as stats from './stats.js';
 import * as me from './me.js';
 import * as update from './update.js';
 
 const modules = [gym, run, food, me];
 const tabs = [
   { id: 'home', title: 'Home', icon: 'home', render: renderHome },
-  gym.tab, run.tab, food.tab, me.tab,
+  gym.tab, run.tab, food.tab, stats.tab, me.tab,
 ];
 let current = local.get('tab', 'home');
 if (!tabs.some((t) => t.id === current)) current = 'home';
