@@ -67,7 +67,7 @@
 .gx-note { min-height: 0; margin: 0 0 8px; padding: 8px 10px; font-size: 14px; border: 0; background: var(--gold-soft); resize: none; }
 
 .gx-shead, .gx-row {
-  display: grid; grid-template-columns: 32px minmax(0, 1fr) 62px 54px 40px; gap: 6px; align-items: center;
+  display: grid; grid-template-columns: 32px minmax(0, 1fr) 60px 52px 44px; gap: 6px; align-items: center;
 }
 .gx-shead { font-size: 11px; font-weight: 750; letter-spacing: .04em; color: var(--text-3); padding: 0 4px 4px; text-align: center; }
 .gx-shead .gx-hchk svg { width: 15px; height: 15px; margin: 0 auto; display: block; }
@@ -84,17 +84,17 @@
 .gx-tag.t-d { color: var(--run); background: var(--run-soft); }
 .gx-tag.t-f { color: var(--down); background: var(--down-soft); }
 .gx-row.done .gx-tag { background: transparent; }
-.gx-prev { font-size: 13px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; height: 34px; border-radius: 8px; font-weight: 550; }
+.gx-prev { font-size: 13px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; height: 40px; min-width: 40px; border-radius: 8px; font-weight: 550; }
 .gx-prev:not(:disabled):active { background: var(--card-2); }
 .gx-prev:disabled { opacity: 1; }
 .gx-in {
-  height: 36px; padding: 0 4px; text-align: center; font-size: 16px; font-weight: 680; border-radius: 9px;
+  height: 40px; padding: 0 4px; text-align: center; font-size: 16px; font-weight: 680; border-radius: 9px;
   background: var(--card-2); border: 1px solid transparent; font-variant-numeric: tabular-nums;
 }
 .gx-in::placeholder { color: var(--text-3); font-weight: 550; }
 .gx-in:focus { background: var(--card); }
 .gx-row.done .gx-in { background: transparent; }
-.gx-chk { height: 34px; border-radius: 9px; background: var(--card-2); color: var(--text-3); display: grid; place-items: center; transition: background .15s, color .15s; }
+.gx-chk { height: 40px; min-width: 40px; border-radius: 9px; background: var(--card-2); color: var(--text-3); display: grid; place-items: center; transition: background .15s, color .15s; }
 .gx-chk svg { width: 20px; height: 20px; stroke-width: 2.6; }
 .gx-row.done .gx-chk { background: var(--up); color: #fff; }
 .gx-rowpr { position: absolute; left: 30px; top: 1px; color: var(--gold); pointer-events: none; }
