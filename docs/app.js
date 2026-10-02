@@ -17,6 +17,7 @@ import * as run from './run.js';
 import * as stats from './stats.js';
 import * as me from './me.js';
 import * as update from './update.js';
+import { mountSyncLine } from './sync-line.js';
 
 const modules = [gym, run, food, me];
 const tabs = [
@@ -41,12 +42,14 @@ async function checkForUpdate() {
 function renderHome(el) {
   el.innerHTML = `<div class="page-head"><p class="muted">${new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
     <h1>${greeting()}</h1>
+    <button class="sync-line" id="app-sync" hidden></button>
     <button class="icon-btn me-btn" id="app-me" aria-label="Me / settings">${icon('me')}</button></div>
     ${update.newerVersion() ? `<div class="card update-card"><div class="grow"><b>New version available</b>
       <p class="small muted">Get the latest features and fixes. Your data stays.</p></div>
       <button class="primary" id="app-update">${icon('sync')} Update</button></div>` : ''}
     <div class="home-cards"></div>`;
   $('#app-me', el).onclick = () => me.openMe();
+  mountSyncLine($('#app-sync', el), store);
   $('#app-update', el)?.addEventListener('click', (e) => { e.currentTarget.disabled = true; update.applyUpdate(); });
   const wrap = $('.home-cards', el);
   modules.map((m) => m.homeCard).filter(Boolean).sort((a, b) => a.order - b.order).forEach((c) => {

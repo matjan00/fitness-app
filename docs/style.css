@@ -126,6 +126,12 @@ img { max-width: 100%; }
 .page-head h1 { margin-top: 2px; }
 .page-head.row { display: flex; }
 .page-head { position: relative; }
+.sync-line { display: block; margin: 2px 0 0; padding: 0; background: none; border: 0; font: inherit; font-size: 12.5px; font-weight: 550; color: var(--text-3); text-align: left; }
+.sync-line[hidden] { display: none; }
+.sync-line.ok { color: var(--up); }
+.sync-line.warn { color: var(--gold); }
+.sync-line.error { color: var(--down); text-decoration: underline; padding: 6px 0; }
+.sync-line:disabled { opacity: 1; cursor: default; }
 .me-btn { position: absolute; top: 4px; right: 0; background: var(--card); }
 .me-btn svg { width: 22px; height: 22px; }
 .home-cards { display: grid; gap: 14px; }
