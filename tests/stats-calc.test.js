@@ -62,3 +62,17 @@ test('runWeekly and gymWeekly bucket by week', () => {
   assert.deepEqual(g.map((x) => [x.sessions, x.volume]), [[0, 0], [2, 1500]]);
   assert.equal(runWeekly(undefined, '2026-10-02', 2).length, 2);
 });
+
+test('1-year range collapses to ~53 weekly averages (one point per week, not per day)', () => {
+  const daily = dailyNutrition([
+    { day: '2026-09-28', kcal: 2000, p: 100, c: 200, f: 60 },
+    { day: '2026-09-30', kcal: 2400, p: 140, c: 240, f: 80 },
+  ], '2026-10-02', 365);
+  const w = weeklyNutrition(daily);
+  assert.equal(daily.length, 365);
+  assert.ok(w.length >= 53 && w.length <= 54);
+  const last = w[w.length - 1];
+  assert.equal(last.day, '2026-09-28');
+  assert.equal(last.p, 120);
+  assert.equal(last.f, 70);
+});

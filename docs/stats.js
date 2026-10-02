@@ -39,7 +39,7 @@ function render(el) {
       ${section('Gym sessions', 'st-gym')}
       ${section('Gym volume', 'st-vol', 'Total kg lifted (weight × reps) per week.')}
     </div>
-    <p class="tiny muted center" style="margin-top:16px">Showing the last ${esc(label)}. Steps will come later.</p>`;
+    <p class="tiny muted center" style="margin-top:16px">Showing the last ${esc(label)}.</p>`;
   $$('.st-range button', el).forEach((b) => b.onclick = () => {
     days = Number(b.dataset.days);
     local.set('statsRange', days);
@@ -92,7 +92,7 @@ function drawFood(el) {
   const mset = [];
   for (const [k, name, v] of ms) {
     const col = cssVar(v);
-    mset.push(line(name, val(k), col, { spanGaps: true, pointRadius: rows.length <= 31 ? 2 : 0 }));
+    mset.push(line(name, val(k), col, { spanGaps: true, tension: weekly ? 0.4 : 0.3, pointRadius: rows.length <= 31 ? 2 : 0 }));
     if (t?.[k]) mset.push(target(`${name} target`, t[k], rows.length, col));
   }
   chart('st-macros', base(labels, mset, { tooltip: { label: (c) => `${c.dataset.label}: ${n0(c.parsed.y)} g` } }));
