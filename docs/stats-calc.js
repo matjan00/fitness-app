@@ -28,7 +28,7 @@ export const weeksFor = (days) => Math.max(4, Math.ceil(days / 7));
 // Diary entries ('meal' records {day,kcal,p,c,f}) → one row per day: totals plus `logged` (any entry that day).
 export function dailyNutrition(meals = [], end, days) {
   const rows = new Map(dayList(end, days).map((d) => [d, { day: d, kcal: 0, p: 0, c: 0, f: 0, logged: false }]));
-  for (const m of meals) {
+  for (const m of Array.isArray(meals) ? meals : []) {
     const r = rows.get(m?.day);
     if (!r) continue;
     r.kcal += num(m.kcal); r.p += num(m.p); r.c += num(m.c); r.f += num(m.f);
@@ -65,7 +65,7 @@ export function averageLogged(daily) {
 // (so the first points of the range are not skewed). entries: [{day,kg}].
 export function weightSeries(entries = [], end, days) {
   const from = addDays(end, -days + 1);
-  const sorted = entries.filter((e) => e?.day && e.kg > 0).sort((a, b) => a.day.localeCompare(b.day));
+  const sorted = (Array.isArray(entries) ? entries : []).filter((e) => e?.day && typeof e.day === 'string' && Number(e.kg) > 0).map((e) => ({ ...e, kg: Number(e.kg) })).sort((a, b) => a.day.localeCompare(b.day));
   return sorted.map((e, i) => {
     let sum = 0, n = 0;
     for (let j = i; j >= 0 && dayIndex(e.day) - dayIndex(sorted[j].day) < 7; j--) { sum += sorted[j].kg; n++; }
@@ -77,8 +77,9 @@ export function weightSeries(entries = [], end, days) {
 export function runWeekly(runs = [], end, weeks) {
   const list = weekList(end, weeks);
   const rows = new Map(list.map((w) => [w, { week: w, km: 0, runs: 0 }]));
-  for (const r of runs) {
-    if (!r?.start || !(r.distance_m > 0)) continue;
+  for (let r of Array.isArray(runs) ? runs : []) {
+    if (!r?.start || !(Number(r.distance_m) > 0) || !Number.isFinite(Date.parse(r.start))) continue;
+    r = { ...r, distance_m: Number(r.distance_m) };
     const row = rows.get(weekOf(dayOf(new Date(r.start))));
     if (row) { row.km += r.distance_m / 1000; row.runs++; }
   }
@@ -89,8 +90,8 @@ export function runWeekly(runs = [], end, weeks) {
 export function gymWeekly(workouts = [], end, weeks, volumeOf = () => 0) {
   const list = weekList(end, weeks);
   const rows = new Map(list.map((w) => [w, { week: w, sessions: 0, volume: 0 }]));
-  for (const w of workouts) {
-    if (!w?.started_at) continue;
+  for (const w of Array.isArray(workouts) ? workouts : []) {
+    if (!w?.started_at || !Number.isFinite(Date.parse(w.started_at))) continue;
     const row = rows.get(weekOf(dayOf(new Date(w.started_at))));
     if (row) { row.sessions++; row.volume += num(volumeOf(w)); }
   }

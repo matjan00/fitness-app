@@ -69,7 +69,7 @@ export function e1rm(kg, reps) {
 }
 
 export const isWorking = (set) => set && set.type !== 'w';
-export const setVolume = (set, mode = 'wr') => (mode === 't' ? 0 : (Number(set.kg) || 0) * (Number(set.reps) || 0));
+export const setVolume = (set, mode = 'wr') => (mode === 't' || !set ? 0 : (Number(set.kg) || 0) * (Number(set.reps) || 0));
 
 export function formatSet(set, mode = 'wr', unit = false) {
   if (!set) return '';
@@ -84,21 +84,22 @@ export function formatSet(set, mode = 'wr', unit = false) {
 
 // ---------- workout totals ----------
 export const workoutDuration = (w) => Math.max(0, (Date.parse(w.ended_at) - Date.parse(w.started_at)) / 1000 || 0);
+const arr = (x) => (Array.isArray(x) ? x : []);
 export function workoutVolume(w) {
   let v = 0;
-  for (const e of w.exercises || []) for (const s of e.sets || []) if (isWorking(s)) v += setVolume(s, e.mode);
+  for (const e of arr(w?.exercises)) for (const s of arr(e?.sets)) if (isWorking(s)) v += setVolume(s, e.mode);
   return v;
 }
 export function workoutSetCount(w) {
   let n = 0;
-  for (const e of w.exercises || []) n += (e.sets || []).length;
+  for (const e of arr(w?.exercises)) n += arr(e?.sets).length;
   return n;
 }
 
 // Best set of an exercise entry (for history cards): heaviest working set, then most reps / longest.
 export function bestSet(entry) {
-  const sets = (entry.sets || []).filter(isWorking);
-  const pool = sets.length ? sets : entry.sets || [];
+  const sets = arr(entry?.sets).filter(isWorking);
+  const pool = sets.length ? sets : arr(entry?.sets);
   let best = null;
   for (const s of pool) {
     if (!best) { best = s; continue; }
@@ -141,15 +142,17 @@ const byStart = (a, b) => (Date.parse(a.started_at) || 0) - (Date.parse(b.starte
 export function computePRs(workouts) {
   const best = new Map(); // exercise_id → { kind: value }
   const out = new Map();
-  for (const w of [...workouts].sort(byStart)) {
+  for (const w of arr(workouts).filter(Boolean).sort(byStart)) {
     const prs = [];
     const inThis = new Map(); // exercise_id → { kind: {value, ei, si} }
-    (w.exercises || []).forEach((e, ei) => {
+    arr(w?.exercises).forEach((e, ei) => {
+      if (!e) return;
       const mode = e.mode || 'wr';
       let cand = inThis.get(e.exercise_id);
       if (!cand) inThis.set(e.exercise_id, (cand = {}));
       for (const kind of kindsFor(mode)) {
-        (e.sets || []).forEach((s, si) => {
+        arr(e.sets).forEach((s, si) => {
+          if (!s) return;
           const v = setMetric(s, kind, mode);
           if (v > 0 && (!cand[kind] || v > cand[kind].value)) cand[kind] = { value: v, ei, si };
         });
@@ -192,7 +195,7 @@ export function exerciseRecords(workouts, exerciseId) {
 // Per-session series for charts: [{ date, e1rm, kg, vol, reps, secs }] oldest first.
 export function exerciseSeries(workouts, exerciseId) {
   const out = [];
-  for (const w of [...workouts].sort(byStart)) {
+  for (const w of arr(workouts).filter(Boolean).sort(byStart)) {
     const entries = (w.exercises || []).filter((e) => e.exercise_id === exerciseId);
     if (!entries.length) continue;
     const row = { date: w.started_at, e1rm: 0, kg: 0, vol: 0, reps: 0, secs: 0 };
@@ -212,12 +215,12 @@ export function exerciseSeries(workouts, exerciseId) {
 // optionally only from workouts that started before `before` (ms) and excluding workout `exceptId`.
 export function lastSessions(workouts, { before = Infinity, exceptId = null } = {}) {
   const map = new Map();
-  const sorted = workouts
-    .filter((w) => w.id !== exceptId && (Date.parse(w.started_at) || 0) < before)
+  const sorted = arr(workouts)
+    .filter((w) => w && w.id !== exceptId && (Date.parse(w.started_at) || 0) < before)
     .sort((a, b) => byStart(b, a));
   for (const w of sorted) {
-    for (const e of w.exercises || []) {
-      if (!map.has(e.exercise_id) && e.sets?.length) map.set(e.exercise_id, { date: w.started_at, mode: e.mode, sets: e.sets, rest: e.rest });
+    for (const e of arr(w.exercises)) {
+      if (e && !map.has(e.exercise_id) && Array.isArray(e.sets) && e.sets.length) map.set(e.exercise_id, { date: w.started_at, mode: e.mode, sets: e.sets, rest: e.rest });
     }
   }
   return map;
@@ -237,9 +240,10 @@ export function previousSet(session, index, sets = null) {
 // Map(exercise_id → last used ms), for "recent first" ordering.
 export function recentUse(workouts) {
   const m = new Map();
-  for (const w of workouts) {
+  for (const w of arr(workouts)) {
+    if (!w) continue;
     const t = Date.parse(w.started_at) || 0;
-    for (const e of w.exercises || []) if (!(m.get(e.exercise_id) >= t)) m.set(e.exercise_id, t);
+    for (const e of arr(w.exercises)) if (e && !(m.get(e.exercise_id) >= t)) m.set(e.exercise_id, t);
   }
   return m;
 }

@@ -15,6 +15,7 @@
 //   syncNow(), syncState() and the auth helpers below.
 
 import { uid } from './util.js';
+import { cleanItem } from './sanitize.js';
 import { SUPABASE_URL, SUPABASE_KEY } from './config.js';
 import { startSince, nextCursor, afterFilter } from './sync-cursor.js';
 
@@ -70,15 +71,20 @@ export async function openStore() {
 }
 
 // ---------- reads ----------
-const toItem = (r) => ({ ...r.data, id: r.id });
+// Malformed records (null/non-object data, missing required fields) are skipped or sanitized here, so no screen sees them.
+const toItem = (r) => {
+  if (!r.data || typeof r.data !== 'object' || Array.isArray(r.data)) return null;
+  const item = cleanItem(r.kind, { ...r.data, id: r.id });
+  return item ? { ...item, id: r.id } : null;
+};
 export const all = (kind) => {
   const out = [];
-  for (const r of mem.values()) if (r.kind === kind && !r.deleted) out.push(toItem(r));
+  for (const r of mem.values()) if (r.kind === kind && !r.deleted) { const it = toItem(r); if (it) out.push(it); }
   return out;
 };
 export const get = (id) => {
   const r = mem.get(id);
-  return r && !r.deleted ? toItem(r) : undefined;
+  return (r && !r.deleted ? toItem(r) : null) || undefined;
 };
 export const kindOf = (id) => mem.get(id)?.kind;
 
@@ -109,7 +115,7 @@ export async function putMany(kind, items) {
   const now = new Date().toISOString();
   const recs = items.map(({ id = uid(), ...data }) => ({ id, kind, data: JSON.parse(JSON.stringify(data)), updated_at: now, deleted: false }));
   await writeLocal(recs);
-  return recs.map(toItem);
+  return recs.map((r) => ({ ...r.data, id: r.id }));
 }
 
 export async function remove(id) {
