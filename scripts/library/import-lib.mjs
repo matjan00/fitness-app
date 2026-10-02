@@ -137,3 +137,23 @@ export function textToRaw(html, url, source) {
     source: { type: source, name: SOURCE_NAMES[source] || source, url, author: 'Ethan Chlebowski', license: LICENSE }, published: null,
   };
 }
+
+// ---------- pruning ----------
+// existing: [{ id, data }] live library rows. keep: Set of "source:sourceId" still produced (or only failed transiently) by sources.json.
+// sources: Set of source names covered by this run (rows of other sources are never touched). Returns the ids to soft-delete.
+export function pruneIds(existing, keep, sources) {
+  const out = [];
+  for (const r of existing) {
+    const key = r?.data?.key;
+    if (typeof key !== 'string' || !key.includes(':')) continue;
+    if (!sources.has(key.slice(0, key.indexOf(':'))) || keep.has(key)) continue;
+    out.push(r.id);
+  }
+  return out;
+}
+// Pruning is safe only when every source in the run listed its recipes and produced at least one (no total failure).
+export function canPrune(stats, listingFailed) {
+  const names = Object.keys(stats);
+  if (listingFailed || !names.length) return false;
+  return names.every((k) => stats[k].tried > 0 && stats[k].ok + stats[k].seafood + stats[k].fish > 0);
+}

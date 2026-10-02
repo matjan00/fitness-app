@@ -6,43 +6,104 @@
   "sources": [
     {
       "source": "mealdb",
-      "mealdb_ids": [
-        "52982",
-        "52811",
-        "52961",
-        "52903",
-        "52908",
-        "52832",
-        "53019",
-        "53020",
-        "53292"
+      "mealdb_categories": [
+        "Beef",
+        "Breakfast",
+        "Chicken",
+        "Dessert",
+        "Goat",
+        "Lamb",
+        "Miscellaneous",
+        "Pasta",
+        "Pork",
+        "Side",
+        "Starter",
+        "Vegan",
+        "Vegetarian"
       ]
     },
     {
       "source": "bbcgoodfood",
-      "urls": [
-        "https://www.bbcgoodfood.com/recipes/chicken-stroganoff",
-        "https://www.bbcgoodfood.com/recipes/bean-enchiladas",
-        "https://www.bbcgoodfood.com/recipes/mexican-chicken-stew-quinoa-beans",
-        "https://www.bbcgoodfood.com/recipes/crispy-chilli-turkey-noodles"
-      ]
+      "collections": [
+        "https://www.bbcgoodfood.com/recipes/collection/high-protein-recipes",
+        "https://www.bbcgoodfood.com/recipes/collection/high-protein-recipes?page=2",
+        "https://www.bbcgoodfood.com/recipes/collection/high-protein-recipes?page=3",
+        "https://www.bbcgoodfood.com/recipes/collection/high-protein-dinner-recipes",
+        "https://www.bbcgoodfood.com/recipes/collection/high-protein-dinner-recipes?page=2",
+        "https://www.bbcgoodfood.com/recipes/collection/high-protein-dinner-recipes?page=3",
+        "https://www.bbcgoodfood.com/recipes/collection/high-protein-breakfast-recipes",
+        "https://www.bbcgoodfood.com/recipes/collection/high-protein-breakfast-recipes?page=2",
+        "https://www.bbcgoodfood.com/recipes/collection/high-protein-breakfast-recipes?page=3",
+        "https://www.bbcgoodfood.com/recipes/collection/high-protein-vegetarian-recipes",
+        "https://www.bbcgoodfood.com/recipes/collection/high-protein-vegetarian-recipes?page=2",
+        "https://www.bbcgoodfood.com/recipes/collection/high-protein-vegetarian-recipes?page=3",
+        "https://www.bbcgoodfood.com/recipes/collection/chicken-breast-recipes",
+        "https://www.bbcgoodfood.com/recipes/collection/chicken-breast-recipes?page=2",
+        "https://www.bbcgoodfood.com/recipes/collection/chicken-breast-recipes?page=3",
+        "https://www.bbcgoodfood.com/recipes/collection/healthy-chicken-recipes",
+        "https://www.bbcgoodfood.com/recipes/collection/healthy-chicken-recipes?page=2",
+        "https://www.bbcgoodfood.com/recipes/collection/healthy-chicken-recipes?page=3",
+        "https://www.bbcgoodfood.com/recipes/collection/easy-dinner-recipes",
+        "https://www.bbcgoodfood.com/recipes/collection/easy-dinner-recipes?page=2",
+        "https://www.bbcgoodfood.com/recipes/collection/easy-dinner-recipes?page=3",
+        "https://www.bbcgoodfood.com/recipes/collection/healthy-dinner-recipes",
+        "https://www.bbcgoodfood.com/recipes/collection/healthy-dinner-recipes?page=2",
+        "https://www.bbcgoodfood.com/recipes/collection/healthy-dinner-recipes?page=3",
+        "https://www.bbcgoodfood.com/recipes/collection/family-meal-recipes",
+        "https://www.bbcgoodfood.com/recipes/collection/family-meal-recipes?page=2",
+        "https://www.bbcgoodfood.com/recipes/collection/family-meal-recipes?page=3",
+        "https://www.bbcgoodfood.com/recipes/collection/healthy-vegetarian-recipes",
+        "https://www.bbcgoodfood.com/recipes/collection/healthy-vegetarian-recipes?page=2",
+        "https://www.bbcgoodfood.com/recipes/collection/healthy-vegetarian-recipes?page=3"
+      ],
+      "link_pattern": "^/recipes/[a-z0-9-]+$",
+      "limit": 40
     },
     {
       "source": "skinnytaste",
-      "urls": [
-        "https://www.skinnytaste.com/harissa-chicken-meatballs/",
-        "https://www.skinnytaste.com/slow-cooker-chicken-tacos/",
-        "https://www.skinnytaste.com/baked-chicken-parmesan/",
-        "https://www.skinnytaste.com/chicken-shawarma-sheet-pan-dinner/"
-      ]
+      "collections": [
+        "https://www.skinnytaste.com/recipes/high-protein/",
+        "https://www.skinnytaste.com/recipes/high-protein/page/2/",
+        "https://www.skinnytaste.com/recipes/high-protein/page/3/",
+        "https://www.skinnytaste.com/recipes/high-protein/page/4/",
+        "https://www.skinnytaste.com/recipes/main-ingredient/chicken-recipes/",
+        "https://www.skinnytaste.com/recipes/main-ingredient/chicken-recipes/page/2/",
+        "https://www.skinnytaste.com/recipes/main-ingredient/chicken-recipes/page/3/",
+        "https://www.skinnytaste.com/recipes/main-ingredient/chicken-recipes/page/4/",
+        "https://www.skinnytaste.com/recipes/main-ingredient/beef-recipes/",
+        "https://www.skinnytaste.com/recipes/main-ingredient/beef-recipes/page/2/",
+        "https://www.skinnytaste.com/recipes/main-ingredient/beef-recipes/page/3/",
+        "https://www.skinnytaste.com/recipes/main-ingredient/beef-recipes/page/4/",
+        "https://www.skinnytaste.com/recipes/main-ingredient/pork-recipes/",
+        "https://www.skinnytaste.com/recipes/main-ingredient/pork-recipes/page/2/",
+        "https://www.skinnytaste.com/recipes/main-ingredient/pork-recipes/page/3/",
+        "https://www.skinnytaste.com/recipes/main-ingredient/pork-recipes/page/4/",
+        "https://www.skinnytaste.com/recipes/main-ingredient/turkey-recipes/",
+        "https://www.skinnytaste.com/recipes/main-ingredient/turkey-recipes/page/2/",
+        "https://www.skinnytaste.com/recipes/main-ingredient/turkey-recipes/page/3/",
+        "https://www.skinnytaste.com/recipes/main-ingredient/turkey-recipes/page/4/",
+        "https://www.skinnytaste.com/recipes/dinner/vegetarian-recipes/",
+        "https://www.skinnytaste.com/recipes/dinner/vegetarian-recipes/page/2/",
+        "https://www.skinnytaste.com/recipes/dinner/vegetarian-recipes/page/3/",
+        "https://www.skinnytaste.com/recipes/dinner/vegetarian-recipes/page/4/"
+      ],
+      "link_pattern": "^/(?!(about|recipes|recipe-index|contact|privacy-policy|shop|blog|category|tag|page|meal-plans?|weight-watchers|newsletter|start-here)/)[a-z0-9]+(-[a-z0-9]+){2,}/$",
+      "limit": 40
     },
     {
       "source": "pinchofyum",
-      "urls": [
-        "https://pinchofyum.com/chickpea-curry",
-        "https://pinchofyum.com/chicken-tacos",
-        "https://pinchofyum.com/broccoli-cheese-soup"
-      ]
+      "collections": [
+        "https://pinchofyum.com/recipes/main-dishes",
+        "https://pinchofyum.com/recipes/main-dishes/page/2",
+        "https://pinchofyum.com/recipes/main-dishes/page/3",
+        "https://pinchofyum.com/recipes/main-dishes/page/4",
+        "https://pinchofyum.com/recipes/main-dishes/page/5",
+        "https://pinchofyum.com/recipes/main-dishes/page/6",
+        "https://pinchofyum.com/recipes/main-dishes/page/7",
+        "https://pinchofyum.com/recipes/main-dishes/page/8"
+      ],
+      "link_pattern": "^/(?!(recipes|about|category|tag|page|shop|blog|contact|start-here|work-with-us|privacy-policy|food-photography-blueprint)(/|$))[a-z0-9]+(-[a-z0-9]+)+$",
+      "limit": 40
     }
   ]
 }
