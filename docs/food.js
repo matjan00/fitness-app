@@ -10,6 +10,7 @@ import { renderBook, openManual, blankDraft, logRecipe, recipePer, openRecipe, e
 import { loadFoods } from './food-db.js';
 import { renderLearn, loadLessons } from './food-learn.js';
 import { renderLibrary } from './food-library-ui.js';
+import { copyMeal, copyDay, moveEntry } from './diary-copy-ui.js';
 
 export const tab = { id: 'food', title: 'Food', icon: 'food', render };
 
@@ -61,6 +62,7 @@ function renderDiary(box) {
       ${!t ? `<button class="soft block" id="fd-settargets" style="margin-top:12px">${icon('fire')} Set your daily targets</button>` : ''}
     </div>
     ${MEALS.map((m) => mealCard(m, entriesOf(day, m.key))).join('')}
+    ${entriesOf(day).length ? `<div class="center" style="margin-top:10px"><button class="link small" id="fd-copyday">${icon('swap')} Copy this whole day to another day</button></div>` : ''}
     <h3 class="section-title">This week</h3>
     <div class="card" id="fd-week"></div>`;
 
@@ -69,6 +71,9 @@ function renderDiary(box) {
   $('#fd-daypick', box).onclick = () => pickDate(box);
   $('#fd-settargets', box)?.addEventListener('click', () => openTargets());
   $$('[data-add]', box).forEach((b) => { b.onclick = () => addTo(b.dataset.add); });
+  $('#fd-copyday', box)?.addEventListener('click', () => copyDay(day, entriesOf(day)));
+  $$('[data-copymeal]', box).forEach((b) => { b.onclick = () => copyMeal(day, b.dataset.copymeal, entriesOf(day, b.dataset.copymeal)); });
+  $$('[data-move]', box).forEach((b) => { b.onclick = () => moveEntry(store.get(b.dataset.move)); });
   $$('[data-entry]', box).forEach((b) => { b.onclick = () => editEntry(store.get(b.dataset.entry)); });
   renderWeek($('#fd-week', box));
 
@@ -106,10 +111,12 @@ function mealCard(m, list) {
   return `<div class="card fd-meal">
     <div class="card-head" style="margin-bottom:${list.length ? 6 : 0}px"><div><h2>${esc(m.label)}</h2>
       <p class="tiny muted">${list.length ? `${n0(s.kcal)} kcal · P ${n0(s.p)} · C ${n0(s.c)} · F ${n0(s.f)}` : 'Nothing yet'}</p></div>
-      <button class="icon-btn fd-addbtn" data-add="${m.key}" aria-label="Add to ${esc(m.label)}">${icon('plus')}</button></div>
-    ${list.length ? `<div class="list">${list.map((e) => `<button class="list-item fd-entry" data-entry="${e.id}">
+      <div class="row">${list.length ? `<button class="icon-btn fd-mv" data-copymeal="${m.key}" aria-label="Copy ${esc(m.label)} to another day or meal">${icon('swap')}</button>` : ''}
+      <button class="icon-btn fd-addbtn" data-add="${m.key}" aria-label="Add to ${esc(m.label)}">${icon('plus')}</button></div></div>
+    ${list.length ? `<div class="list">${list.map((e) => `<div class="fd-row"><button class="list-item fd-entry" data-entry="${e.id}">
       <div class="grow"><div class="ellipsis">${esc(e.label)}</div><div class="sub">${esc(amountTxt(e))}</div></div>
-      <div class="fd-entry-k"><b>${n0(e.kcal)}</b><span>kcal</span></div></button>`).join('')}</div>` : ''}
+      <div class="fd-entry-k"><b>${n0(e.kcal)}</b><span>kcal</span></div></button>
+      <button class="icon-btn fd-mv" data-move="${e.id}" aria-label="Move ${esc(e.label)} to another meal">${icon('swap')}</button></div>`).join('')}</div>` : ''}
   </div>`;
 }
 function amountTxt(e) {
