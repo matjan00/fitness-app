@@ -17,3 +17,7 @@
 .ct-val { font-weight: 650; white-space: nowrap; }
 .pill.up { background: var(--up-soft); color: var(--up); }
 .pill.down { background: var(--down-soft); color: var(--down); }
+
+/* Gym logger in cut workouts */
+.ct-mark { position: absolute; left: 30px; bottom: 1px; font-size: 11px; line-height: 1; pointer-events: none; }
+.ct-verdict { margin-top: 14px; }

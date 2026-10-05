@@ -81,6 +81,38 @@ function editItem(key, day, f) {
   ], async (v) => { await daily({ kcal: v.kcal, p: v.p, c: v.c, f: v.f }); });
 }
 
+// ---------- runs ----------
+const parsePace = (t) => { const [m, s] = String(t).split(':').map(Number); return m * 60 + (s || 0); };
+const fmtPace = (secs) => `${Math.floor(secs / 60)}:${String(Math.round(secs % 60)).padStart(2, '0')}`;
+const paceSecs = (r) => { const km = (+r.distance_m || 0) / 1000; const s = +r.moving_s || +r.elapsed_s || 0; return km > 0 && s > 0 ? s / km : null; };
+function todaysRun() {
+  const d = today();
+  return store.all('run').filter((r) => r.start && new Date(r.start).toDateString() === new Date(`${d}T12:00`).toDateString())
+    .sort((a, b) => (+b.distance_m || 0) - (+a.distance_m || 0))[0] || null;
+}
+function logRun(kind) {
+  push((el, s) => {
+    el.innerHTML = sheet({ title: `Log ${SESSION_LABEL[kind].toLowerCase()}`, body: `<form class="form ct-entry">
+      <div class="form-row"><label>Distance (km)<input name="km" inputmode="decimal" autocomplete="off"></label>
+      <label>Time (mm:ss or h:mm:ss)<input name="t" inputmode="text" placeholder="32:30" autocomplete="off"></label></div>
+      <p class="small muted ct-pace">&nbsp;</p>
+      <div class="sheet-actions" style="margin-top:10px"><button type="button" class="ghost" data-a="no">Cancel</button><button type="submit" class="primary">Save</button></div></form>` });
+    const form = $('form', el);
+    const secs = () => { const p = form.t.value.trim().split(':').map(Number); if (p.some((x) => !Number.isFinite(x))) return 0; return p.length === 3 ? p[0] * 3600 + p[1] * 60 + p[2] : p.length === 2 ? p[0] * 60 + p[1] : p[0] * 60; };
+    form.oninput = () => { const km = parseNum(form.km.value); const t = secs(); $('.ct-pace', el).textContent = km > 0 && t > 0 ? `Pace ${fmtPace(t / km)}/km` : ' '; };
+    setTimeout(() => form.km.focus(), 250);
+    $('[data-a=no]', el).onclick = () => s.close();
+    form.onsubmit = async (e) => {
+      e.preventDefault();
+      const km = parseNum(form.km.value), t = secs();
+      if (!(km > 0 && t > 0)) { toast('Enter distance and time'); return; }
+      await store.put('run', { name: SESSION_LABEL[kind], type: 'running', sport: 'running', manual: true, start: new Date(Date.now() - t * 1000).toISOString(), distance_m: Math.round(km * 1000), moving_s: t, elapsed_s: t });
+      toast('Run saved');
+      s.close();
+    };
+  }, { sheet: true });
+}
+
 // ---------- the card ----------
 function sessionBlock(sess, done, wk) {
   const plan = PLAN[Math.min(Math.max(wk, 1), PLAN.length) - 1];
@@ -93,8 +125,14 @@ function sessionBlock(sess, done, wk) {
   }
   if (sess.kind === 'easy' || sess.kind === 'quality') {
     const txt = sess.kind === 'easy' ? `${plan?.easyMin || 35} min @ ${EASY_PACE}` : `10 min warm-up · ${plan?.quality.text || ''} · 10 min cool-down`;
+    const run = done ? todaysRun() : null;
+    const target = sess.kind === 'easy' ? '6:45' : plan?.quality.pace;
+    const pace = run ? paceSecs(run) : null;
+    const vs = pace && target ? pace - parsePace(target) : null;
     return `<div class="ct-sess"><div class="row between"><b>${SESSION_LABEL[sess.kind]}</b>${done ? `<span class="pill up">${icon('check')} Done</span>` : ''}</div>
-      <p class="small muted">${esc(txt)}</p></div>`;
+      <p class="small muted">${esc(txt)}</p>
+      ${run ? `<p class="small" style="margin-top:6px">${n1((+run.distance_m || 0) / 1000)} km · ${fmtPace(pace)}/km average${vs != null ? ` · ${sess.kind === 'easy' ? (vs > 0 ? 'easy enough' : `${fmtPace(-vs)} faster than easy pace`) : `${vs <= 0 ? `${fmtPace(-vs)} faster` : `${fmtPace(vs)} slower`} than ${target}/km (whole run incl. warm-up)`}` : ''}</p>`
+        : `<button class="ghost block" id="ct-logrun" style="margin-top:10px">${icon('plus')} Log run by hand</button><p class="tiny muted" style="margin-top:4px">Garmin runs appear by themselves after the next sync.</p>`}</div>`;
   }
   return `<div class="ct-sess"><b>${SESSION_LABEL[sess.kind]}</b><p class="small muted">${sess.kind === 'steps' ? 'No session — hit your steps.' : 'Rest. Check-in day is the day for measurements and photos.'}</p></div>`;
 }
@@ -164,6 +202,7 @@ function render(el) {
     if (!f.minimum && minUsed >= 1) toast('That is more than 1 minimum day this week — it will be flagged');
   };
   $('#ct-yday', el).onclick = () => openDay(addDays(day, -1));
+  $('#ct-logrun', el)?.addEventListener('click', () => logRun(st.session.kind));
   $('#ct-start', el)?.addEventListener('click', async () => {
     let r = store.all('routine').find((x) => x.program === PROGRAM_NAME && x.cut === st.session.letter);
     if (!r) { await addCutRoutines(); r = store.all('routine').find((x) => x.program === PROGRAM_NAME && x.cut === st.session.letter); }

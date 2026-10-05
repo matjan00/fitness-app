@@ -14,6 +14,8 @@ import {
   loadDb, exName, groupsOf, modeFor, restFor, settings, saveSettings, workouts, last, prsOf, getActive, saveActive, clearActive,
 } from './gym-data.js';
 import { pickExercises, openExercise, thumb, handleImgErrors, setLabels, prListHtml } from './gym-lib.js';
+import { cutContext, rxFor, judgeWorkout } from './cut-gym.js';
+import { setMark, setsText, lastText, MARK, VERDICT, SESSION_VERDICT } from './cut-engine.js';
 
 let active = null;          // the workout in progress (same object that is saved to localStorage)
 export const activeWorkout = () => active;
@@ -45,12 +47,27 @@ function makeEntry(exId, r = null) {
   return { k: uid(), exercise_id: exId, name: exName(exId), note: null, mode, rest: r?.rest ?? restFor(exId), sets };
 }
 
+// Cut plan workout: the slot (rep range, kind) and today's prescription become the set targets (tk/tr).
+function applyRx(e, ctx, slot) {
+  const { slot: sl, rx, sets, last: lastSets } = rxFor(e.exercise_id, ctx, slot);
+  if (!sl) return e;
+  e.slot = { name: sl.name, reps: sl.reps, sets: sl.sets, kind: sl.kind, alt: sl.alt, exercise_id: sl.exercise_id };
+  e.rx = rx;
+  e.lastTxt = lastSets ? lastText(lastSets, e.mode === 'bw') : '';
+  e.rest = sl.rest ?? e.rest;
+  const lo = sl.reps.split('-')[0];
+  e.sets = Array.from({ length: sets }, (_, i) => newSet({ tk: rx ? String(rx.kg) : '', tr: rx ? String(rx.reps[i]) : lo }));
+  return e;
+}
+
 // Values a set would get when ticked with empty inputs: previous numbers, else routine target.
+// In a cut workout the prescription comes first (one tap confirms the target).
 function fillValues(e, i, prevMap) {
   const set = e.sets[i];
   const sess = prevMap.get(e.exercise_id);
   const p = sess && (sess.mode || 'wr') === e.mode ? previousSet(sess, i, e.sets) : null;
   const above = e.sets[i - 1];
+  if (e.rx && e.mode !== 't') return { kg: set.tk || (p?.kg != null ? fmtNum(p.kg) : ''), reps: set.tr || '' };
   if (e.mode === 't') {
     const secs = p?.secs ?? firstInt(set.tr);
     if (secs != null) return { m: String(Math.floor(secs / 60)), s: String(secs % 60) };
@@ -130,6 +147,11 @@ export async function startWorkout(routine = null) {
     exercises: (routine?.exercises || []).filter((r) => r.exercise_id).map((r) => makeEntry(r.exercise_id, r)),
     rest: null,
   };
+  const ctx = cutContext(routine);
+  if (ctx) {
+    active.cut = ctx;
+    active.exercises.forEach((e) => applyRx(e, ctx));
+  }
   persist();
   ensureTicker();
   wake(true);
@@ -211,12 +233,24 @@ function openSession(sess, kind, original = null) {
       <button class="gx-prev" data-act="prev" ${p ? '' : 'disabled'}>${prevTxt ? esc(prevTxt) : '–'}</button>
       ${cells}
       <button class="gx-chk" data-act="check" aria-label="Complete set">${icon('check')}</button>
-      ${isPR(e, s) ? `<span class="gx-rowpr">${icon('trophy')}</span>` : ''}
+      ${isPR(e, s) ? `<span class="gx-rowpr">${icon('trophy')}</span>` : ''}${markHtml(e, s)}
     </div>`;
+  }
+
+  // ⬆️ / ➡️ / ⬇️ of a ticked set against today's target (cut workouts).
+  function markHtml(e, s) {
+    if (!e.rx || !s.done || e.mode === 't') return '';
+    const m = setMark({ kg: parseNum(s.tk) || 0, reps: parseNum(s.tr) }, setValues(s, e.mode));
+    return m ? `<span class="ct-mark">${MARK[m]}</span>` : '';
   }
 
   // "Go up: 62.5 kg × 8" from last time's sets and the routine's rep range (default 8-12); deload when stalled.
   function hintHtml(e) {
+    if (e.slot && e.mode !== 't') {
+      const bw = e.mode === 'bw';
+      if (!e.rx) return `<p class="gx-hint">${e.sets.length} × ${esc(e.slot.reps)} · first time: work up to a weight that leaves ~2 reps in reserve (RPE 7–8). <span>That becomes your baseline.</span></p>`;
+      return `<p class="gx-hint">Target: ${esc(setsText(e.rx.kg, e.rx.reps.slice(0, e.sets.length), bw))}${e.lastTxt ? ` — last time ${esc(e.lastTxt)}` : ''} <span>${esc(e.rx.text)}</span></p>`;
+    }
     if (e.mode !== 'wr') return '';
     const sess = prevMap.get(e.exercise_id);
     if (!sess || (sess.mode || 'wr') !== 'wr') return '';
@@ -420,10 +454,10 @@ function openSession(sess, kind, original = null) {
   function updateRow(e, i, row) {
     const s = e.sets[i];
     row.classList.toggle('done', s.done);
-    const had = $('.gx-rowpr', row);
-    const pr = isPR(e, s);
-    if (pr && !had) row.insertAdjacentHTML('beforeend', `<span class="gx-rowpr">${icon('trophy')}</span>`);
-    if (!pr && had) had.remove();
+    $('.gx-rowpr', row)?.remove();
+    $('.ct-mark', row)?.remove();
+    const badge = (isPR(e, s) ? `<span class="gx-rowpr">${icon('trophy')}</span>` : '') + markHtml(e, s);
+    if (badge) row.insertAdjacentHTML('beforeend', badge);
     const live = $('.gx-live', row.closest('.screen'));
     if (live) live.textContent = liveStats(sess);
   }
@@ -491,6 +525,8 @@ function openSession(sess, kind, original = null) {
     const idx = sess.exercises.indexOf(e);
     const opts = [
       ...(isActive ? [{ value: 'rest', label: `Rest timer (${restLabel(e.rest)})`, icon: 'timer' }] : []),
+      ...(e.slot && active?.cut ? [e.slot.alt && e.exercise_id !== e.slot.alt ? { value: 'alt', label: `Swap to ${exName(e.slot.alt)}`, icon: 'swap' }
+        : e.exercise_id !== e.slot.exercise_id ? { value: 'alt', label: `Back to ${exName(e.slot.exercise_id)}`, icon: 'swap' } : null].filter(Boolean) : []),
       { value: 'replace', label: 'Replace exercise', icon: 'swap' },
       ...(idx > 0 ? [{ value: 'up', label: 'Move up', icon: 'up' }] : []),
       ...(idx < sess.exercises.length - 1 ? [{ value: 'down', label: 'Move down', icon: 'down' }] : []),
@@ -502,8 +538,8 @@ function openSession(sess, kind, original = null) {
     if (!v) return;
     if (v === 'rest') return chooseRest(e, s);
     if (v === 'mode') return chooseMode(e, s);
-    if (v === 'replace') {
-      const [id] = await pickExercises({ multi: false });
+    if (v === 'replace' || v === 'alt') {
+      const id = v === 'alt' ? (e.exercise_id !== e.slot.alt ? e.slot.alt : e.slot.exercise_id) : (await pickExercises({ multi: false }))[0];
       if (!id) return;
       const fresh = makeEntry(id);
       e.exercise_id = id;
@@ -511,6 +547,8 @@ function openSession(sess, kind, original = null) {
       e.mode = fresh.mode;
       if (isActive) e.rest = fresh.rest;
       e.sets = e.sets.map((x) => newSet({ type: x.type, done: false }));
+      // A swapped exercise keeps the plan slot but is judged on its own history.
+      if (isActive && active.cut && e.slot) applyRx(e, active.cut, { ...e.slot, rest: e.rest });
     } else if (v === 'up' || v === 'down') {
       const j = v === 'up' ? idx - 1 : idx + 1;
       [sess.exercises[idx], sess.exercises[j]] = [sess.exercises[j], sess.exercises[idx]];
@@ -557,10 +595,15 @@ function openSession(sess, kind, original = null) {
       notes: (sess.notes || '').trim(),
       exercises,
     };
+    if (sess.cut) {
+      const j = judgeWorkout({ ...rec, id: sess.id, exercises: exercises.map((x) => ({ ...x, slot: sess.exercises.find((y) => y.exercise_id === x.exercise_id)?.slot })) }, sess.cut);
+      rec.cut = { ...sess.cut, session: j.session, verdicts: Object.fromEntries(j.exercises.filter((x) => x.verdict).map((x) => [x.exercise_id, x.verdict])) };
+      sess.judged = j;
+    }
     const saved = await store.put('workout', rec);
     endActive();
-    summary = { w: saved, prs: prsOf(saved.id) };
-    const r = saved.routine_id && store.get(saved.routine_id);
+    summary = { w: saved, prs: prsOf(saved.id), cut: sess.judged || null };
+    const r = !sess.cut && saved.routine_id && store.get(saved.routine_id);
     if (r) {
       const next = routineFromWorkout(saved, r);
       if (routineChanged(r.exercises || [], next)) summary.routine = { r, next };
@@ -595,7 +638,22 @@ function openSession(sess, kind, original = null) {
 }
 
 // ---------- finish summary ----------
-function summaryHtml({ w, prs, routine, routineDone }) {
+// Cut plan: session verdict, verdict per exercise vs last time, e1RM change on main lifts, next prescription.
+function cutSummaryHtml(cut, w) {
+  const cls = { progressed: 'up', held: '', dropped: 'down', completed: '' }[cut.session];
+  return `<div class="card ct-verdict"><div class="row between"><b>Session</b><span class="pill ${cls}">${esc(SESSION_VERDICT[cut.session])}</span></div>
+    <p class="tiny muted" style="margin-top:6px">${cut.session === 'completed' ? 'Deload week: judged on completion only.' : 'Progressed: half the exercises beat last time and no main lift dropped. Held: no main lift dropped.'}</p></div>
+    <h3 class="section-title">Vs last time · next session</h3>
+    <div class="card list">${cut.exercises.map((x) => {
+      const v = x.verdict ? VERDICT[x.verdict] : null;
+      const e1 = x.main && x.e1rmPrev && x.e1rm ? ` · e1RM ${fmtNum(x.e1rmPrev)} → ${fmtNum(x.e1rm)} kg` : '';
+      return `<div class="list-item"><div class="grow"><b class="ellipsis" style="display:block">${esc(exName(x.exercise_id))}</b>
+        <span class="sub">${v ? `${v[0]} ${v[1]}` : 'First time — baseline set'}${e1}</span>
+        ${x.next ? `<span class="sub" style="display:block">Next: ${esc(setsText(x.next.kg, x.next.reps, x.mode === 'bw'))}</span>` : ''}</div></div>`;
+    }).join('')}</div>`;
+}
+
+function summaryHtml({ w, prs, routine, routineDone, cut }) {
   const secs = workoutDuration(w);
   const nSets = w.exercises.reduce((a, e) => a + e.sets.length, 0);
   const confetti = Array.from({ length: 26 }, (_, i) => `<i style="--x:${(i * 37) % 100}%;--d:${(i % 7) * 0.12}s;--r:${(i * 53) % 360}deg;--c:${i % 4}"></i>`).join('');
@@ -612,6 +670,7 @@ function summaryHtml({ w, prs, routine, routineDone }) {
           <div class="stat"><b>${nSets}</b><span>Sets</span></div>
         </div>
       </div>
+      ${cut ? cutSummaryHtml(cut, w) : ''}
       ${prs.length ? `<h3 class="section-title">Personal records</h3>${prListHtml(prs)}` : ''}
       ${routine ? `<div class="card gx-upd"><div class="row">${icon('sync')}<div class="grow"><b>Update “${esc(routine.r.name)}”?</b>
           <p class="small muted">Use today's sets and weights as the new targets next time.</p></div></div>
