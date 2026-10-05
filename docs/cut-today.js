@@ -8,6 +8,7 @@ import { startWorkout } from './gym-workout.js';
 import { cutSettings, currentTargets, openCutSettings, openPlan, addCutRoutines, startWeight, isSetUp } from './cut.js';
 import { ROUTINES, PLAN, PROGRAM_NAME, EASY_PACE, weekNumber, daysToGoal, daysBetween, emaTrend, trendOn, targetWeight } from './cut-calc.js';
 import { redFlags, rescheduleLifts, isLogged } from './cut-flags.js';
+import { reviewNeeded, openReview, dueCheckin, checkinFor } from './cut-review.js';
 import { nextLift, sessionFor, sessionDone, dayFacts, dayStatus, streak, weekStreak, minimumDaysInWeek, SESSION_LABEL } from './cut-day.js';
 
 const STATUS = { green: ['Green day', 'up'], yellow: ['Yellow day', 'gold'], red: ['Red day', 'down'], open: ['In progress', ''] };
@@ -36,7 +37,8 @@ export function statusOf(day, src = sources(), cfg = cutSettings(), kcalTarget =
   const f = dayFacts(day, src);
   const session = sessionFor(day, { workouts: src.workouts, routineCut });
   const done = sessionDone(session.kind, day, src);
-  return { facts: f, session, done, ...dayStatus(f, { kcalTarget, cfg, session, done, isToday: day === today() }) };
+  const target = kcalTarget && session.kind === 'lift' ? kcalTarget + (+cfg.liftDayBonus || 0) : kcalTarget;
+  return { facts: f, session, done, ...dayStatus(f, { kcalTarget: target, cfg, session, done, isToday: day === today() }) };
 }
 
 // ---------- quick entry sheets ----------
@@ -114,6 +116,15 @@ function logRun(kind) {
       s.close();
     };
   }, { sheet: true });
+}
+
+// Weekly review button: due (check-in day and the 2 days after) or done (grade).
+function reviewBtn() {
+  const ci = dueCheckin();
+  if (!ci || today() > addDays(ci, 2)) return '';
+  const done = checkinFor(ci);
+  return done ? `<button class="link small" id="ct-review" style="margin-top:10px">Weekly review done · grade ${esc(done.grade || '–')}</button>`
+    : `<button class="primary block" id="ct-review" style="margin-top:10px">${icon('flag')} Weekly review</button>`;
 }
 
 // ---------- the card ----------
@@ -203,6 +214,7 @@ function render(el) {
       <button class="${f.minimum ? 'soft' : 'ghost'} grow" id="ct-min">${f.minimum ? `${icon('check')} Minimum day` : 'Minimum day'}</button>
       <button class="ghost" id="ct-yday">Yesterday</button>
     </div>
+    ${reviewBtn()}
     <p class="tiny ${minUsed > 1 ? 'down' : 'muted'}" style="margin-top:6px">${f.minimum ? (st.minimumMet ? 'Minimum met: weigh-in, protein and 6,000 steps. Counts as yellow.' : 'Minimum day needs a weigh-in, protein ≥ 140 g and 6,000 steps.') : 'Bad day, travel or illness: weigh-in + protein + 6,000 steps.'}${minUsed > 1 ? ` ${minUsed} minimum days this week — more than 1 is flagged.` : ''}</p>
     <div class="stats" style="margin-top:12px">
       <div class="stat"><b>${greenStreak}</b><span>green days</span></div>
@@ -216,6 +228,7 @@ function render(el) {
     await saveDaily(day, { minimum: !f.minimum });
     if (!f.minimum && minUsed >= 1) toast('That is more than 1 minimum day this week — it will be flagged');
   };
+  $('#ct-review', el)?.addEventListener('click', () => openReview());
   $('#ct-yday', el).onclick = () => openDay(addDays(day, -1));
   $('#ct-logrun', el)?.addEventListener('click', () => logRun(st.session.kind));
   $('#ct-start', el)?.addEventListener('click', async () => {
@@ -258,6 +271,7 @@ export const homeCard = { order: 0, render };
 export function init() {
   setTimeout(() => {
     const c = cutSettings();
+    if (reviewNeeded()) { openReview(); return; }
     const y = addDays(today(), -1);
     if (!c.startDate || y < c.startDate || local.get('cut.askedYesterday') === today()) return;
     if (isLogged(y, sources())) return;
