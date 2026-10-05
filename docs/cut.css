@@ -1,0 +1,5 @@
+/* Cut plan (cut.js) */
+.ct-week.on { box-shadow: 0 0 0 2px var(--accent), var(--shadow); }
+.ct-week.deload { background: var(--card-2); }
+.ct-week.buffer { opacity: .75; }
+.ct-week p { margin-top: 4px; }
