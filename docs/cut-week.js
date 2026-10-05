@@ -11,7 +11,9 @@ const range = (from, to) => { const out = []; for (let d = from; d <= to; d = ad
 const avg = (xs) => { const v = xs.filter((x) => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
 const STRENGTH = { progressed: 1, held: 0.8, dropped: 0, completed: 1 };
 
-export const gradeOf = (pct) => (pct >= 0.9 ? 'A' : pct >= 0.75 ? 'B' : pct >= 0.6 ? 'C' : 'F');
+// A ≥ 90 % · B ≥ 80 % · C ≥ 70 % · D ≥ 60 % · E ≥ 50 % · F below 50 %.
+export const GRADES = [[0.9, 'A'], [0.8, 'B'], [0.7, 'C'], [0.6, 'D'], [0.5, 'E']];
+export const gradeOf = (pct) => GRADES.find(([min]) => pct >= min)?.[1] || 'F';
 
 // statusOf(day) → { status, facts, session, done } (cut-today.statusOf). workouts: finished workouts with .cut.session.
 // Returns the numbers the review shows and the grade.

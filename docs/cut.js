@@ -13,6 +13,7 @@ import {
   targetsChanged, daysToGoal,
 } from './cut-calc.js';
 import { adaptiveTdee } from './cut-flags.js';
+import { useCutPlan, stopCutPlan } from './run-plan-ui.js';
 import { dayFacts } from './cut-day.js';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -90,6 +91,9 @@ export function openCutSettings() {
           <label>Check-in day<select name="checkinDay">${DAYS.map((d, i) => `<option value="${i}" ${+c.checkinDay === i ? 'selected' : ''}>${d}</option>`).join('')}</select></label></div>
         <p class="tiny muted">Calories and macros are the same targets the Food tab uses. Start: 1,750 kcal · 150 g protein · 55 g fat · 165 g carbs.</p>
       </div>
+      <h3 class="section-title">Running</h3>
+      <div class="card"><label class="switch"><span>Running coach follows the cut plan<span class="tiny muted" style="display:block;font-weight:400">Easy + quality run each week. Your current goal plan is kept and comes back when this is off. Garmin sync and Send to watch work the same.</span></span>
+        <input type="checkbox" name="runsFromCut" ${c.runsFromCut !== false ? 'checked' : ''}></label></div>
       <h3 class="section-title">Gym</h3>
       <div class="card row between"><div class="grow"><b>Upper A / B / C</b><p class="small muted">3 upper-body routines, rotated A → B → C</p></div>
         <button class="ghost" id="ct-routines">${icon('plus')} Add</button></div>` });
@@ -109,11 +113,13 @@ export function openCutSettings() {
         startWeight: nv('startWeight') > 30 ? nv('startWeight') : null,
         steps: Math.round(nv('steps') || CUT_DEFAULTS.steps), sleep: nv('sleep') || CUT_DEFAULTS.sleep,
         kcalFloor: Math.round(nv('kcalFloor') || CUT_DEFAULTS.kcalFloor), checkinDay: +v('checkinDay'),
+        runsFromCut: $('[name=runsFromCut]', el).checked,
       };
       const targets = { kcal: Math.round(kcal), p: Math.round(nv('p') || 0), c: Math.round(nv('c') || 0), f: Math.round(nv('f') || 0) };
       await saveCut(cut);
       await foodUi.saveSettings({ targets, profile: { ...(fs.profile || {}), sex, age: Math.round(nv('age')) || null, height: Math.round(nv('height')) || null } });
       await recordTargets({ ...targets, steps: cut.steps }, 'Edited in settings');
+      if (cut.runsFromCut && startDate) await useCutPlan(startDate); else await stopCutPlan();
       toast('Cut plan saved');
       s.close();
     };

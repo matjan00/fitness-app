@@ -210,7 +210,7 @@ Implement on top of the existing `fit` app. Keep the existing tech stack and sty
 - **e1RM** per main lift (Machine Chest Press, Overhead Press, Chest-Supported DB Row, Pull-Up/Lat Pulldown) (Epley: weight × (1 + reps/30)) from the best set of each session.
 - **Progression engine:** after every session, apply the Part 1 "Workout judging" rules to the sets actually logged: store a verdict per exercise (Beat / Matched / Dropped) and per session (Progressed / Held / Dropped), and pre-fill the next session's weight and target reps from those actual results. Track consecutive below-range and no-improvement counts per exercise for the −5% / −10% rules. Swapped exercises are judged against their own history.
 - **Day status:** green / yellow / red per the Part 1 rules.
-- **Week grade:** % of green days + workouts done/scheduled + check-in done + strength score (Progressed = 100%, Held = 80%, Dropped = 0% per session, averaged) → A (≥ 90%), B (≥ 75%), C (≥ 60%), F.
+- **Week grade:** % of green days + workouts done/scheduled + check-in done + strength score (Progressed = 100%, Held = 80%, Dropped = 0% per session, averaged) → A (≥ 90%), B (≥ 80%), C (≥ 70%), D (≥ 60%), E (≥ 50%), F (< 50%).
 
 ## 4. Screens
 1. **Today**

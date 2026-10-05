@@ -8,8 +8,10 @@ const days = (from, n) => Array.from({ length: n }, (_, i) => addDays(from, i));
 test('grade thresholds', () => {
   assert.equal(gradeOf(0.95), 'A');
   assert.equal(gradeOf(0.8), 'B');
-  assert.equal(gradeOf(0.6), 'C');
-  assert.equal(gradeOf(0.59), 'F');
+  assert.equal(gradeOf(0.75), 'C');
+  assert.equal(gradeOf(0.6), 'D');
+  assert.equal(gradeOf(0.55), 'E');
+  assert.equal(gradeOf(0.49), 'F');
 });
 
 test('week summary and grade', () => {
@@ -35,7 +37,7 @@ test('week summary and grade', () => {
   assert.ok(s.change < 0);
   // (6/7 + 2/3 + 1 + 0.9) / 4 ≈ 0.856 → B
   assert.equal(s.grade, 'B');
-  assert.equal(weekSummary('2026-10-26', { statusOf, weights, workouts, cfg, start: 73, checkinDone: false }).grade, 'C');
+  assert.equal(weekSummary('2026-10-26', { statusOf, weights, workouts, cfg, start: 73, checkinDone: false }).grade, 'D'); // ≈ 0.606
 });
 
 test('adjustment rules', () => {
