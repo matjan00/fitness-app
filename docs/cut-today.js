@@ -1,24 +1,27 @@
 // Cut plan "Today" card at the top of Home: week / phase / days to goal, today's session with a Start button,
 // the daily checklist (each value entered in a few seconds), day status, minimum-day button and streaks.
 
-import { $, $$, esc, icon, toast, today, n0, n1, parseNum, addDays } from './util.js';
+import { $, $$, esc, icon, toast, today, n0, n1, parseNum, addDays, local } from './util.js';
 import * as store from './store.js';
 import { push, sheet } from './nav.js';
 import { startWorkout } from './gym-workout.js';
-import { cutSettings, currentTargets, openCutSettings, openPlan, addCutRoutines } from './cut.js';
-import { PLAN, PROGRAM_NAME, EASY_PACE, weekNumber, daysToGoal, daysBetween } from './cut-calc.js';
-import { sessionFor, sessionDone, dayFacts, dayStatus, streak, weekStreak, minimumDaysInWeek, SESSION_LABEL } from './cut-day.js';
+import { cutSettings, currentTargets, openCutSettings, openPlan, addCutRoutines, startWeight, isSetUp } from './cut.js';
+import { ROUTINES, PLAN, PROGRAM_NAME, EASY_PACE, weekNumber, daysToGoal, daysBetween, emaTrend, trendOn, targetWeight } from './cut-calc.js';
+import { redFlags, rescheduleLifts, isLogged } from './cut-flags.js';
+import { nextLift, sessionFor, sessionDone, dayFacts, dayStatus, streak, weekStreak, minimumDaysInWeek, SESSION_LABEL } from './cut-day.js';
 
 const STATUS = { green: ['Green day', 'up'], yellow: ['Yellow day', 'gold'], red: ['Red day', 'down'], open: ['In progress', ''] };
 
 // ---------- data ----------
 const routineCut = (id) => store.get(id)?.cut || null;
-function sources() {
+export function sources() {
   return {
     weights: store.all('bodyweight'), dailies: store.all('daily'), meals: store.all('meal'),
-    workouts: store.all('workout'), runs: store.all('run'), checkins: store.all('checkin'),
+    workouts: store.all('workout'), runs: store.all('run'), checkins: store.all('checkin'), routineCut,
   };
 }
+const dayName = (d) => (d === today() ? 'today' : d === addDays(today(), 1) ? 'tomorrow' : new Date(`${d}T12:00`).toLocaleDateString('en-GB', { weekday: 'long' }));
+export const currentFlags = (c = cutSettings()) => redFlags(today(), sources(), c, startWeight(c));
 export async function saveDaily(day, patch) {
   const cur = store.all('daily').find((d) => d.day === day);
   await store.put('daily', { ...(cur || {}), ...patch, day });
@@ -151,6 +154,15 @@ function render(el) {
   const tg = currentTargets(c);
   const st = statusOf(day, src, c, tg.kcal);
   const f = st.facts;
+  const resched = rescheduleLifts(day, { workouts: src.workouts, startDate: c.startDate });
+  if (resched?.day === day && st.session.kind !== 'lift') {
+    const letter = nextLift(src.workouts, day, routineCut);
+    st.session = { kind: 'lift', letter, routine: ROUTINES.find((r) => r.key === letter) };
+    st.done = sessionDone('lift', day, src);
+  }
+  const flags = redFlags(day, src, c, startWeight(c));
+  const start = startWeight(c);
+  const trend = trendOn(emaTrend(src.weights), day);
   const wk = weekNumber(c.startDate, day);
   const plan = PLAN[wk - 1];
   const left = daysToGoal(c.startDate, day);
@@ -176,7 +188,10 @@ function render(el) {
   el.innerHTML = `<div class="card ct-today">
     <div class="card-head"><div><h2>${head}</h2><p class="tiny muted">${wk > 0 && left != null ? `${left} days to goal · ` : ''}goal ${n1(c.goalWeight)} kg</p></div>
       <button class="link" id="ct-plan">Plan</button></div>
+    ${flags.length ? `<div class="ct-flags">${flags.map((x) => `<p>${icon('flag')} ${esc(x.text)}</p>`).join('')}</div>` : ''}
+    ${trend != null ? `<p class="small ct-trend">Trend <b>${n1(trend)} kg</b>${f.weight != null ? ` · today ${n1(f.weight)}` : ''}${plan && !plan.buffer && start ? ` · week ${wk} target ${n1(targetWeight(start, c.goalWeight, c.rate, wk))} kg` : ''}</p>` : ''}
     ${wk > 0 ? sessionBlock(st.session, st.done, wk) : ''}
+    ${resched && !st.done ? `<p class="small ct-note">${icon('info')} Missed a lift this week. ${resched.day === day ? `Do ${esc(st.session.routine?.name || 'it')} today` : `Next lift ${dayName(resched.day)}`}, then the next one ${dayName(resched.then)} — never two lift days in a row.</p>` : ''}
     <div class="row between" style="margin:14px 0 4px"><h3 class="ct-sub">Today</h3><span class="pill ${stCls}">${stLabel}</span></div>
     <div class="list">
       ${row('weight', 'Weight', v(f.weight == null ? null : n1(f.weight), ' kg'))}
@@ -238,3 +253,25 @@ export function openDay(day) {
 }
 
 export const homeCard = { order: 0, render };
+
+// "Log yesterday" first when yesterday (inside the plan) has nothing logged; asked once per day.
+export function init() {
+  setTimeout(() => {
+    const c = cutSettings();
+    const y = addDays(today(), -1);
+    if (!c.startDate || y < c.startDate || local.get('cut.askedYesterday') === today()) return;
+    if (isLogged(y, sources())) return;
+    local.set('cut.askedYesterday', today());
+    toast('Yesterday is not logged yet');
+    openDay(y);
+  }, 600);
+}
+
+// Red flags strip above the tab bar on the other tabs (Home shows them in the Today card).
+export function banner(el) {
+  if (document.getElementById('view')?.dataset.tab === 'home' || !isSetUp()) return false;
+  const flags = currentFlags();
+  if (!flags.length) return false;
+  el.innerHTML = `<button class="ct-banner" onclick="showTab('home')">${icon('flag')} ${flags.length === 1 ? esc(flags[0].text) : `${flags.length} red flags — see Home`}</button>`;
+  return true;
+}

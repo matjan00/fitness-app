@@ -21,6 +21,7 @@ export const CUT_DEFAULTS = {
   proteinMin: 140,
   kcalBand: 100,        // calories within target ±100
   checkinDay: 0,        // 0 = Sunday … 6 = Saturday (Date.getDay)
+  maintenance: 2500,    // initial maintenance estimate (kcal); the app learns the real one from data
 };
 export const CUT_TARGETS = { kcal: 1750, p: 150, f: 55, c: 165 };
 export const PLAN_WEEKS_TOTAL = 11;

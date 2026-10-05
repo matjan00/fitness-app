@@ -21,3 +21,11 @@
 /* Gym logger in cut workouts */
 .ct-mark { position: absolute; left: 30px; bottom: 1px; font-size: 11px; line-height: 1; pointer-events: none; }
 .ct-verdict { margin-top: 14px; }
+
+/* Red flags, trend, notes */
+.ct-flags { background: var(--down-soft); color: var(--down); border-radius: var(--radius-sm); padding: 10px 12px; margin-bottom: 12px; display: grid; gap: 6px; font-size: 14px; font-weight: 600; }
+.ct-flags p { display: flex; gap: 8px; align-items: flex-start; overflow-wrap: anywhere; }
+.ct-flags svg, .ct-note svg, .ct-banner svg { width: 16px; height: 16px; flex: none; margin-top: 2px; }
+.ct-trend { margin: -4px 0 12px; color: var(--text-2); }
+.ct-note { display: flex; gap: 8px; margin-top: 10px; color: var(--text-2); }
+.ct-banner { display: flex; gap: 8px; align-items: center; width: 100%; padding: 10px 16px; background: var(--down-soft); color: var(--down); font-weight: 650; font-size: 14px; text-align: left; }

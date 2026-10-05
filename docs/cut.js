@@ -12,6 +12,8 @@ import {
   CUT_DEFAULTS, CUT_TARGETS, PROGRAM_NAME, EASY_PACE, routineRecords, planWeeks, weekNumber, startWeightFrom,
   targetsChanged, daysToGoal,
 } from './cut-calc.js';
+import { adaptiveTdee } from './cut-flags.js';
+import { dayFacts } from './cut-day.js';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -37,6 +39,16 @@ export async function recordTargets(next, reason) {
   if (!targetsChanged(log[log.length - 1], next)) return;
   await store.put('targets', { day: today(), at: new Date().toISOString(), kcal: next.kcal ?? null, p: next.p ?? null, c: next.c ?? null, f: next.f ?? null, steps: next.steps ?? null, reason });
 }
+
+// Maintenance learned from the last 21 days (calories eaten vs trend change); null until 14 days are logged.
+export function learnedMaintenance(day = today()) {
+  const src = { weights: store.all('bodyweight'), dailies: store.all('daily'), meals: store.all('meal') };
+  return adaptiveTdee(day, { weights: src.weights, kcalOf: (d) => dayFacts(d, src).kcal });
+}
+const maintenanceHtml = (c) => {
+  const m = learnedMaintenance();
+  return `<p class="small muted">Maintenance: estimate ${n0(c.maintenance)} kcal · ${m ? `from your data <b>${n0(m.tdee)} kcal</b> (${m.days} days logged, trend ${m.change > 0 ? '+' : ''}${n1(m.change)} kg)` : 'your real number appears after 14 days of logged calories'}</p>`;
+};
 
 // Adds Upper A / B / C (program "Cut 11 weeks") unless they are already there.
 export async function addCutRoutines() {
@@ -64,6 +76,7 @@ export function openCutSettings() {
           ${num('goalWeight', 'Goal (kg)', c.goalWeight)}</div>
         <div class="form-row">${num('startWeight', 'Start weight (kg)', c.startWeight ?? '')}
           <label>Pace<select name="rate">${[0.5, 0.75, 1].map((r) => `<option value="${r}" ${+c.rate === r ? 'selected' : ''}>${r} kg / week</option>`).join('')}</select></label></div>
+        <p class="tiny muted">Feeling dizzy, exhausted for days, or performance crashing? Set the pace to 0.5 kg / week. That is not a willpower problem.</p>
         <p class="tiny muted">Leave start weight empty to use the average of your first 3 morning weigh-ins from the start date${sw ? ` (now ${n1(sw)} kg)` : ''}.</p>
         <div class="seg" id="ct-sex"><button type="button" data-v="male" class="${prof.sex === 'male' ? 'on' : ''}">Male</button><button type="button" data-v="female" class="${prof.sex === 'female' ? 'on' : ''}">Female</button></div>
         <div class="form-row">${num('age', 'Age', prof.age, 'numeric')}${num('height', 'Height (cm)', prof.height, 'numeric')}</div>
@@ -122,6 +135,7 @@ export function openPlan() {
         <div class="stat"><b>${n1(c.goalWeight)}</b><span>goal kg</span></div>
         <div class="stat"><b>${n2(c.rate)}</b><span>kg / week</span></div>
       </div>
+      <div class="card" style="margin-bottom:12px">${maintenanceHtml(c)}</div>
       <div class="stack-sm">${weeks.map((w) => `<div class="card ct-week${w.week === cur ? ' on' : ''}${w.deload ? ' deload' : ''}${w.buffer ? ' buffer' : ''}">
         <div class="row between"><b>Week ${w.week} · ${esc(w.phase)}${w.week === cur ? ' <span class="pill accent">Now</span>' : ''}</b>
           <b>${w.target ? `${n1(w.target)} kg` : '—'}</b></div>
@@ -145,6 +159,7 @@ export const meSection = {
       <div class="card"><div class="card-head" style="margin-bottom:6px"><h2>${c.startDate ? (wk ? `Week ${wk} of 11` : `Starts ${esc(niceDate(fromDay(c.startDate)))}`) : 'Not set up'}</h2>
         <button class="link" id="ct-edit">${c.startDate ? 'Edit' : 'Set up'}</button></div>
         <p class="small muted">Goal ${n1(c.goalWeight)} kg at ${n2(c.rate)} kg/week${c.startDate && wk ? ` · ${n0(left)} days to go` : ''}${t.kcal ? ` · ${n0(t.kcal)} kcal, ${n0(t.p || 0)} g protein, ${n0(t.steps)} steps` : ''}</p>
+        <div style="margin-top:8px">${maintenanceHtml(c)}</div>
         <button class="ghost block" id="ct-plan" style="margin-top:12px">${icon('list')} View the plan</button></div>`;
     $('#ct-edit', el).onclick = openCutSettings;
     $('#ct-plan', el).onclick = openPlan;
