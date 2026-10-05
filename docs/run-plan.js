@@ -11,6 +11,7 @@
 // already done/skipped and only rebuilds the sessions still 'planned'.
 
 import * as C from './run-coach.js';
+import { cutRunSessions } from './cut-run.js';
 
 const DAY = 86400000;
 const WEEK = 7 * DAY;
@@ -181,6 +182,7 @@ function testSession({ index, week, phase, distKm, paces, goalPace, maxHr, isGoa
 // ---------- plan generation ----------
 // ctx: the object from run-coach's buildContext() (needs runs, est/olderEst/zoneVdot, paces, maxHr, now, classOf).
 export function generatePlan({ ctx, goal, runsPerWeek, startedAt = Date.now() }) {
+  if (goal?.cut) return generateCutPlan({ ctx, goal, startedAt });
   runsPerWeek = clamp(Math.round(runsPerWeek) || 2, 2, 5);
   const start = startingVdot(ctx);
   const gVdot = goalVdot(goal);
@@ -263,6 +265,18 @@ export function generatePlan({ ctx, goal, runsPerWeek, startedAt = Date.now() })
     goal, runsPerWeek, startedAt, sessions,
     timelineWeeks: totalWeeks, timelineCapped: timeline.capped, startVdot: start.vdot, startReliable: start.reliable, goalVdot: gVdot,
     goalWindow: goalWindow(startedAt, totalWeeks),
+    history: [],
+  };
+}
+
+// Cut plan (fit-cut-plan.md): 2 runs a week for 11 (+2 buffer) weeks, from the cut start date.
+// goal: { cut: true, distance_km: 5, time_s } (time_s = the 5k benchmark shown in the header).
+function generateCutPlan({ ctx = {}, goal, startedAt }) {
+  const sessions = cutRunSessions(ctx.maxHr).map((s, index) => mk({ ...s, index }));
+  return {
+    goal, runsPerWeek: 2, startedAt, sessions,
+    timelineWeeks: 13, timelineCapped: false, startVdot: null, startReliable: true, goalVdot: null,
+    goalWindow: `5k time trial in week 11 (${new Date(startedAt + 10 * WEEK).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })})`,
     history: [],
   };
 }
@@ -445,8 +459,10 @@ function parseAmount(text) {
   return /km/i.test(m[2]) ? { distance_m: Math.round(v * 1000) } : { duration_s: Math.round(v * 60) };
 }
 
-// "5 × 1 km" / "8 × 400 m" → { reps, distance_m }
+// "5 × 1 km" / "8 × 400 m" → { reps, distance_m }; "2 × 10 min" → { reps, duration_s }
 function parseReps(text) {
+  const t = String(text || '').match(/(\d+)\s*[×x]\s*(\d+)\s*min\b/i);
+  if (t) return { reps: Number(t[1]), duration_s: Number(t[2]) * 60 };
   const m = String(text || '').match(/(\d+)\s*[×x]\s*(\d+(?:[.,]\d+)?)\s*(km|m)\b/i);
   if (!m) return null;
   const v = num(m[2]);
@@ -483,7 +499,8 @@ export function sessionSteps(session) {
     const r = parseReps(main);
     if (r) {
       const rec = parseRecovery(main) || { duration_s: 90 };
-      steps.push({ kind: 'repeat', reps: r.reps, steps: [withPace({ kind: 'run', distance_m: r.distance_m }, pace), { kind: 'recovery', ...rec }] });
+      const work = r.duration_s ? { duration_s: r.duration_s } : { distance_m: r.distance_m };
+      steps.push({ kind: 'repeat', reps: r.reps, steps: [withPace({ kind: 'run', ...work }, pace), { kind: 'recovery', ...rec }] });
     } else {
       steps.push(withPace({ kind: 'run', open: true }, pace));
     }

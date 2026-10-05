@@ -16,10 +16,11 @@ import * as food from './food.js';
 import * as run from './run.js';
 import * as stats from './stats.js';
 import * as me from './me.js';
+import * as cutToday from './cut-today.js';
 import * as update from './update.js';
 import { mountSyncLine } from './sync-line.js';
 
-const modules = [gym, run, food, me];
+const modules = [gym, run, food, me, cutToday];
 const tabs = [
   { id: 'home', title: 'Home', icon: 'home', render: renderHome },
   gym.tab, run.tab, food.tab, stats.tab,

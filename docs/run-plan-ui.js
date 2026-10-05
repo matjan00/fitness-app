@@ -10,8 +10,29 @@ import { openRun } from './run-detail.js';
 import { SUPABASE_URL, SUPABASE_KEY } from './config.js';
 
 const KEY = 'run-plan';
+const BEFORE_CUT = 'run-plan-before-cut';
+
+// The running coach follows the cut plan's runs: the current goal plan is kept aside and comes back when
+// the cut plan is switched off. Same plan format, so matching Garmin runs and Send to watch work as before.
+export async function useCutPlan(startDate) {
+  const cur = getPlan();
+  const startedAt = new Date(`${startDate}T00:00:00`).getTime();
+  if (cur?.goal?.cut && cur.startedAt === startedAt) return;
+  if (cur && !cur.goal.cut) await store.setConfig(BEFORE_CUT, cur);
+  const fresh = P.generatePlan({ ctx: {}, goal: { cut: true, distance_km: 5, time_s: 0 }, runsPerWeek: 2, startedAt });
+  // Moving the start date keeps the runs already done.
+  await savePlan(cur?.goal?.cut ? P.regeneratePlan(cur, {}, { startedAt }) : fresh);
+}
+export async function stopCutPlan() {
+  const cur = getPlan();
+  if (!cur?.goal?.cut) return;
+  const { id, key, ...before } = store.getConfig(BEFORE_CUT, {});
+  await store.setConfig(KEY, before.goal ? before : {});
+}
 export const getPlan = () => { const { id, key, ...cfg } = store.getConfig(KEY, {}); return cfg.goal ? cfg : null; };
 export const savePlan = (plan) => store.setConfig(KEY, plan);
+// "10 km in 50:00", or the cut plan's runs (fit-cut-plan.md).
+const goalTxt = (g) => (g.cut ? 'Cut plan runs (2 a week)' : `${g.distance_km} km in ${C.fmtTime(g.time_s)}`);
 export const resetPlan = () => store.setConfig(KEY, {});
 
 const PHASE_BLURB = {
@@ -154,7 +175,7 @@ export function planSectionHtml(ctx, plan) {
   return `
   ${behind ? behindBannerHtml(behind) : ''}
   <div class="card rn-goal">
-    <div class="card-head"><h2>Goal: ${esc(plan.goal.distance_km)} km in ${esc(C.fmtTime(plan.goal.time_s))}</h2><button class="link small" data-a="rn-view-plan">View plan</button></div>
+    <div class="card-head"><h2>${plan.goal.cut ? '' : 'Goal: '}${esc(goalTxt(plan.goal))}</h2><button class="link small" data-a="rn-view-plan">View plan</button></div>
     <p class="small muted">Current estimated ${esc(plan.goal.distance_km)} km time: <b>${currentTime ? esc(C.fmtTime(currentTime)) : 'not yet measured'}</b></p>
     <div class="rn-hero-track" style="background:var(--card-2);margin-top:8px"><i style="width:${Math.max(0, Math.min(100, goalPct))}%;background:var(--run)"></i></div>
     <p class="rn-hero-sub" style="color:var(--text-2);margin-top:6px">Estimated goal window: <b>${esc(plan.goalWindow)}</b>${plan.timelineCapped ? ' (a stretch at this pace of training — sticking with more runs/week would speed it up)' : ''}</p>
@@ -240,7 +261,7 @@ export function openSchedule(ctx, planIn, afterChange = () => {}) {
       <div class="card rn-list">${sessions.map((s) => scheduleRow(s)).join('')}</div>`).join('');
     el.innerHTML = page({
       title: 'Training plan',
-      sub: `${plan.goal.distance_km} km in ${C.fmtTime(plan.goal.time_s)} · ${esc(plan.goalWindow)}`,
+      sub: `${esc(goalTxt(plan.goal))} · ${esc(plan.goalWindow)}`,
       body: rows,
     });
     $$('[data-sess]', el).forEach((b) => {
@@ -375,7 +396,7 @@ function setupSummaryHtml(ctx, goal, runsPerWeek) {
 export function meGoalPlanHtml(plan) {
   if (!plan) return '';
   return `<div><p class="rn-label">Goal plan</p>
-    <p class="small muted">${esc(plan.goal.distance_km)} km in ${esc(C.fmtTime(plan.goal.time_s))}</p>
+    <p class="small muted">${esc(goalTxt(plan.goal))}</p>
     <p class="rn-label" style="margin-top:10px">Runs per week</p>
     <div class="seg" id="rn-plan-rpw">${[2, 3, 4, 5].map((n) => `<button data-v="${n}" class="${plan.runsPerWeek === n ? 'on' : ''}">${n}</button>`).join('')}</div>
     <div class="row" style="gap:8px;margin-top:12px"><button class="ghost" style="flex:1" data-a="rn-edit-goal">Change goal</button><button class="danger-text" style="flex:1" data-a="rn-reset-plan">Reset plan</button></div></div>`;

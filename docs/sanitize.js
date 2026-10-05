@@ -87,7 +87,31 @@ export function cleanFood(f) {
   return out;
 }
 
-export const CLEANERS = { food: cleanFood, workout: cleanWorkout, routine: cleanRoutine, meal: cleanMeal, bodyweight: cleanBodyweight, run: cleanRun, recipe: cleanRecipe, library: cleanRecipe };
+// Cut plan daily log: { day, sleepHours, steps, kcal, p, c, f, minimum, note }. Missing numbers stay null (not logged).
+export function cleanDaily(d) {
+  if (!isObj(d) || !validDay(d.day)) return null;
+  const out = { ...d, minimum: d.minimum === true, note: str(d.note) };
+  for (const k of ['sleepHours', 'steps', 'kcal', 'p', 'c', 'f']) out[k] = numOrNull(d[k]);
+  return out;
+}
+
+// Weekly check-in: measurements in cm (null when not taken), photo ids, reflection text.
+export function cleanCheckin(c) {
+  if (!isObj(c) || !validDay(c.day)) return null;
+  const out = { ...c, reflection: str(c.reflection), photos: isObj(c.photos) ? c.photos : {} };
+  for (const k of ['waist', 'hips', 'chest', 'arm', 'thigh']) out[k] = numOrNull(c[k]);
+  return out;
+}
+
+// Targets history row: { day, kcal, p, c, f, steps, reason }.
+export function cleanTargets(t) {
+  if (!isObj(t) || !validDay(t.day)) return null;
+  const out = { ...t, reason: str(t.reason) };
+  for (const k of ['kcal', 'p', 'c', 'f', 'steps']) out[k] = numOrNull(t[k]);
+  return out;
+}
+
+export const CLEANERS = { daily: cleanDaily, checkin: cleanCheckin, targets: cleanTargets, food: cleanFood, workout: cleanWorkout, routine: cleanRoutine, meal: cleanMeal, bodyweight: cleanBodyweight, run: cleanRun, recipe: cleanRecipe, library: cleanRecipe };
 
 // Clean one loaded item of a kind; kinds without a cleaner only need to be an object.
 export function cleanItem(kind, item) {

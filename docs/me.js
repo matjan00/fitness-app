@@ -6,6 +6,7 @@ import * as store from './store.js';
 import * as gym from './gym.js';
 import * as food from './food.js';
 import * as run from './run.js';
+import * as cut from './cut.js';
 import * as update from './update.js';
 import { push, page } from './nav.js';
 
@@ -36,7 +37,7 @@ function render(el, head = true) {
   renderVersion($('#me-version', el));
 
   const wrap = $('#me-sections', el);
-  [gym, run, food].map((m) => m.meSection).filter(Boolean).sort((a, b) => a.order - b.order).forEach((s) => {
+  [cut, gym, run, food].map((m) => m.meSection).filter(Boolean).sort((a, b) => a.order - b.order).forEach((s) => {
     const d = document.createElement('div');
     wrap.append(d);
     try { s.render(d); } catch (e) { console.error(e); d.innerHTML = `<div class="card error">${esc(e.message)}</div>`; }

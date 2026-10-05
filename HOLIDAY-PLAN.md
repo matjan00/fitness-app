@@ -1,3 +1,7 @@
+> **Superseded 2026-10-05:** everything below was built and released on 2 Oct; all holiday routines are off.
+> Work now follows `fit-cut-plan.md`. Where they overlap, the cut plan replaces it (gym progression hint → cut
+> progression engine; Stats tab → cut-plan charts). Nothing else from this file is planned.
+
 # Work plan for 2026-10-02 → 2026-10-11 (user on holiday Sat 3 – Sun 11)
 
 Rules: free only, cheap model (Sonnet) per task with a tight brief, stop safely before the weekly limit,
