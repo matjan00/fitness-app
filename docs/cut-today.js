@@ -274,12 +274,51 @@ export function init() {
     if (reviewNeeded()) { openReview(); return; }
     const y = addDays(today(), -1);
     if (!c.startDate || y < c.startDate || local.get('cut.askedYesterday') === today()) return;
-    if (isLogged(y, sources())) return;
-    local.set('cut.askedYesterday', today());
-    toast('Yesterday is not logged yet');
-    openDay(y);
+    if (!isLogged(y, sources())) {
+      local.set('cut.askedYesterday', today());
+      toast('Yesterday is not logged yet');
+      openDay(y);
+      return;
+    }
+    const msg = reminderText();
+    if (msg) toast(msg, 4500);
   }, 600);
+  scheduleReminders();
 }
+
+// ---------- reminders ----------
+// Morning: weigh-in. Evening: food, steps and sleep. Shown as a prompt when the app opens; as a phone
+// notification at 8:00 and 21:00 when switched on (only while the app is open or in the background —
+// a web app can't wake itself up once the phone has closed it).
+function reminderText(day = today(), hour = new Date().getHours()) {
+  if (!isSetUp() || day < cutSettings().startDate) return '';
+  const f = dayFacts(day, sources());
+  if (hour >= 5 && hour < 12 && f.weight == null) return 'Morning weigh-in: after the bathroom, before food.';
+  if (hour >= 19) {
+    const miss = [f.kcal == null && 'food', f.steps == null && 'steps', f.sleep == null && 'sleep'].filter(Boolean);
+    if (miss.length) return `Evening log: ${miss.join(', ')} still missing for today.`;
+  }
+  return '';
+}
+const timers = [];
+function scheduleReminders() {
+  timers.splice(0).forEach(clearTimeout);
+  if (!cutSettings().reminders || typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+  for (const h of [8, 21]) {
+    const at = new Date();
+    at.setHours(h, 0, 0, 0);
+    if (at <= new Date()) at.setDate(at.getDate() + 1);
+    timers.push(setTimeout(async () => {
+      const msg = reminderText(today(), h);
+      if (msg) {
+        try { (await navigator.serviceWorker?.ready)?.showNotification('Fit', { body: msg, icon: 'icon-192.png', tag: `cut-${h}` }); }
+        catch { try { new Notification('Fit', { body: msg }); } catch { /* not allowed */ } }
+      }
+      scheduleReminders();
+    }, at - new Date()));
+  }
+}
+export { scheduleReminders };
 
 // Red flags strip above the tab bar on the other tabs (Home shows them in the Today card).
 export function banner(el) {

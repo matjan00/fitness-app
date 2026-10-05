@@ -91,6 +91,9 @@ export function openCutSettings() {
           <label>Check-in day<select name="checkinDay">${DAYS.map((d, i) => `<option value="${i}" ${+c.checkinDay === i ? 'selected' : ''}>${d}</option>`).join('')}</select></label></div>
         <p class="tiny muted">Calories and macros are the same targets the Food tab uses. Start: 1,750 kcal · 150 g protein · 55 g fat · 165 g carbs.</p>
       </div>
+      <h3 class="section-title">Reminders</h3>
+      <div class="card"><label class="switch"><span>Phone reminders<span class="tiny muted" style="display:block;font-weight:400">8:00 weigh-in, 21:00 log food, steps and sleep — only if not done yet. Works while the app is open or in the background; when you open the app you always get the same prompt.</span></span>
+        <input type="checkbox" name="reminders" ${c.reminders ? 'checked' : ''}></label></div>
       <h3 class="section-title">Running</h3>
       <div class="card"><label class="switch"><span>Running coach follows the cut plan<span class="tiny muted" style="display:block;font-weight:400">Easy + quality run each week. Your current goal plan is kept and comes back when this is off. Garmin sync and Send to watch work the same.</span></span>
         <input type="checkbox" name="runsFromCut" ${c.runsFromCut !== false ? 'checked' : ''}></label></div>
@@ -114,7 +117,10 @@ export function openCutSettings() {
         steps: Math.round(nv('steps') || CUT_DEFAULTS.steps), sleep: nv('sleep') || CUT_DEFAULTS.sleep,
         kcalFloor: Math.round(nv('kcalFloor') || CUT_DEFAULTS.kcalFloor), checkinDay: +v('checkinDay'),
         runsFromCut: $('[name=runsFromCut]', el).checked,
+        reminders: $('[name=reminders]', el).checked,
       };
+      if (cut.reminders && typeof Notification !== 'undefined' && Notification.permission === 'default') await Notification.requestPermission().catch(() => {});
+      if (cut.reminders && (typeof Notification === 'undefined' || Notification.permission !== 'granted')) toast('Notifications are blocked on this phone — you will get the reminder when you open the app');
       const targets = { kcal: Math.round(kcal), p: Math.round(nv('p') || 0), c: Math.round(nv('c') || 0), f: Math.round(nv('f') || 0) };
       await saveCut(cut);
       await foodUi.saveSettings({ targets, profile: { ...(fs.profile || {}), sex, age: Math.round(nv('age')) || null, height: Math.round(nv('height')) || null } });

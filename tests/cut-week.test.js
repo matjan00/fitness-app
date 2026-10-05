@@ -65,3 +65,23 @@ test('lift change over 2 weeks and the check-in day', () => {
   assert.equal(lastCheckinDay('2026-10-20', 0), '2026-10-18');
   assert.equal(lastCheckinDay('2026-10-18', 0), '2026-10-18');
 });
+
+test('progress chart data', async () => {
+  const { weightChart, liftSeries } = await import('../docs/cut-week.js');
+  const rows = weightChart([{ day: '2026-10-12', kg: 73 }, { day: '2026-10-13', kg: 72 }], { startDate: '2026-10-12' }, 73, '2026-10-14');
+  assert.equal(rows[0].day, '2026-10-05');
+  assert.equal(rows.length, 7 + 91);
+  assert.equal(rows[7].kg, 73);
+  assert.equal(rows[8].trend, 72.9);
+  assert.equal(rows[9].trend, 72.9); // carried on to today
+  assert.equal(rows[10].trend, null); // future
+  assert.equal(rows[14].projected, 72.25);
+  assert.equal(rows[rows.length - 1].projected, 65);
+  assert.equal(rows[0].projected, null);
+  const S = (kg, ...r) => r.map((x) => ({ type: 'n', kg, reps: x }));
+  const ws = [{ started_at: '2026-10-12T10:00:00', ended_at: '2026-10-12T11:00:00', exercises: [{ exercise_id: 'Leverage_Chest_Press', mode: 'wr', sets: S(60, 10) }, { exercise_id: 'Pullups', mode: 'bw', sets: S(0, 8) }] },
+    { started_at: '2026-10-14T10:00:00', ended_at: '2026-10-14T11:00:00', exercises: [{ exercise_id: 'Wide-Grip_Lat_Pulldown', mode: 'wr', sets: S(50, 10) }] }];
+  const ls = liftSeries(ws, '2026-10-01');
+  assert.deepEqual(ls['Chest press'], [{ day: '2026-10-12', e1rm: 80 }]);
+  assert.equal(ls['Pull-up / pulldown'].length, 1);
+});

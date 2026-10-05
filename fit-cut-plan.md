@@ -9,7 +9,7 @@
 3. ✅ Workout logger: prefilled sets, rest timer, verdicts, progression engine
 4. ✅ Trend weight, adaptive TDEE, red flags, "Log yesterday"
 5. ✅ Weekly review: measurements, photos, grading, adjustment suggestions
-6. ⬜ Progress charts, photo comparison, reminders
+6. ✅ Progress charts, photo comparison, reminders
 
 Implementation notes: weight stays in the existing `bodyweight` records; kcal/macros targets are the Food tab's targets
 (config `food`); plan settings in config `cut`; new record kinds `daily`, `checkin`, `targets` (targets history).

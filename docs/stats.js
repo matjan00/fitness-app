@@ -4,6 +4,8 @@ import * as store from './store.js';
 import { chart, cssVar, fade } from './charts.js';
 import { targets } from './food-ui.js';
 import { workoutVolume } from './gym-calc.js';
+import { renderProgress } from './cut-progress.js';
+import { isSetUp } from './cut.js';
 import { RANGES, dailyNutrition, weeklyNutrition, averageLogged, weightSeries, runWeekly, gymWeekly, weeksFor } from './stats-calc.js';
 
 export const tab = { id: 'stats', title: 'Stats', icon: 'stats', render };
@@ -27,9 +29,21 @@ function empty(el, id, msg) {
   return !msg;
 }
 
+let view = local.get('statsView', 'cut');
+
 function render(el) {
+  // Cut plan progress first while the plan is set up; "Everything" is the original Stats view.
+  const cut = isSetUp();
+  const viewSeg = cut ? `<div class="seg st-view" style="margin-bottom:10px"><button data-v="cut" class="${view === 'cut' ? 'on' : ''}">Cut plan</button><button data-v="all" class="${view !== 'cut' ? 'on' : ''}">Everything</button></div>` : '';
+  const bindView = () => $$('.st-view button', el).forEach((b) => { b.onclick = () => { view = b.dataset.v; local.set('statsView', view); render(el); }; });
+  if (cut && view === 'cut') {
+    el.innerHTML = `<div class="page-head"><h1>Stats</h1></div>${viewSeg}<div id="st-cut"></div>`;
+    bindView();
+    renderProgress($('#st-cut', el));
+    return;
+  }
   const label = RANGES.find((r) => r.days === days).label;
-  el.innerHTML = `<div class="page-head"><h1>Stats</h1></div>
+  el.innerHTML = `<div class="page-head"><h1>Stats</h1></div>${viewSeg}
     <div class="seg st-range">${RANGES.map((r) => `<button data-days="${r.days}" class="${r.days === days ? 'on' : ''}">${r.label}</button>`).join('')}</div>
     <div class="stack st-cards">
       ${section('Calories', 'st-kcal')}
@@ -40,6 +54,7 @@ function render(el) {
       ${section('Gym volume', 'st-vol', 'Total kg lifted (weight × reps) per week.')}
     </div>
     <p class="tiny muted center" style="margin-top:16px">Showing the last ${esc(label)}.</p>`;
+  bindView();
   $$('.st-range button', el).forEach((b) => b.onclick = () => {
     days = Number(b.dataset.days);
     local.set('statsRange', days);

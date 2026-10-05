@@ -107,3 +107,39 @@ export function lastCheckinDay(day, checkinDay) {
   }
   return null;
 }
+
+// ---------- progress charts (Stats tab) ----------
+// Weight chart from a week before the start to the end of the plan (or today if later):
+// [{ day, kg (weigh-in or null), trend, projected, goal }].
+export function weightChart(weights = [], cfg = {}, start = null, day) {
+  const c = { ...CUT_DEFAULTS, ...cfg };
+  if (!c.startDate) return [];
+  const tr = emaTrend(weights);
+  const byDay = new Map(tr.map((r) => [r.day, r]));
+  const end = [addDays(c.startDate, 13 * 7 - 1), day].sort().pop();
+  return range(addDays(c.startDate, -7), end).map((d) => {
+    const w = byDay.get(d);
+    const weeks = Math.max(0, (Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10)) - Date.UTC(+c.startDate.slice(0, 4), +c.startDate.slice(5, 7) - 1, +c.startDate.slice(8, 10))) / 6048e5);
+    return {
+      day: d, kg: w ? w.kg : null, trend: d <= day ? trendOn(tr, d) : null,
+      projected: start > 0 && d >= c.startDate ? Math.round(Math.max(c.goalWeight, start - c.rate * weeks) * 100) / 100 : null,
+      goal: c.goalWeight,
+    };
+  });
+}
+
+// Best-set e1RM per session for each main lift (weight × reps sets only; Pull-Up and Lat Pulldown together):
+// { [label]: [{ day, e1rm }] }.
+export const LIFT_LABELS = { Leverage_Chest_Press: 'Chest press', Standing_Military_Press: 'Overhead press', Dumbbell_Incline_Row: 'DB row', Pullups: 'Pull-up / pulldown', 'Wide-Grip_Lat_Pulldown': 'Pull-up / pulldown', Incline_Dumbbell_Press: 'Incline DB press' };
+export function liftSeries(workouts = [], since = '') {
+  const out = {};
+  for (const w of [...workouts].filter((x) => x?.ended_at && x.started_at.slice(0, 10) >= since).sort((a, b) => a.started_at.localeCompare(b.started_at))) {
+    for (const e of w.exercises || []) {
+      const label = LIFT_LABELS[e.exercise_id];
+      if (!label || (e.mode && e.mode !== 'wr')) continue;
+      const v = e1rmOf(workingSets(e.sets));
+      if (v > 0) (out[label] ||= []).push({ day: w.started_at.slice(0, 10), e1rm: Math.round(v * 10) / 10 });
+    }
+  }
+  return out;
+}
