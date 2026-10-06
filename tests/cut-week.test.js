@@ -85,3 +85,13 @@ test('progress chart data', async () => {
   assert.deepEqual(ls['Chest press'], [{ day: '2026-10-12', e1rm: 80 }]);
   assert.equal(ls['Pull-up / pulldown'].length, 1);
 });
+
+test('the review covers the plan week that just ended', () => {
+  const statusOf = () => ({ status: 'green', facts: {}, session: { kind: 'rest' }, done: false });
+  // start Monday 12 Oct; check-in on Sunday 25th = last day of week 2 → Mon 19 – Sat 24
+  const a = weekSummary('2026-10-25', { statusOf, cfg: { startDate: '2026-10-12' } });
+  assert.deepEqual([a.week, a.from, a.to, a.days], [2, '2026-10-19', '2026-10-24', 6]);
+  // check-in on Wednesday 28th → the full week 2
+  const b = weekSummary('2026-10-28', { statusOf, cfg: { startDate: '2026-10-12' } });
+  assert.deepEqual([b.week, b.from, b.to, b.days], [2, '2026-10-19', '2026-10-25', 7]);
+});

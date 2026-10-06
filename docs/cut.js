@@ -76,9 +76,9 @@ export function openCutSettings() {
         <div class="form-row"><label>Start date<input type="date" name="startDate" value="${esc(c.startDate || '')}"></label>
           ${num('goalWeight', 'Goal (kg)', c.goalWeight)}</div>
         <div class="form-row">${num('startWeight', 'Start weight (kg)', c.startWeight ?? '')}
-          <label>Pace<select name="rate">${[0.5, 0.75, 1].map((r) => `<option value="${r}" ${+c.rate === r ? 'selected' : ''}>${r} kg / week</option>`).join('')}</select></label></div>
-        <p class="tiny muted">Feeling dizzy, exhausted for days, or performance crashing? Set the pace to 0.5 kg / week. That is not a willpower problem.</p>
-        <p class="tiny muted">Leave start weight empty to use the average of your first 3 morning weigh-ins from the start date${sw ? ` (now ${n1(sw)} kg)` : ''}.</p>
+          <label>Pace<select name="rate">${[0.5, 0.75, 1].map((r) => `<option value="${r}" ${+c.rate === r ? 'selected' : ''}>${r} kg/wk</option>`).join('')}</select></label></div>
+        <div class="form-row ct-hints"><p class="tiny muted">Empty = average of your first 3 morning weigh-ins${sw ? ` (now ${n1(sw)} kg)` : ''}.</p>
+          <p class="tiny muted">Dizzy, exhausted for days or lifts crashing? Use 0.5 kg/wk — not a willpower problem.</p></div>
         <div class="seg" id="ct-sex"><button type="button" data-v="male" class="${prof.sex === 'male' ? 'on' : ''}">Male</button><button type="button" data-v="female" class="${prof.sex === 'female' ? 'on' : ''}">Female</button></div>
         <div class="form-row">${num('age', 'Age', prof.age, 'numeric')}${num('height', 'Height (cm)', prof.height, 'numeric')}</div>
       </div>

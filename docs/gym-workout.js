@@ -15,7 +15,11 @@ import {
 } from './gym-data.js';
 import { pickExercises, openExercise, thumb, handleImgErrors, setLabels, prListHtml } from './gym-lib.js';
 import { cutContext, rxFor, judgeWorkout } from './cut-gym.js';
-import { setMark, setsText, lastText, MARK, VERDICT, SESSION_VERDICT } from './cut-engine.js';
+import { setMark, setsText, VERDICT, SESSION_VERDICT, planSlot } from './cut-engine.js';
+
+// Mark of a ticked set against today's target (cut workouts): coloured glyph + label for screen readers.
+const MARK_GLYPH = { up: '▲', on: '=', down: '▼' };
+const MARK_LABEL = { up: 'Above target', on: 'On target', down: 'Below target' };
 
 let active = null;          // the workout in progress (same object that is saved to localStorage)
 export const activeWorkout = () => active;
@@ -49,11 +53,10 @@ function makeEntry(exId, r = null) {
 
 // Cut plan workout: the slot (rep range, kind) and today's prescription become the set targets (tk/tr).
 function applyRx(e, ctx, slot) {
-  const { slot: sl, rx, sets, last: lastSets } = rxFor(e.exercise_id, ctx, slot);
+  const { slot: sl, rx, sets } = rxFor(e.exercise_id, ctx, slot);
   if (!sl) return e;
   e.slot = { name: sl.name, reps: sl.reps, sets: sl.sets, kind: sl.kind, alt: sl.alt, exercise_id: sl.exercise_id };
   e.rx = rx;
-  e.lastTxt = lastSets ? lastText(lastSets, e.mode === 'bw') : '';
   e.rest = sl.rest ?? e.rest;
   const lo = sl.reps.split('-')[0];
   e.sets = Array.from({ length: sets }, (_, i) => newSet({ tk: rx ? String(rx.kg) : '', tr: rx ? String(rx.reps[i]) : lo }));
@@ -241,7 +244,7 @@ function openSession(sess, kind, original = null) {
   function markHtml(e, s) {
     if (!e.rx || !s.done || e.mode === 't') return '';
     const m = setMark({ kg: parseNum(s.tk) || 0, reps: parseNum(s.tr) }, setValues(s, e.mode));
-    return m ? `<span class="ct-mark">${MARK[m]}</span>` : '';
+    return m ? `<span class="ct-mark ${m}" role="img" aria-label="${MARK_LABEL[m]}" title="${MARK_LABEL[m]}">${MARK_GLYPH[m]}</span>` : '';
   }
 
   // "Go up: 62.5 kg × 8" from last time's sets and the routine's rep range (default 8-12); deload when stalled.
@@ -249,7 +252,7 @@ function openSession(sess, kind, original = null) {
     if (e.slot && e.mode !== 't') {
       const bw = e.mode === 'bw';
       if (!e.rx) return `<p class="gx-hint">${e.sets.length} × ${esc(e.slot.reps)} · first time: work up to a weight that leaves ~2 reps in reserve (RPE 7–8). <span>That becomes your baseline.</span></p>`;
-      return `<p class="gx-hint">Target: ${esc(setsText(e.rx.kg, e.rx.reps.slice(0, e.sets.length), bw))}${e.lastTxt ? ` — last time ${esc(e.lastTxt)}` : ''} <span>${esc(e.rx.text)}</span></p>`;
+      return `<p class="gx-hint">Target ${esc(setsText(e.rx.kg, e.rx.reps.slice(0, e.sets.length), bw))} <span>${esc(e.rx.text)}</span></p>`;
     }
     if (e.mode !== 'wr') return '';
     const sess = prevMap.get(e.exercise_id);
@@ -268,7 +271,9 @@ function openSession(sess, kind, original = null) {
     const heads = e.mode === 't' ? '<span>MIN</span><span>SEC</span>' : e.mode === 'bw' ? '<span>+KG</span><span>REPS</span>' : '<span>KG</span><span>REPS</span>';
     return `<section class="card gx-exc" data-k="${e.k}" data-ei="${ei}">
       <div class="gx-exh">
-        <button class="gx-exname" data-act="info">${thumb(e.exercise_id, 'sm')}<span class="ellipsis">${esc(exName(e.exercise_id, e.name))}</span></button>
+        <button class="gx-exname" data-act="info">${thumb(e.exercise_id, 'sm')}${e.slot && e.slot.exercise_id === e.exercise_id
+          ? `<span class="ct-exname"><span class="ellipsis">${esc(e.slot.name)}</span><span class="tiny muted ellipsis">${esc(exName(e.exercise_id, e.name))}</span></span>`
+          : `<span class="ellipsis">${esc(exName(e.exercise_id, e.name))}</span>`}</button>
         <button class="icon-btn" data-act="menu" aria-label="Exercise options">${icon('more')}</button>
       </div>
       <div class="gx-exmeta">
@@ -647,7 +652,7 @@ function cutSummaryHtml(cut, w) {
     <div class="card list">${cut.exercises.map((x) => {
       const v = x.verdict ? VERDICT[x.verdict] : null;
       const e1 = x.main && x.e1rmPrev && x.e1rm ? ` · e1RM ${fmtNum(x.e1rmPrev)} → ${fmtNum(x.e1rm)} kg` : '';
-      return `<div class="list-item"><div class="grow"><b class="ellipsis" style="display:block">${esc(exName(x.exercise_id))}</b>
+      return `<div class="list-item"><div class="grow"><b class="ellipsis" style="display:block">${esc(planSlot(x.exercise_id)?.exercise_id === x.exercise_id ? planSlot(x.exercise_id).name : exName(x.exercise_id))}</b>
         <span class="sub">${v ? `${v[0]} ${v[1]}` : 'First time — baseline set'}${e1}</span>
         ${x.next ? `<span class="sub" style="display:block">Next: ${esc(setsText(x.next.kg, x.next.reps, x.mode === 'bw'))}</span>` : ''}</div></div>`;
     }).join('')}</div>`;

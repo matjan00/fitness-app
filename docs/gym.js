@@ -7,6 +7,7 @@
 //   gym-routines.js  routine editor + starter programs
 import { $, esc, icon, toast, local, mins, bigKg, niceDate, niceTime, relDay, clock } from './util.js';
 import * as store from './store.js';
+import { isSetUp as cutPlanOn } from './cut.js';
 import { push, page, chooseSheet, confirmSheet } from './nav.js';
 import { chart, cssVar } from './charts.js';
 import {
@@ -335,8 +336,8 @@ export const homeCard = {
       ${lastW ? `<button class="gx-last" data-w="${esc(lastW.id)}"><span class="grow"><span class="tiny muted">Last workout</span>
           <b class="ellipsis">${esc(lastW.name || 'Workout')}</b><span class="small muted">${esc(relDay(lastW.started_at))} · ${mins(workoutDuration(lastW))} · ${bigKg(workoutVolume(lastW))}${lastPrs ? ` · ${lastPrs} PR${lastPrs > 1 ? 's' : ''}` : ''}</span></span>
           <svg class="chev" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>` : ''}
-      <button class="primary block gx-hstart">${icon(a ? 'play' : 'plus')} ${a ? `Resume workout · <span data-gx-elapsed>${elapsed(a)}</span>` : 'Start workout'}</button>
-      ${!a && rs.length ? `<div class="chips gx-quick">${rs.map((r) => `<button class="chip" data-r="${esc(r.id)}">${icon('play')} ${esc(r.name)}</button>`).join('')}</div>` : ''}
+      <button class="${a || !cutPlanOn() ? 'primary' : 'ghost'} block gx-hstart">${icon(a ? 'play' : 'plus')} ${a ? `Resume workout · <span data-gx-elapsed>${elapsed(a)}</span>` : cutPlanOn() ? 'Other workout' : 'Start workout'}</button>
+      ${!a && rs.length && !cutPlanOn() ? `<div class="chips gx-quick">${rs.map((r) => `<button class="chip" data-r="${esc(r.id)}">${icon('play')} ${esc(r.name)}</button>`).join('')}</div>` : ''}
     </div>`;
     $('.gx-open', el).onclick = () => window.showTab?.('gym');
     $('.gx-hstart', el).onclick = () => (activeWorkout() ? openActive() : startWorkout());

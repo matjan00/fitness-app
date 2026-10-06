@@ -7,6 +7,7 @@ import { isScheduled } from './cut-day.js';
 import { e1rmOf, workingSets } from './cut-engine.js';
 import { MAIN_LIFTS } from './cut-calc.js';
 
+const dayIdx = (s) => Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10)) / 864e5;
 const range = (from, to) => { const out = []; for (let d = from; d <= to; d = addDays(d, 1)) out.push(d); return out; };
 const avg = (xs) => { const v = xs.filter((x) => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
 const STRENGTH = { progressed: 1, held: 0.8, dropped: 0, completed: 1 };
@@ -19,7 +20,13 @@ export const gradeOf = (pct) => GRADES.find(([min]) => pct >= min)?.[1] || 'F';
 // Returns the numbers the review shows and the grade.
 export function weekSummary(checkinDay, { statusOf, weights = [], workouts = [], cfg = {}, start = null, checkinDone = true } = {}) {
   const c = { ...CUT_DEFAULTS, ...cfg };
-  const from = addDays(checkinDay, -7), to = addDays(checkinDay, -1);
+  // The plan week that ended on or before the check-in day (its last day only counts once it is over).
+  let from = addDays(checkinDay, -7), to = addDays(checkinDay, -1);
+  if (c.startDate) {
+    const n = weekNumber(c.startDate, checkinDay);
+    const w = dayIdx(checkinDay) - dayIdx(c.startDate) === n * 7 - 1 ? n : n - 1;
+    if (w >= 1) { from = addDays(c.startDate, (w - 1) * 7); to = [addDays(c.startDate, w * 7 - 1), addDays(checkinDay, -1)].sort()[0]; }
+  }
   const days = range(from, to).filter((d) => !c.startDate || d >= c.startDate).map((d) => ({ day: d, ...statusOf(d) }));
   const tr = emaTrend(weights);
   const tFrom = trendOn(tr, addDays(from, -1)) ?? tr.find((r) => r.day >= from)?.trend ?? null;

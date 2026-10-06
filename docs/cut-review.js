@@ -22,7 +22,7 @@ const range = (from, to) => { const out = []; for (let d = from; d <= to; d = ad
 export function dueCheckin(day = today(), c = cutSettings()) {
   if (!c.startDate) return null;
   const ci = lastCheckinDay(day, c.checkinDay);
-  if (!ci || ci < addDays(c.startDate, 7)) return null;
+  if (!ci || ci < addDays(c.startDate, 6)) return null; // after the last day of week 1 at the earliest
   return ci;
 }
 export const checkinFor = (ci) => store.all('checkin').find((x) => x.forDay === ci || (x.day >= addDays(ci, -1) && x.day <= addDays(ci, 2)));
@@ -61,7 +61,7 @@ export function openReview(ci = dueCheckin()) {
         <div class="small" style="text-align:right">${n0(s.score * 100)}%<br><span class="muted">${s.green} green · ${s.yellow} yellow of ${s.days} days</span></div></div></div>
       <div class="card stack-sm" style="margin-top:12px">
         <div class="row between"><span>Trend</span><b>${s.trendFrom != null && s.trendTo != null ? `${n1(s.trendFrom)} → ${n1(s.trendTo)} kg (${s.change > 0 ? '+' : ''}${n1(s.change)})` : '–'}</b></div>
-        <div class="row between"><span>Target this week</span><b>${s.target ? `${n1(s.target)} kg${s.trendTo != null ? ` <span class="${s.trendTo - s.target > 1 ? 'down' : 'muted'}">(${s.trendTo - s.target > 0 ? '+' : ''}${n1(s.trendTo - s.target)})</span>` : ''}` : '–'}</b></div>
+        <div class="row between"><span>Week ${s.week} target</span><b>${s.target ? `${n1(s.target)} kg${s.trendTo != null ? ` <span class="${s.trendTo - s.target > 1 ? 'down' : 'muted'}">(${s.trendTo - s.target > 0 ? '+' : ''}${n1(s.trendTo - s.target)})</span>` : ''}` : '–'}</b></div>
         <div class="row between"><span>Calories (avg)</span><b>${vs(s.kcal, tg.kcal)}</b></div>
         <div class="row between"><span>Protein (avg)</span><b>${vs(s.protein, tg.p, ' g')}</b></div>
         <div class="row between"><span>Steps (avg)</span><b>${vs(s.steps, c.steps)}</b></div>

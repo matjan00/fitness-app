@@ -19,16 +19,23 @@
 .pill.down { background: var(--down-soft); color: var(--down); }
 
 /* Gym logger in cut workouts */
-.ct-mark { position: absolute; left: 30px; bottom: 1px; font-size: 11px; line-height: 1; pointer-events: none; }
+.ct-mark { position: absolute; left: 28px; bottom: 0; min-width: 16px; height: 16px; padding: 0 3px; border-radius: 8px; display: grid; place-items: center; font-size: 10px; font-weight: 800; line-height: 1; pointer-events: none; }
+.ct-mark.up { background: var(--up-soft); color: var(--up); }
+.ct-mark.on { background: var(--card-2); color: var(--text-2); }
+.ct-mark.down { background: var(--down-soft); color: var(--down-ink); }
 .ct-verdict { margin-top: 14px; }
 
 /* Red flags, trend, notes */
-.ct-flags { background: var(--down-soft); color: var(--down); border-radius: var(--radius-sm); padding: 10px 12px; margin-bottom: 12px; display: grid; gap: 6px; font-size: 14px; font-weight: 600; }
-.ct-flags p { display: flex; gap: 8px; align-items: flex-start; overflow-wrap: anywhere; }
-.ct-flags svg, .ct-note svg, .ct-banner svg { width: 16px; height: 16px; flex: none; margin-top: 2px; }
+.ct-flags { background: var(--down-soft); color: var(--down-ink); border-radius: var(--radius-sm); padding: 0 12px; margin-bottom: 12px; font-size: 14px; font-weight: 600; }
+.ct-flags summary { display: flex; gap: 8px; align-items: center; min-height: 44px; cursor: pointer; list-style: none; overflow-wrap: anywhere; }
+.ct-flags summary::-webkit-details-marker { display: none; }
+.ct-flags summary::after { content: '›'; margin-left: auto; font-size: 18px; transition: transform .2s; }
+.ct-flags[open] summary::after { transform: rotate(90deg); }
+.ct-flags p { padding: 0 0 10px 24px; overflow-wrap: anywhere; }
+.ct-flags svg, .ct-note svg, .ct-banner svg, .ct-revdone svg { width: 16px; height: 16px; flex: none; margin-top: 2px; }
 .ct-trend { margin: -4px 0 12px; color: var(--text-2); }
 .ct-note { display: flex; gap: 8px; margin-top: 10px; color: var(--text-2); }
-.ct-banner { display: flex; gap: 8px; align-items: center; width: 100%; padding: 10px 16px; background: var(--down-soft); color: var(--down); font-weight: 650; font-size: 14px; text-align: left; }
+.ct-banner { display: flex; gap: 8px; align-items: center; width: 100%; padding: 10px 16px; background: var(--down-soft); color: var(--down-ink); font-weight: 650; font-size: 14px; text-align: left; }
 
 /* Weekly review (cut-review.js) */
 .ct-big { font-size: 40px; line-height: 1.1; font-weight: 800; }
@@ -42,3 +49,11 @@
 .cp-photos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
 .cp-photos figure { margin: 0; display: grid; gap: 4px; text-align: center; }
 .cp-photos img, .cp-none { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; border-radius: var(--radius-sm); background: var(--card-2); display: grid; place-items: center; }
+
+/* Design pass: compact Today card, plan names in the logger */
+.ct-add { color: var(--text-3); font-weight: 600; font-size: 14px; }
+.ct-revdone { display: block; margin: -4px 0 10px; }
+.ct-exname { display: grid; min-width: 0; text-align: left; line-height: 1.2; }
+.ct-hints { align-items: start; }
+.ct-hints p { margin: 0; }
+.ct-exname > .ellipsis:first-child { color: var(--accent-ink); }
