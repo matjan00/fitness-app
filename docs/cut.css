@@ -57,3 +57,5 @@
 .ct-hints { align-items: start; }
 .ct-hints p { margin: 0; }
 .ct-exname > .ellipsis:first-child { color: var(--accent-ink); }
+.ct-links { margin-top: 8px; }
+.ct-daytype button { min-height: 40px; }

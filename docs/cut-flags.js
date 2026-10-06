@@ -29,8 +29,8 @@ export function adaptiveTdee(day, { weights = [], kcalOf = () => null, window = 
 
 // ---------- missed lifts ----------
 // Lift days planned before `day` in its week that were not made up: planned lift days minus days lifted so far.
-export function missedLifts(day, { workouts = [], startDate = null } = {}) {
-  const past = range(weekOf(day), addDays(day, -1)).filter((d) => !startDate || d >= startDate);
+export function missedLifts(day, { workouts = [], startDate = null, travel = new Set() } = {}) {
+  const past = range(weekOf(day), addDays(day, -1)).filter((d) => (!startDate || d >= startDate) && !travel.has(d));
   const planned = past.filter((d) => WEEK_TEMPLATE[weekday(d)] === 'lift');
   const done = past.filter((d) => sessionDone('lift', d, { workouts })).length;
   const n = Math.max(0, planned.length - done);
@@ -40,8 +40,8 @@ export function missedLifts(day, { workouts = [], startDate = null } = {}) {
 // After a missed lift: the first day from `day` that doesn't follow a lift day, and the day after that for the
 // following lift (the next planned lift day if it is at least 2 days later, else 2 days later) — never two lifts in a row.
 // Returns { day, then } or null when no lift was missed this week.
-export function rescheduleLifts(day, { workouts = [], startDate = null } = {}) {
-  if (!missedLifts(day, { workouts, startDate }).length) return null;
+export function rescheduleLifts(day, { workouts = [], startDate = null, travel = new Set() } = {}) {
+  if (travel.has(day) || !missedLifts(day, { workouts, startDate, travel }).length) return null;
   const doneOn = (d) => sessionDone('lift', d, { workouts });
   let d = day;
   if (doneOn(d)) return null;
@@ -68,7 +68,7 @@ export function redFlags(day, src, cfg = {}, start = null) {
   // 2 scheduled sessions missed in a week (this week so far, or last week)
   for (const ws of [weekOf(day), addDays(weekOf(day), -7)]) {
     const missed = range(ws, addDays(ws, 6)).filter((d) => inPlan(d)).filter((d) => {
-      const s = sessionFor(d, { workouts: src.workouts, routineCut: src.routineCut });
+      const s = sessionFor(d, { workouts: src.workouts, routineCut: src.routineCut, dailies: src.dailies });
       return isScheduled(s.kind) && !sessionDone(s.kind, d, src);
     });
     if (missed.length >= 2) {
@@ -79,7 +79,8 @@ export function redFlags(day, src, cfg = {}, start = null) {
 
   // protein under the minimum 3 days in a row (unlogged days count as missed)
   const last3 = [1, 2, 3].map((n) => addDays(day, -n));
-  if (last3.every(inPlan) && last3.every((d) => (facts(d).p ?? 0) < c.proteinMin)) {
+  // (travel days don't count)
+  if (last3.every(inPlan) && last3.every((d) => !facts(d).travel && (facts(d).p ?? 0) < c.proteinMin)) {
     flags.push({ key: 'protein', text: `Protein under ${c.proteinMin} g for 3 days in a row` });
   }
 

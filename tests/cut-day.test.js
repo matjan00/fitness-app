@@ -89,3 +89,15 @@ test('lifting-day calorie bonus', async () => {
   assert.equal(liftDayExtra('2026-10-12', { cfg: { startDate: '2026-10-12' } }), 0); // no bonus set
   assert.equal(liftDayExtra('2026-10-05', { cfg }), 0); // before the start
 });
+
+test('travel days: only the weigh-in counts', () => {
+  const t = { weight: 73, p: 60, kcal: null, steps: 2000, sleep: 5, travel: true };
+  assert.equal(dayStatus(t, { kcalTarget: 1750, session: { kind: 'lift' } }).status, 'green');
+  assert.equal(dayStatus({ ...t, kcal: 2000 }, { kcalTarget: 1750 }).status, 'green'); // within ±300
+  assert.equal(dayStatus({ ...t, kcal: 2200 }, { kcalTarget: 1750 }).status, 'yellow');
+  assert.equal(dayStatus({ ...t, weight: null }, { kcalTarget: 1750 }).status, 'red');
+  assert.equal(dayStatus({ ...t, weight: null }, { kcalTarget: 1750, isToday: true }).status, 'open');
+  // no session expected; the rotation is unaffected
+  assert.equal(sessionFor('2026-10-12', { dailies: [{ day: '2026-10-12', travel: true }] }).kind, 'travel');
+  assert.equal(sessionFor('2026-10-14', { dailies: [{ day: '2026-10-12', travel: true }] }).letter, 'A');
+});

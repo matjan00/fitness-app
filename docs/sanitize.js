@@ -87,10 +87,10 @@ export function cleanFood(f) {
   return out;
 }
 
-// Cut plan daily log: { day, sleepHours, steps, kcal, p, c, f, minimum, note }. Missing numbers stay null (not logged).
+// Cut plan daily log: { day, sleepHours, steps, kcal, p, c, f, minimum, travel, note }. Missing numbers stay null (not logged).
 export function cleanDaily(d) {
   if (!isObj(d) || !validDay(d.day)) return null;
-  const out = { ...d, minimum: d.minimum === true, note: str(d.note) };
+  const out = { ...d, minimum: d.minimum === true, travel: d.travel === true, note: str(d.note) };
   for (const k of ['sleepHours', 'steps', 'kcal', 'p', 'c', 'f']) out[k] = numOrNull(d[k]);
   return out;
 }

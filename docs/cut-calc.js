@@ -20,6 +20,7 @@ export const CUT_DEFAULTS = {
   sleep: 7,
   proteinMin: 140,
   kcalBand: 100,        // calories within target ±100
+  travelKcalBand: 300,  // travel day: calories roughly on target (±300), only if entered
   checkinDay: 0,        // 0 = Sunday … 6 = Saturday (Date.getDay)
   liftDayBonus: 0,      // extra kcal on lifting days (weekly review: main lift down > 5 %)
   maintenance: 2500,    // initial maintenance estimate (kcal); the app learns the real one from data

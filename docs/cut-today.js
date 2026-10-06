@@ -9,7 +9,7 @@ import { cutSettings, currentTargets, openCutSettings, openPlan, addCutRoutines,
 import { ROUTINES, PLAN, PROGRAM_NAME, EASY_PACE, weekNumber, daysToGoal, daysBetween, emaTrend, trendOn, targetWeight } from './cut-calc.js';
 import { redFlags, rescheduleLifts, isLogged } from './cut-flags.js';
 import { reviewNeeded, openReview, dueCheckin, checkinFor } from './cut-review.js';
-import { liftDayExtra, nextLift, sessionFor, sessionDone, dayFacts, dayStatus, streak, weekStreak, minimumDaysInWeek, SESSION_LABEL } from './cut-day.js';
+import { travelDays, liftDayExtra, nextLift, sessionFor, sessionDone, dayFacts, dayStatus, streak, weekStreak, minimumDaysInWeek, SESSION_LABEL } from './cut-day.js';
 
 const STATUS = { green: ['Green day', 'up'], yellow: ['Yellow day', 'gold'], red: ['Red day', 'down'], open: ['In progress', ''] };
 
@@ -35,7 +35,7 @@ async function saveWeight(day, kg) {
 // Status of any day (shared with streaks and, later, the weekly review).
 export function statusOf(day, src = sources(), cfg = cutSettings(), kcalTarget = currentTargets(cfg).kcal) {
   const f = dayFacts(day, src);
-  const session = sessionFor(day, { workouts: src.workouts, routineCut });
+  const session = sessionFor(day, { workouts: src.workouts, routineCut, dailies: src.dailies });
   const done = sessionDone(session.kind, day, src);
   const target = kcalTarget ? kcalTarget + liftDayExtra(day, { cfg, workouts: src.workouts }) : kcalTarget;
   return { facts: f, session, done, ...dayStatus(f, { kcalTarget: target, cfg, session, done, isToday: day === today() }) };
@@ -128,6 +128,54 @@ function reviewBtn() {
     : `<button class="primary block" id="ct-review" style="margin-bottom:12px">${icon('flag')} Weekly review</button>`;
 }
 
+// ---------- day type: normal / minimum / travel ----------
+function dayTypeHtml(f, st, minUsed) {
+  const type = f.travel ? 'travel' : f.minimum ? 'minimum' : 'normal';
+  const hint = {
+    normal: 'Bad day or illness? Minimum day. Away for work? Travel day.',
+    minimum: st.minimumMet ? 'Minimum met: weigh-in, protein and 6,000 steps. Counts as yellow.' : 'Minimum day: weigh-in, protein ≥ 140 g and 6,000 steps. Counts as yellow.',
+    travel: 'Travel day: only the morning weigh-in counts. Calories roughly on target if you log them; steps optional; no session.',
+  }[type];
+  return `<div class="seg ct-daytype" style="margin-top:12px" role="group" aria-label="Day type">${['normal', 'minimum', 'travel'].map((t) => `<button type="button" data-t="${t}" class="${t === type ? 'on' : ''}" aria-pressed="${t === type}">${t[0].toUpperCase() + t.slice(1)}</button>`).join('')}</div>
+    <p class="tiny ${minUsed > 1 && type === 'minimum' ? 'down' : 'muted'}" style="margin-top:6px">${esc(hint)}${minUsed > 1 && type === 'minimum' ? ` ${minUsed} minimum days this week — more than 1 is flagged.` : ''}</p>`;
+}
+function bindDayType(el, day, f, minUsed) {
+  $$('.ct-daytype button', el).forEach((b) => { b.onclick = async () => {
+    const t = b.dataset.t;
+    await saveDaily(day, { minimum: t === 'minimum', travel: t === 'travel' });
+    if (t === 'minimum' && !f.minimum && minUsed >= 1) toast('That is more than 1 minimum day this week — it will be flagged');
+  }; });
+}
+
+// Mark (or clear) a range of upcoming days as travel days.
+function planTravel() {
+  const upcoming = store.all('daily').filter((d) => d.travel && d.day >= today()).map((d) => d.day).sort();
+  push((el, s) => {
+    el.innerHTML = sheet({ title: 'Travel days', body: `<form class="form ct-entry">
+      <p class="small muted">On travel days only the morning weigh-in counts; calories roughly, steps optional, no session.</p>
+      <div class="form-row"><label>From<input type="date" name="from" value="${today()}" required></label><label>To<input type="date" name="to" value="${today()}" required></label></div>
+      ${upcoming.length ? `<p class="small">Planned: ${esc(upcoming.map((d) => new Date(`${d}T12:00`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })).join(', '))}</p>` : ''}
+      <div class="sheet-actions" style="margin-top:12px"><button type="button" class="ghost" data-a="clear">Clear these days</button><button type="submit" class="primary">Mark as travel</button></div></form>` });
+    const form = $('form', el);
+    const days = () => {
+      const a = form.from.value, b = form.to.value;
+      if (!a || !b || b < a) { toast('Pick a start and an end date'); return null; }
+      const out = [];
+      for (let d = a; d <= b && out.length < 60; d = addDays(d, 1)) out.push(d);
+      return out;
+    };
+    const apply = async (travel) => {
+      const list = days();
+      if (!list) return;
+      for (const d of list) await saveDaily(d, travel ? { travel: true, minimum: false } : { travel: false });
+      toast(travel ? `${list.length} travel day${list.length > 1 ? 's' : ''} marked` : 'Travel days cleared');
+      s.close();
+    };
+    form.onsubmit = (e) => { e.preventDefault(); apply(true); };
+    $('[data-a=clear]', el).onclick = () => apply(false);
+  }, { sheet: true });
+}
+
 // ---------- the card ----------
 function sessionBlock(sess, done, wk) {
   const plan = PLAN[Math.min(Math.max(wk, 1), PLAN.length) - 1];
@@ -149,7 +197,8 @@ function sessionBlock(sess, done, wk) {
       ${run ? `<p class="small" style="margin-top:6px">${n1((+run.distance_m || 0) / 1000)} km · ${fmtPace(pace)}/km average${vs != null ? ` · ${sess.kind === 'easy' ? (vs > 0 ? 'easy enough' : `${fmtPace(-vs)} faster than easy pace`) : `${vs <= 0 ? `${fmtPace(-vs)} faster` : `${fmtPace(vs)} slower`} than ${target}/km (whole run incl. warm-up)`}` : ''}</p>`
         : `<button class="ghost block" id="ct-logrun" style="margin-top:10px">${icon('plus')} Log run by hand</button><p class="tiny muted" style="margin-top:4px">Garmin runs appear by themselves after the next sync.</p>`}</div>`;
   }
-  return `<div class="ct-sess"><b>${SESSION_LABEL[sess.kind]}</b><p class="small muted">${sess.kind === 'steps' ? 'No session — hit your steps.' : 'Rest. Check-in day is the day for measurements and photos.'}</p></div>`;
+  const note = { steps: 'No session — hit your steps.', travel: 'Weigh in this morning. Calories and steps are optional, roughly is fine.' }[sess.kind] || 'Rest. Check-in day is the day for measurements and photos.';
+  return `<div class="ct-sess"><b>${SESSION_LABEL[sess.kind]}</b><p class="small muted">${note}</p></div>`;
 }
 
 function render(el) {
@@ -166,7 +215,7 @@ function render(el) {
   const tg = currentTargets(c);
   const st = statusOf(day, src, c, tg.kcal);
   const f = st.facts;
-  const resched = rescheduleLifts(day, { workouts: src.workouts, startDate: c.startDate });
+  const resched = rescheduleLifts(day, { workouts: src.workouts, startDate: c.startDate, travel: travelDays(src.dailies) });
   if (resched?.day === day && st.session.kind !== 'lift') {
     const letter = nextLift(src.workouts, day, routineCut);
     st.session = { kind: 'lift', letter, routine: ROUTINES.find((r) => r.key === letter) };
@@ -184,7 +233,7 @@ function render(el) {
   // streaks (only days since the start count)
   const inPlan = (d) => d >= c.startDate;
   const greenStreak = streak(day, (d) => { if (!inPlan(d)) return false; const s = statusOf(d, src, c, tg.kcal); return s.status === 'green' || (s.status === 'yellow' && s.facts.minimum); });
-  const proteinStreak = streak(day, (d) => inPlan(d) && (dayFacts(d, src).p ?? 0) >= c.proteinMin);
+  const proteinStreak = streak(day, (d) => { if (!inPlan(d)) return false; const fx = dayFacts(d, src); return fx.travel || (fx.p ?? 0) >= c.proteinMin; });
   const checkinStreak = weekStreak(day, src.checkins.map((x) => x.day));
   const minUsed = minimumDaysInWeek(day, src.dailies);
   const [stLabel, stCls] = STATUS[st.status];
@@ -210,13 +259,10 @@ function render(el) {
       ${row('weight', 'Weight', v(f.weight == null ? null : n1(f.weight), ' kg'), trend != null ? `trend ${n1(trend)} kg${plan && !plan.buffer && start ? ` · target ${n1(targetWeight(start, c.goalWeight, c.rate, wk))} by ${new Date(`${addDays(c.startDate, wk * 7 - 1)}T12:00`).toLocaleDateString('en-GB', { weekday: 'short' })}` : ''}` : '')}
       ${row('sleep', 'Sleep', v(f.sleep == null ? null : n1(f.sleep), ' h'))}
       ${row('steps', 'Steps', v(f.steps == null ? null : n0(f.steps)))}
-      ${row('protein', 'Food', food)}
+      ${row(f.travel ? 'kcal' : 'protein', 'Food', food)}
     </div>
-    <div class="row between" style="margin-top:12px;gap:8px">
-      <button class="${f.minimum ? 'soft' : 'ghost'} grow" id="ct-min">${f.minimum ? `${icon('check')} Minimum day` : 'Minimum day'}</button>
-      <button class="ghost" id="ct-yday">Edit yesterday</button>
-    </div>
-    <p class="tiny ${minUsed > 1 ? 'down' : 'muted'}" style="margin-top:6px">${f.minimum ? (st.minimumMet ? 'Minimum met: weigh-in, protein and 6,000 steps. Counts as yellow.' : 'Minimum day needs a weigh-in, protein ≥ 140 g and 6,000 steps.') : 'Bad day, travel or illness: weigh-in + protein + 6,000 steps.'}${minUsed > 1 ? ` ${minUsed} minimum days this week — more than 1 is flagged.` : ''}</p>
+    ${dayTypeHtml(f, st, minUsed)}
+    <div class="row between ct-links"><button class="link small" id="ct-yday">Edit yesterday</button><button class="link small" id="ct-trip">Plan travel days</button></div>
     <div class="stats" style="margin-top:12px">
       <div class="stat"><b>${greenStreak}</b><span>green days</span></div>
       <div class="stat"><b>${proteinStreak}</b><span>protein days</span></div>
@@ -224,11 +270,9 @@ function render(el) {
     </div></div>`;
 
   $('#ct-plan', el).onclick = openPlan;
-  $$('.ct-item', el).forEach((b) => { b.onclick = () => editItem(b.dataset.k === 'protein' ? 'food' : b.dataset.k, day, f); });
-  $('#ct-min', el).onclick = async () => {
-    await saveDaily(day, { minimum: !f.minimum });
-    if (!f.minimum && minUsed >= 1) toast('That is more than 1 minimum day this week — it will be flagged');
-  };
+  $$('.ct-item', el).forEach((b) => { b.onclick = () => editItem(['protein', 'kcal'].includes(b.dataset.k) ? 'food' : b.dataset.k, day, f); });
+  bindDayType(el, day, f, minUsed);
+  $('#ct-trip', el).onclick = planTravel;
   $('#ct-review', el)?.addEventListener('click', () => openReview());
   $('#ct-yday', el).onclick = () => openDay(addDays(day, -1));
   $('#ct-logrun', el)?.addEventListener('click', () => logRun(st.session.kind));
@@ -254,12 +298,10 @@ export function openDay(day) {
           <button class="ghost" data-k="sleep">Sleep${f.sleep != null ? ` ${n1(f.sleep)} h` : ''}</button>
           <button class="ghost" data-k="steps">Steps${f.steps != null ? ` ${n0(f.steps)}` : ''}</button>
           <button class="ghost" data-k="food">Food${f.kcal != null ? ` ${n0(f.kcal)}` : ''}</button>
-          <button class="${f.minimum ? 'soft' : 'ghost'}" data-k="min">Minimum day</button>
-        </div>` });
-      $$('[data-k]', el).forEach((b) => { b.onclick = async () => {
-        if (b.dataset.k === 'min') { await saveDaily(day, { minimum: !f.minimum }); return; }
-        editItem(b.dataset.k, day, f);
-      }; });
+        </div>
+        ${dayTypeHtml(f, st, minimumDaysInWeek(day, store.all('daily')))}` });
+      $$('[data-k]', el).forEach((b) => { b.onclick = () => editItem(b.dataset.k, day, f); });
+      bindDayType(el, day, f, minimumDaysInWeek(day, store.all('daily')));
     };
     draw();
     const off = store.onChange(() => { if (el.isConnected) draw(); else off(); });
