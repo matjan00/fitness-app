@@ -6,6 +6,7 @@ import * as store from './store.js';
 import { push, page, sheet } from './nav.js';
 import { loadFoods, buildIndex, search, unitOptions, foodLabel, matchKey } from './food-db.js';
 import { macrosFor } from './food-calc.js';
+import { liftDayExtra } from './cut-day.js';
 
 export const MEALS = [
   { key: 'breakfast', label: 'Breakfast' },
@@ -17,6 +18,14 @@ export const mealLabel = (k) => MEALS.find((m) => m.key === k)?.label || k;
 
 export const settings = () => store.getConfig('food', {});
 export const targets = () => settings().targets || null;
+// Targets for one day: on cut-plan lifting days the weekly review's lifting-day bonus is added (kcal, as carbs).
+export function dayTargets(d) {
+  const t = targets();
+  if (!t) return null;
+  const cut = store.getConfig('cut', {});
+  const extra = liftDayExtra(d, { cfg: cut, workouts: store.all('workout') });
+  return extra ? { ...t, kcal: t.kcal + extra, c: Math.round((t.c || 0) + extra / 4), liftDay: extra } : t;
+}
 export async function saveSettings(patch) {
   const cur = settings();
   delete cur.id;

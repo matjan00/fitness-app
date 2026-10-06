@@ -9,7 +9,7 @@ import { cutSettings, currentTargets, openCutSettings, openPlan, addCutRoutines,
 import { ROUTINES, PLAN, PROGRAM_NAME, EASY_PACE, weekNumber, daysToGoal, daysBetween, emaTrend, trendOn, targetWeight } from './cut-calc.js';
 import { redFlags, rescheduleLifts, isLogged } from './cut-flags.js';
 import { reviewNeeded, openReview, dueCheckin, checkinFor } from './cut-review.js';
-import { nextLift, sessionFor, sessionDone, dayFacts, dayStatus, streak, weekStreak, minimumDaysInWeek, SESSION_LABEL } from './cut-day.js';
+import { liftDayExtra, nextLift, sessionFor, sessionDone, dayFacts, dayStatus, streak, weekStreak, minimumDaysInWeek, SESSION_LABEL } from './cut-day.js';
 
 const STATUS = { green: ['Green day', 'up'], yellow: ['Yellow day', 'gold'], red: ['Red day', 'down'], open: ['In progress', ''] };
 
@@ -37,7 +37,7 @@ export function statusOf(day, src = sources(), cfg = cutSettings(), kcalTarget =
   const f = dayFacts(day, src);
   const session = sessionFor(day, { workouts: src.workouts, routineCut });
   const done = sessionDone(session.kind, day, src);
-  const target = kcalTarget && session.kind === 'lift' ? kcalTarget + (+cfg.liftDayBonus || 0) : kcalTarget;
+  const target = kcalTarget ? kcalTarget + liftDayExtra(day, { cfg, workouts: src.workouts }) : kcalTarget;
   return { facts: f, session, done, ...dayStatus(f, { kcalTarget: target, cfg, session, done, isToday: day === today() }) };
 }
 

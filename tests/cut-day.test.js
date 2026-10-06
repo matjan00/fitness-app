@@ -79,3 +79,13 @@ test('streaks', () => {
   assert.equal(weekStreak('2026-10-27', ['2026-10-18']), 0);
   assert.equal(minimumDaysInWeek('2026-10-14', [{ day: '2026-10-12', minimum: true }, { day: '2026-10-11', minimum: true }, { day: '2026-10-13' }]), 1);
 });
+
+test('lifting-day calorie bonus', async () => {
+  const { liftDayExtra } = await import('../docs/cut-day.js');
+  const cfg = { startDate: '2026-10-12', liftDayBonus: 150 };
+  assert.equal(liftDayExtra('2026-10-12', { cfg }), 150); // Monday = planned lift day
+  assert.equal(liftDayExtra('2026-10-13', { cfg }), 0); // Tuesday = easy run
+  assert.equal(liftDayExtra('2026-10-13', { cfg, workouts: [W('2026-10-13', 'Upper B')] }), 150); // lifted anyway
+  assert.equal(liftDayExtra('2026-10-12', { cfg: { startDate: '2026-10-12' } }), 0); // no bonus set
+  assert.equal(liftDayExtra('2026-10-05', { cfg }), 0); // before the start
+});
