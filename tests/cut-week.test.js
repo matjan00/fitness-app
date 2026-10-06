@@ -37,6 +37,8 @@ test('week summary and grade', () => {
   assert.ok(s.change < 0);
   // (6/7 + 2/3 + 1 + 0.9) / 4 ≈ 0.856 → B
   assert.equal(s.grade, 'B');
+  assert.deepEqual(s.parts.map((x) => x.key), ['days', 'sessions', 'checkin', 'strength']);
+  assert.equal(s.parts[1].value, 2 / 3);
   assert.equal(weekSummary('2026-10-26', { statusOf, weights, workouts, cfg, start: 73, checkinDone: false }).grade, 'D'); // ≈ 0.606
 });
 

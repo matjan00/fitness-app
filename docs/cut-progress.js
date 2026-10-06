@@ -55,7 +55,7 @@ export function renderProgress(el) {
   $('#cp-b', el)?.addEventListener('change', photos);
   photos();
 }
-const label = (ci) => `${short(ci.forDay || ci.day)}${ci.summary?.week ? ` · week ${ci.summary.week}` : ''}`;
+const label = (ci) => `${ci.summary?.week ? `W${ci.summary.week} · ` : ''}${short(ci.forDay || ci.day)}`;
 const opts = (list, sel) => list.map((ci, i) => `<option value="${i}" ${i === sel ? 'selected' : ''}>${esc(label(ci))}</option>`).join('');
 
 function drawWeight(el, c) {
@@ -101,17 +101,18 @@ function drawPace(el, c) {
   const runs = store.all('run').filter((r) => r.start && +r.distance_m > 500 && (+r.moving_s || +r.elapsed_s) > 0 && r.start.slice(0, 10) >= addDays(c.startDate, -28))
     .sort((a, b) => a.start.localeCompare(b.start));
   if (empty(el, 'cp-pace', runs.length ? '' : 'Runs appear here after your Garmin sync.')) return;
-  const pace = (r) => Math.round(((+r.moving_s || +r.elapsed_s) / (+r.distance_m / 1000)) / 6) / 10; // min/km, 1 decimal
+  const pace = (r) => Math.round((+r.moving_s || +r.elapsed_s) / (+r.distance_m / 1000)); // seconds per km
+  const mmss = (v) => `${Math.floor(v / 60)}:${String(Math.round(v % 60)).padStart(2, '0')}`;
   chart('cp-pace', { type: 'line', data: { labels: runs.map((r) => short(r.start.slice(0, 10))), datasets: [
     { label: 'Pace', data: runs.map(pace), borderColor: cssVar('--run'), backgroundColor: cssVar('--run'), pointRadius: 3, borderWidth: 2, tension: 0.25 }] },
-  options: { ...lineOpts({ y: { reverse: true, ticks: { callback: (v) => `${Math.floor(v)}:${String(Math.round((v % 1) * 60)).padStart(2, '0')}` } } }), plugins: { legend: { display: false },
-    tooltip: { callbacks: { label: (t) => `${Math.floor(t.parsed.y)}:${String(Math.round((t.parsed.y % 1) * 60)).padStart(2, '0')} /km` } } } } });
+  options: { ...lineOpts({ y: { reverse: true, grace: 0, ticks: { stepSize: 15, callback: mmss } } }), plugins: { legend: { display: false },
+    tooltip: { callbacks: { label: (t) => `${mmss(t.parsed.y)} /km` } } } } });
 }
 
 function drawGrades(el, c, checkins) {
   const rows = checkins.filter((x) => x.score != null);
   if (empty(el, 'cp-grades', rows.length ? '' : 'Grades appear after your first weekly review.')) return;
-  chart('cp-grades', { type: 'bar', data: { labels: rows.map((x) => `${label(x)} · ${x.grade}`), datasets: [
+  chart('cp-grades', { type: 'bar', data: { labels: rows.map((x) => `${x.summary?.week ? `W${x.summary.week}` : short(x.forDay || x.day)} · ${x.grade}`), datasets: [
     { label: 'Score %', data: rows.map((x) => Math.round(x.score * 100)), backgroundColor: rows.map((x) => cssVar(x.score >= 0.8 ? '--up' : x.score >= 0.6 ? '--gold' : '--down')), borderRadius: 6 }] },
   options: { ...lineOpts({ y: { min: 0, max: 100 } }), plugins: { legend: { display: false } } } });
 }

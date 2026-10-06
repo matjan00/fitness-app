@@ -38,13 +38,14 @@ export function weekSummary(checkinDay, { statusOf, weights = [], workouts = [],
   const done = sched.filter((d) => d.done).length;
   const sessions = workouts.filter((w) => w?.cut?.session && w.started_at.slice(0, 10) >= from && w.started_at.slice(0, 10) <= to);
   const strength = sessions.length ? avg(sessions.map((w) => STRENGTH[w.cut.session] ?? 0.8)) : null;
-  const parts = [
-    days.length ? (green + yellow * 0.5) / days.length : 0,
-    sched.length ? done / sched.length : 1,
-    checkinDone ? 1 : 0,
-    ...(strength != null ? [strength] : []),
+  // The grade is the average of these parts (0–1); the review shows the ones that pulled it down.
+  const partList = [
+    { key: 'days', label: 'Green days', value: days.length ? (green + yellow * 0.5) / days.length : 0 },
+    { key: 'sessions', label: 'Sessions done', value: sched.length ? done / sched.length : 1 },
+    { key: 'checkin', label: 'Check-in', value: checkinDone ? 1 : 0 },
+    ...(strength != null ? [{ key: 'strength', label: 'Lifts', value: strength }] : []),
   ];
-  const score = avg(parts);
+  const score = avg(partList.map((x) => x.value));
   const f = (k) => avg(days.map((d) => d.facts[k]));
   return {
     from, to, week: wk, days: days.length, green, yellow,
@@ -53,7 +54,7 @@ export function weekSummary(checkinDay, { statusOf, weights = [], workouts = [],
     kcal: f('kcal'), protein: f('p'), steps: f('steps'), sleep: f('sleep'),
     sessionsDone: done, sessionsPlanned: sched.length,
     strength, sessions: sessions.map((w) => w.cut.session),
-    score, grade: gradeOf(score),
+    score, grade: gradeOf(score), parts: partList,
   };
 }
 
