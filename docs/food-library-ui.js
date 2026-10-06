@@ -4,7 +4,7 @@ import { $, $$, esc, icon, toast, n0, local, today } from './util.js';
 import * as store from './store.js';
 import { push, page, sheet, confirmSheet } from './nav.js';
 import { sumEntries } from './food-calc.js';
-import { targets, img } from './food-ui.js';
+import { dayTargets, img } from './food-ui.js';
 import { logRecipe, editRecipe, recipePer, openRecipe } from './food-recipes.js';
 import { ownView, effectiveLib, sortRecipes, SORTS } from './food-estimate.js';
 import { findCopy, copiesByLib, libToOwn, withTotals } from './food-copy.js';
@@ -67,7 +67,7 @@ function draw(box, lib) {
   const active = nav.cuisine || nav.q || nav.all || filterCount(nav);
   const fc = filterCount(nav);
   const list = sortRecipes(filterRecipes(all, nav, favs), nav.sort);
-  const t = targets();
+  const t = dayTargets(today());
   let fits = [];
   if (t && !active) {
     const s = sumEntries(dayEntries());

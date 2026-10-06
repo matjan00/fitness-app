@@ -115,3 +115,12 @@ export const minimumDaysInWeek = (day, dailies = []) => {
   const w = weekOf(day);
   return dailies.filter((d) => d && d.minimum === true && weekOf(d.day) === w).length;
 };
+
+// Extra kcal on a cut-plan lifting day (weekly review: "+150 kcal on lifting days"). A lifting day is a planned lift
+// day of the example week or any day with a finished workout. 0 when there is no bonus or the plan hasn't started.
+export function liftDayExtra(day, { cfg = {}, workouts = [] } = {}) {
+  const bonus = +cfg.liftDayBonus || 0;
+  if (!bonus || !cfg.startDate || !day || day < cfg.startDate) return 0;
+  const lift = WEEK_TEMPLATE[weekday(day)] === 'lift' || workouts.some((w) => w && w.ended_at && w.started_at && localDay(w.started_at) === day);
+  return lift ? bonus : 0;
+}

@@ -5,7 +5,7 @@ import * as store from './store.js';
 import { push, page, sheet, chooseSheet } from './nav.js';
 import { chart, fade, cssVar } from './charts.js';
 import { sumEntries, suggestTargets, ACTIVITY, weightTrend, weeklyChange, latestWeight, macrosFor } from './food-calc.js';
-import { MEALS, mealLabel, settings, targets, saveSettings, ring, bar, pickFood, amountSheet, snap, customFoodForm, img } from './food-ui.js';
+import { MEALS, mealLabel, settings, targets, dayTargets, saveSettings, ring, bar, pickFood, amountSheet, snap, customFoodForm, img } from './food-ui.js';
 import { renderBook, openManual, blankDraft, logRecipe, recipePer, openRecipe, editRecipe } from './food-recipes.js';
 import { loadFoods } from './food-db.js';
 import { renderLearn, loadLessons } from './food-learn.js';
@@ -44,7 +44,7 @@ function dayTitle(d) {
 }
 
 function renderDiary(box) {
-  const t = targets();
+  const t = dayTargets(day);
   const sum = sumEntries(entriesOf(day));
   box.innerHTML = `
     <div class="fd-daynav">
@@ -57,6 +57,7 @@ function renderDiary(box) {
       <div class="fd-sum-top">${ring(sum.kcal, t?.kcal)}
         <div class="fd-sum-side">
           <div class="fd-sum-kcal"><b>${n0(sum.kcal)}</b> <span class="muted">${t ? `/ ${n0(t.kcal)} kcal` : 'kcal eaten'}</span></div>
+          ${t?.liftDay ? `<p class="tiny muted">Lifting day: +${n0(t.liftDay)} kcal</p>` : ''}
           ${bar('Protein', sum.p, t?.p, 'fd-bp')}${bar('Carbs', sum.c, t?.c, 'fd-bc')}${bar('Fat', sum.f, t?.f, 'fd-bf')}
         </div></div>
       ${!t ? `<button class="soft block" id="fd-settargets" style="margin-top:12px">${icon('fire')} Set your daily targets</button>` : ''}
@@ -273,7 +274,7 @@ function renderWeek(box) {
       labels: days.map((d) => fromDay(d).toLocaleDateString('en-GB', { weekday: 'narrow' })),
       datasets: [
         { label: 'kcal', data: sums.map((s) => Math.round(s.kcal)), backgroundColor: days.map((d) => (d === day ? food : `${food}77`)), borderRadius: 6, yAxisID: 'y', order: 2 },
-        ...(t ? [{ type: 'line', label: 'Target kcal', data: days.map(() => t.kcal), borderColor: line, borderDash: [4, 4], pointRadius: 0, borderWidth: 1.5, yAxisID: 'y', order: 1 }] : []),
+        ...(t ? [{ type: 'line', label: 'Target kcal', data: days.map((d) => dayTargets(d).kcal), borderColor: line, borderDash: [4, 4], pointRadius: 0, borderWidth: 1.5, yAxisID: 'y', order: 1 }] : []),
         { type: 'line', label: 'Protein g', data: sums.map((s) => (s.kcal > 0 ? Math.round(s.p) : null)), spanGaps: true, borderColor: prot, backgroundColor: prot, pointRadius: 2.5, borderWidth: 2, tension: 0.3, yAxisID: 'y2', order: 0 },
       ],
     },
@@ -430,7 +431,8 @@ export const meSection = {
     el.innerHTML = `<h3 class="section-title" style="margin-top:4px">Nutrition &amp; body</h3>
       <div class="card"><div class="card-head" style="margin-bottom:${t ? 10 : 6}px"><h2>Daily targets</h2><button class="link" id="fd-tedit">${t ? 'Edit' : 'Set up'}</button></div>
         ${t ? `<div class="fd-tsum"><div><b>${n0(t.kcal)}</b><span>kcal</span></div><div class="fd-p"><b>${n0(t.p)}</b><span>protein g</span></div>
-          <div class="fd-c"><b>${n0(t.c)}</b><span>carbs g</span></div><div class="fd-f"><b>${n0(t.f)}</b><span>fat g</span></div></div>`
+          <div class="fd-c"><b>${n0(t.c)}</b><span>carbs g</span></div><div class="fd-f"><b>${n0(t.f)}</b><span>fat g</span></div></div>
+          ${+store.getConfig('cut', {}).liftDayBonus ? `<p class="tiny muted" style="margin-top:8px">+${n0(+store.getConfig('cut', {}).liftDayBonus)} kcal on cut-plan lifting days (from a weekly review).</p>` : ''}`
           : '<p class="small muted">Calculate how much to eat for your goal (lose, keep or gain weight).</p>'}</div>
       <div class="card" style="margin-top:12px"><label class="switch"><span>Show cooking lessons<span class="tiny muted" style="display:block;font-weight:400">The "Learn" tab in Food</span></span><input type="checkbox" id="fd-lessons" ${settings().showLessons ? 'checked' : ''}></label></div>
       <div id="fd-wbox" style="margin-top:12px"></div>
@@ -459,7 +461,7 @@ function openMyFoods() {
 export const homeCard = {
   order: 20,
   render(el) {
-    const t = targets();
+    const t = dayTargets(today());
     const s = sumEntries(entriesOf(today()));
     const bw = store.all('bodyweight');
     const w = weightTrend(bw);
