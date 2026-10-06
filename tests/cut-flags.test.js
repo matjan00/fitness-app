@@ -75,3 +75,13 @@ test('red flags: check-in skipped, behind the checkpoint, strength down', () => 
   const dropped = [W('2026-10-14', 'Upper B', { cut: { session: 'dropped' } }), W('2026-10-16', 'Upper C', { cut: { session: 'dropped' } })];
   assert.ok(redFlags('2026-10-20', base({ weights, workouts: dropped }), cfg, 73).some((x) => x.key === 'strength'));
 });
+
+test('travel days are not held against you', () => {
+  const cfg = { startDate: '2026-10-12', checkinDay: 0 };
+  const dailies = ['2026-10-12', '2026-10-13', '2026-10-14'].map((d) => ({ day: d, travel: true }));
+  const weights = ['2026-10-12', '2026-10-13', '2026-10-14'].map((d) => ({ day: d, kg: 73 }));
+  const f = redFlags('2026-10-15', { weights, dailies, meals: [], workouts: [], runs: [], checkins: [] }, cfg, 73).map((x) => x.key);
+  assert.ok(!f.includes('missed'));
+  assert.ok(!f.includes('protein'));
+  assert.equal(rescheduleLifts('2026-10-15', { travel: new Set(dailies.map((d) => d.day)) }), null);
+});

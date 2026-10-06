@@ -88,7 +88,7 @@ test('cut plan kinds: daily, checkin, targets', async () => {
   const { cleanDaily, cleanCheckin, cleanTargets } = await import('../docs/sanitize.js');
   assert.equal(cleanDaily({ day: 'bad' }), null);
   assert.deepEqual(cleanDaily({ day: '2026-10-12', steps: '9500', sleepHours: '', kcal: null, minimum: 'yes', extra: 1 }),
-    { day: '2026-10-12', steps: 9500, sleepHours: null, kcal: null, p: null, c: null, f: null, minimum: false, note: '', extra: 1 });
+    { day: '2026-10-12', steps: 9500, sleepHours: null, kcal: null, p: null, c: null, f: null, minimum: false, travel: false, note: '', extra: 1 });
   const c = cleanCheckin({ day: '2026-10-18', waist: '84.5', photos: 'x' });
   assert.equal(c.waist, 84.5);
   assert.equal(c.hips, null);

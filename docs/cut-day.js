@@ -11,7 +11,7 @@ const num = (x) => (x == null || x === '' ? null : Number.isFinite(+x) ? +x : nu
 
 // Example week from the plan (order flexible): Mon lift · Tue easy run · Wed lift · Thu quality run · Fri lift · Sat steps · Sun rest.
 export const WEEK_TEMPLATE = { 1: 'lift', 2: 'easy', 3: 'lift', 4: 'quality', 5: 'lift', 6: 'steps', 0: 'rest' };
-export const SESSION_LABEL = { lift: 'Upper body', easy: 'Easy run', quality: 'Quality run', steps: 'Steps only', rest: 'Rest' };
+export const SESSION_LABEL = { lift: 'Upper body', easy: 'Easy run', quality: 'Quality run', steps: 'Steps only', rest: 'Rest', travel: 'Travel day' };
 export const isScheduled = (kind) => kind === 'lift' || kind === 'easy' || kind === 'quality';
 
 // Letter (A/B/C) of a workout: from its routine (cut: 'A') or its name ("Upper B").
@@ -33,7 +33,8 @@ export function nextLift(workouts = [], day, routineCut) {
 }
 
 // What is planned for a day: { kind, letter?, routine? }.
-export function sessionFor(day, { workouts = [], routineCut } = {}) {
+export function sessionFor(day, { workouts = [], routineCut, dailies = [] } = {}) {
+  if (dailies.some((d) => d && d.day === day && d.travel === true)) return { kind: 'travel' };
   const kind = WEEK_TEMPLATE[weekday(day)];
   if (kind !== 'lift') return { kind };
   const letter = nextLift(workouts, day, routineCut);
@@ -61,6 +62,7 @@ export function dayFacts(day, { weights = [], dailies = [], meals = [] } = {}) {
     steps: num(d?.steps),
     kcal: pick('kcal'), p: pick('p'), c: pick('c'), f: pick('f'),
     minimum: d?.minimum === true,
+    travel: d?.travel === true,
     note: d?.note || '',
     logged: Boolean(w || m.length || (d && ['sleepHours', 'steps', 'kcal', 'p'].some((k) => num(d[k]) != null))),
   };
@@ -73,6 +75,7 @@ export function dayFacts(day, { weights = [], dailies = [], meals = [] } = {}) {
 // Returns { status, checks: [{ key, label, ok, warn }] , minimumMet }.
 export function dayStatus(f, { kcalTarget = null, cfg = {}, session = { kind: 'rest' }, done = false, isToday = false } = {}) {
   const c = { ...CUT_DEFAULTS, ...cfg };
+  if (f.travel) return travelStatus(f, { kcalTarget, c, isToday });
   const planned = isScheduled(session.kind);
   const checks = [
     { key: 'weight', label: 'Weighed in', ok: f.weight != null },
@@ -89,6 +92,20 @@ export function dayStatus(f, { kcalTarget = null, cfg = {}, session = { kind: 'r
   else if (f.minimum && minimumMet) status = 'yellow';
   else status = isToday ? 'open' : 'red';
   return { status, checks, minimumMet };
+}
+
+// Travel day: only the morning weigh-in is required. Calories, when entered, should be roughly on target
+// (±300 kcal, else yellow); steps are optional and never count against the day. No session is expected.
+function travelStatus(f, { kcalTarget, c, isToday }) {
+  const kcalOk = f.kcal == null || !kcalTarget || Math.abs(f.kcal - kcalTarget) <= c.travelKcalBand;
+  const checks = [
+    { key: 'weight', label: 'Weighed in', ok: f.weight != null },
+    { key: 'kcal', label: kcalTarget ? `Calories roughly ${kcalTarget - c.travelKcalBand}–${kcalTarget + c.travelKcalBand} (optional)` : 'Calories (optional)', ok: kcalOk, warn: !kcalOk },
+    { key: 'steps', label: 'Steps (optional)', ok: true },
+    { key: 'session', label: 'Travel day — no session', ok: true },
+  ];
+  const status = f.weight == null ? (isToday ? 'open' : 'red') : kcalOk ? 'green' : 'yellow';
+  return { status, checks, minimumMet: false };
 }
 
 // Counts back from `day` while `ok(day)` holds. Today counts only once it qualifies (it doesn't break a streak).
@@ -124,3 +141,6 @@ export function liftDayExtra(day, { cfg = {}, workouts = [] } = {}) {
   const lift = WEEK_TEMPLATE[weekday(day)] === 'lift' || workouts.some((w) => w && w.ended_at && w.started_at && localDay(w.started_at) === day);
   return lift ? bonus : 0;
 }
+
+// Days marked as travel days (Set of 'YYYY-MM-DD').
+export const travelDays = (dailies = []) => new Set(dailies.filter((d) => d && d.travel === true).map((d) => d.day));
