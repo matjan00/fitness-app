@@ -43,9 +43,10 @@ export function statusOf(day, src = sources(), cfg = cutSettings(), kcalTarget =
 
 // ---------- quick entry sheets ----------
 // fields: [{ name, label, value, mode }]; onSave(values) gets numbers (or null for empty fields).
-function entrySheet(title, fields, onSave) {
+function entrySheet(title, fields, onSave, note = '') {
   push((el, s) => {
     el.innerHTML = sheet({ title, body: `<form class="form ct-entry">
+      ${note ? `<p class="small muted">${esc(note)}</p>` : ''}
       <div class="form-row">${fields.map((f) => `<label>${esc(f.label)}<input name="${f.name}" inputmode="${f.mode || 'decimal'}" value="${esc(f.value ?? '')}" autocomplete="off"></label>`).join('')}</div>
       <div class="sheet-actions" style="margin-top:14px"><button type="button" class="ghost" data-a="no">Cancel</button><button type="submit" class="primary">Save</button></div></form>` });
     const form = $('form', el);
@@ -81,9 +82,9 @@ function editItem(key, day, f) {
   }
   // food: day totals from the separate food app (empty = use the Food tab diary)
   return entrySheet('Food totals', [
-    { name: 'kcal', label: 'kcal', value: f.kcal, mode: 'numeric' }, { name: 'p', label: 'Protein', value: f.p, mode: 'numeric' },
-    { name: 'c', label: 'Carbs', value: f.c, mode: 'numeric' }, { name: 'f', label: 'Fat', value: f.f, mode: 'numeric' },
-  ], async (v) => { await daily({ kcal: v.kcal, p: v.p, c: v.c, f: v.f }); });
+    { name: 'kcal', label: 'Calories (kcal)', value: f.kcal, mode: 'numeric' }, { name: 'p', label: 'Protein (g)', value: f.p, mode: 'numeric' },
+    { name: 'c', label: 'Carbs (g)', value: f.c, mode: 'numeric' }, { name: 'f', label: 'Fat (g)', value: f.f, mode: 'numeric' },
+  ], async (v) => { await daily({ kcal: v.kcal, p: v.p, c: v.c, f: v.f }); }, 'Day totals from your food app. Leave empty to use the Food tab diary.');
 }
 
 // ---------- runs ----------
@@ -123,8 +124,8 @@ function reviewBtn() {
   const ci = dueCheckin();
   if (!ci || today() > addDays(ci, 2)) return '';
   const done = checkinFor(ci);
-  return done ? `<button class="link small" id="ct-review" style="margin-top:10px">Weekly review done · grade ${esc(done.grade || '–')}</button>`
-    : `<button class="primary block" id="ct-review" style="margin-top:10px">${icon('flag')} Weekly review</button>`;
+  return done ? `<button class="link small ct-revdone" id="ct-review">Weekly review done · grade ${esc(done.grade || '–')} ›</button>`
+    : `<button class="primary block" id="ct-review" style="margin-bottom:12px">${icon('flag')} Weekly review</button>`;
 }
 
 // ---------- the card ----------
@@ -134,7 +135,7 @@ function sessionBlock(sess, done, wk) {
     const r = sess.routine;
     const deload = plan?.deload;
     return `<div class="ct-sess"><div class="row between"><b>${esc(r.name)}${deload ? ' · deload' : ''}</b>${done ? `<span class="pill up">${icon('check')} Done</span>` : ''}</div>
-      <p class="small muted">${r.exercises.map((x) => `${esc(x.name)} ${deload ? 2 : x.sets}×${esc(x.reps)}`).join(' · ')}</p>
+      <p class="small muted">${r.exercises.length} exercises · ${esc(r.exercises.filter((x) => x.kind === 'main').map((x) => x.name).join(', '))}${deload ? ' · 2 sets each' : ''}</p>
       ${done ? '' : `<button class="primary block" id="ct-start" style="margin-top:10px">${icon('play')} Start ${esc(r.name)}</button>`}</div>`;
   }
   if (sess.kind === 'easy' || sess.kind === 'quality') {
@@ -187,39 +188,39 @@ function render(el) {
   const checkinStreak = weekStreak(day, src.checkins.map((x) => x.day));
   const minUsed = minimumDaysInWeek(day, src.dailies);
   const [stLabel, stCls] = STATUS[st.status];
-  const v = (x, unit = '') => (x == null ? '<span class="muted">Tap to add</span>' : `${x}${unit}`);
+  const v = (x, unit = '') => (x == null ? '<span class="ct-add">Add</span>' : `${x}${unit}`);
   const ok = (key) => st.checks.find((x) => x.key === key);
-  const row = (key, label, value) => {
+  const row = (key, label, value, extra = '') => {
     const chk = ok(key);
     return `<button class="list-item ct-item" data-k="${key}"><span class="ct-tick ${chk?.ok ? 'ok' : chk?.warn ? 'warn' : ''}">${icon(chk?.ok ? 'check' : 'plus')}</span>
-      <div class="grow"><b>${label}</b><div class="sub">${chk ? esc(chk.label) : ''}</div></div><span class="ct-val">${value}</span></button>`;
+      <div class="grow"><b>${label}</b><div class="sub">${esc(extra || chk?.label || '')}</div></div><span class="ct-val">${value}</span></button>`;
   };
   const food = f.kcal == null && f.p == null ? v(null) : `${f.kcal == null ? '–' : n0(f.kcal)} kcal · P ${f.p == null ? '–' : n0(f.p)}`;
 
   el.innerHTML = `<div class="card ct-today">
     <div class="card-head"><div><h2>${head}</h2><p class="tiny muted">${wk > 0 && left != null ? `${left} days to goal · ` : ''}goal ${n1(c.goalWeight)} kg</p></div>
       <button class="link" id="ct-plan">Plan</button></div>
-    ${flags.length ? `<div class="ct-flags">${flags.map((x) => `<p>${icon('flag')} ${esc(x.text)}</p>`).join('')}</div>` : ''}
-    ${trend != null ? `<p class="small ct-trend">Trend <b>${n1(trend)} kg</b>${f.weight != null ? ` · today ${n1(f.weight)}` : ''}${plan && !plan.buffer && start ? ` · week ${wk} target ${n1(targetWeight(start, c.goalWeight, c.rate, wk))} kg` : ''}</p>` : ''}
+    ${flags.length ? `<details class="ct-flags"><summary>${icon('flag')} ${flags.length === 1 ? esc(flags[0].text) : `${flags.length} red flags`}</summary>
+      ${flags.length > 1 ? flags.map((x) => `<p>${esc(x.text)}</p>`).join('') : ''}</details>` : ''}
+    ${reviewBtn()}
     ${wk > 0 ? sessionBlock(st.session, st.done, wk) : ''}
-    ${resched && !st.done ? `<p class="small ct-note">${icon('info')} Missed a lift this week. ${resched.day === day ? `Do ${esc(st.session.routine?.name || 'it')} today` : `Next lift ${dayName(resched.day)}`}, then the next one ${dayName(resched.then)} — never two lift days in a row.</p>` : ''}
+    ${resched && !st.done ? `<p class="small ct-note">${icon('info')} Missed a lift: ${resched.day === day ? 'do it today' : `next lift ${dayName(resched.day)}`}, the one after ${dayName(resched.then)}.</p>` : ''}
     <div class="row between" style="margin:14px 0 4px"><h3 class="ct-sub">Today</h3><span class="pill ${stCls}">${stLabel}</span></div>
     <div class="list">
-      ${row('weight', 'Weight', v(f.weight == null ? null : n1(f.weight), ' kg'))}
+      ${row('weight', 'Weight', v(f.weight == null ? null : n1(f.weight), ' kg'), trend != null ? `trend ${n1(trend)} kg${plan && !plan.buffer && start ? ` · target ${n1(targetWeight(start, c.goalWeight, c.rate, wk))} by ${new Date(`${addDays(c.startDate, wk * 7 - 1)}T12:00`).toLocaleDateString('en-GB', { weekday: 'short' })}` : ''}` : '')}
       ${row('sleep', 'Sleep', v(f.sleep == null ? null : n1(f.sleep), ' h'))}
       ${row('steps', 'Steps', v(f.steps == null ? null : n0(f.steps)))}
       ${row('protein', 'Food', food)}
     </div>
     <div class="row between" style="margin-top:12px;gap:8px">
       <button class="${f.minimum ? 'soft' : 'ghost'} grow" id="ct-min">${f.minimum ? `${icon('check')} Minimum day` : 'Minimum day'}</button>
-      <button class="ghost" id="ct-yday">Yesterday</button>
+      <button class="ghost" id="ct-yday">Edit yesterday</button>
     </div>
-    ${reviewBtn()}
     <p class="tiny ${minUsed > 1 ? 'down' : 'muted'}" style="margin-top:6px">${f.minimum ? (st.minimumMet ? 'Minimum met: weigh-in, protein and 6,000 steps. Counts as yellow.' : 'Minimum day needs a weigh-in, protein ≥ 140 g and 6,000 steps.') : 'Bad day, travel or illness: weigh-in + protein + 6,000 steps.'}${minUsed > 1 ? ` ${minUsed} minimum days this week — more than 1 is flagged.` : ''}</p>
     <div class="stats" style="margin-top:12px">
       <div class="stat"><b>${greenStreak}</b><span>green days</span></div>
       <div class="stat"><b>${proteinStreak}</b><span>protein days</span></div>
-      <div class="stat"><b>${checkinStreak}</b><span>check-in weeks</span></div>
+      <div class="stat"><b>${checkinStreak}</b><span>check-ins</span></div>
     </div></div>`;
 
   $('#ct-plan', el).onclick = openPlan;

@@ -11,6 +11,8 @@
   --accent-2: #ff8a3d;
   --accent-soft: #fff0eb;
   --accent-text: #ffffff;
+  --accent-ink: #c2410c;       /* accent as text on light backgrounds (4.5:1+) */
+  --down-ink: #b42318;
   --gym: #f2542d;
   --run: #2f7ff0;
   --run-soft: #e9f2ff;
@@ -44,6 +46,8 @@
     --accent: #ff6a45;
     --accent-2: #ff9a55;
     --accent-soft: #33190f;
+    --accent-ink: #ff7a55;
+    --down-ink: #fb8a84;
     --gym: #ff6a45;
     --run: #5b9cff;
     --run-soft: #142540;
@@ -210,7 +214,7 @@ img { max-width: 100%; }
 .danger { background: var(--down); color: #fff; }
 .danger-text { color: var(--down) !important; }
 .block { width: 100%; }
-.link { color: var(--accent); font-weight: 650; }
+.link { color: var(--accent-ink); font-weight: 650; }
 .icon-btn { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 12px; color: var(--text); }
 .icon-btn:active { background: var(--card-2); }
 .fab-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }

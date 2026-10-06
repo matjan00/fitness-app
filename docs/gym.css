@@ -270,5 +270,5 @@ body:has(#banner:not([hidden])) #view { padding-bottom: calc(var(--tabbar-h) + 9
 .gx-tr { font-size: 20px; font-weight: 700; color: var(--text-2); }
 .gx-tr.up { color: var(--accent); }
 .gx-tr.down { color: var(--danger, #d64545); }
-.gx-hint { margin: 2px 0 6px; font-size: 13px; color: var(--accent); font-weight: 600; }
+.gx-hint { margin: 2px 0 6px; font-size: 13px; color: var(--accent-ink); font-weight: 600; }
 .gx-hint span { color: var(--text-2); font-weight: 400; }

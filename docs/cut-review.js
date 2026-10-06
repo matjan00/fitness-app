@@ -22,7 +22,7 @@ const range = (from, to) => { const out = []; for (let d = from; d <= to; d = ad
 export function dueCheckin(day = today(), c = cutSettings()) {
   if (!c.startDate) return null;
   const ci = lastCheckinDay(day, c.checkinDay);
-  if (!ci || ci < addDays(c.startDate, 7)) return null;
+  if (!ci || ci < addDays(c.startDate, 6)) return null; // after the last day of week 1 at the earliest
   return ci;
 }
 export const checkinFor = (ci) => store.all('checkin').find((x) => x.forDay === ci || (x.day >= addDays(ci, -1) && x.day <= addDays(ci, 2)));
@@ -58,16 +58,17 @@ export function openReview(ci = dueCheckin()) {
     el.innerHTML = page({ title: 'Weekly review', back: completed, body: `
       <p class="small muted" style="margin:0 2px 12px">Week ${s.week} · ${esc(new Date(`${s.from}T12:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }))} – ${esc(new Date(`${s.to}T12:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }))}. The numbers vs your targets, plainly.</p>
       <div class="card ct-grade"><div class="row between"><div><p class="tiny muted">Week grade</p><b class="ct-big">${s.grade}</b></div>
-        <div class="small" style="text-align:right">${n0(s.score * 100)}%<br><span class="muted">${s.green} green · ${s.yellow} yellow of ${s.days} days</span></div></div></div>
+        <div class="small" style="text-align:right">${n0(s.score * 100)}%<br><span class="muted">${s.green} green · ${s.yellow} yellow of ${s.days} days</span></div></div>
+        ${s.parts.some((x) => x.value < 0.8) ? `<p class="small" style="margin-top:8px">Pulled down by: ${s.parts.filter((x) => x.value < 0.8).sort((a, b) => a.value - b.value).map((x) => `<b>${esc(x.label)} ${n0(x.value * 100)}%</b>`).join(', ')}</p>` : ''}</div>
       <div class="card stack-sm" style="margin-top:12px">
         <div class="row between"><span>Trend</span><b>${s.trendFrom != null && s.trendTo != null ? `${n1(s.trendFrom)} → ${n1(s.trendTo)} kg (${s.change > 0 ? '+' : ''}${n1(s.change)})` : '–'}</b></div>
-        <div class="row between"><span>Target this week</span><b>${s.target ? `${n1(s.target)} kg${s.trendTo != null ? ` <span class="${s.trendTo - s.target > 1 ? 'down' : 'muted'}">(${s.trendTo - s.target > 0 ? '+' : ''}${n1(s.trendTo - s.target)})</span>` : ''}` : '–'}</b></div>
-        <div class="row between"><span>Calories (avg)</span><b>${vs(s.kcal, tg.kcal)}</b></div>
-        <div class="row between"><span>Protein (avg)</span><b>${vs(s.protein, tg.p, ' g')}</b></div>
-        <div class="row between"><span>Steps (avg)</span><b>${vs(s.steps, c.steps)}</b></div>
-        <div class="row between"><span>Sleep (avg)</span><b>${vs(s.sleep, c.sleep, ' h', 1)}</b></div>
+        <div class="row between"><span>Week ${s.week} target</span><b>${s.target ? `${n1(s.target)} kg${s.trendTo != null ? ` <span class="${s.trendTo - s.target > 1 ? 'down' : 'muted'}">(${s.trendTo - s.target > 0 ? '+' : ''}${n1(s.trendTo - s.target)})</span>` : ''}` : '–'}</b></div>
+        ${s.kcal != null ? `<div class="row between"><span>Calories (avg)</span><b>${vs(s.kcal, tg.kcal)}</b></div>` : ''}
+        ${s.protein != null ? `<div class="row between"><span>Protein (avg)</span><b>${vs(s.protein, tg.p, ' g')}</b></div>` : ''}
+        ${s.steps != null ? `<div class="row between"><span>Steps (avg)</span><b>${vs(s.steps, c.steps)}</b></div>` : ''}
+        ${s.sleep != null ? `<div class="row between"><span>Sleep (avg)</span><b>${vs(s.sleep, c.sleep, ' h', 1)}</b></div>` : ''}
         <div class="row between"><span>Sessions</span><b>${s.sessionsDone} / ${s.sessionsPlanned}</b></div>
-        <div class="row between"><span>Lifts</span><b>${s.sessions.length ? esc(s.sessions.map((x) => x[0].toUpperCase() + x.slice(1)).join(' · ')) : '–'}</b></div>
+        ${s.sessions.length ? `<div class="row between"><span>Lifts</span><b>${esc(s.sessions.map((x) => x[0].toUpperCase() + x.slice(1)).join(' · '))}</b></div>` : ''}
         <div class="row between"><span>Compliance (2 weeks)</span><b>${n0(compliance * 100)}%</b></div>
       </div>
 

@@ -37,6 +37,8 @@ test('week summary and grade', () => {
   assert.ok(s.change < 0);
   // (6/7 + 2/3 + 1 + 0.9) / 4 ≈ 0.856 → B
   assert.equal(s.grade, 'B');
+  assert.deepEqual(s.parts.map((x) => x.key), ['days', 'sessions', 'checkin', 'strength']);
+  assert.equal(s.parts[1].value, 2 / 3);
   assert.equal(weekSummary('2026-10-26', { statusOf, weights, workouts, cfg, start: 73, checkinDone: false }).grade, 'D'); // ≈ 0.606
 });
 
@@ -84,4 +86,14 @@ test('progress chart data', async () => {
   const ls = liftSeries(ws, '2026-10-01');
   assert.deepEqual(ls['Chest press'], [{ day: '2026-10-12', e1rm: 80 }]);
   assert.equal(ls['Pull-up / pulldown'].length, 1);
+});
+
+test('the review covers the plan week that just ended', () => {
+  const statusOf = () => ({ status: 'green', facts: {}, session: { kind: 'rest' }, done: false });
+  // start Monday 12 Oct; check-in on Sunday 25th = last day of week 2 → Mon 19 – Sat 24
+  const a = weekSummary('2026-10-25', { statusOf, cfg: { startDate: '2026-10-12' } });
+  assert.deepEqual([a.week, a.from, a.to, a.days], [2, '2026-10-19', '2026-10-24', 6]);
+  // check-in on Wednesday 28th → the full week 2
+  const b = weekSummary('2026-10-28', { statusOf, cfg: { startDate: '2026-10-12' } });
+  assert.deepEqual([b.week, b.from, b.to, b.days], [2, '2026-10-19', '2026-10-25', 7]);
 });
