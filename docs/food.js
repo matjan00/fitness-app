@@ -239,7 +239,8 @@ async function editEntry(e) {
     const v = await chooseSheet(rec ? e.label : `${e.label} (recipe deleted)`, [
       ...(rec ? [{ value: 'edit', label: 'Change amount or meal', icon: 'edit' }, { value: 'open', label: 'Open recipe', icon: 'note' }] : []),
       { value: 'del', label: 'Remove from diary', icon: 'trash', danger: true }]);
-    if (v === 'edit') return logRecipe(rec, { entry: e });
+    // Use the per-serving numbers stored on the entry, so an entry logged from a scaled recipe keeps its scale.
+    if (v === 'edit') return logRecipe(e.per ? { id: rec.id, title: e.label, servings: 1, totals: { ...e.per } } : rec, { entry: e });
     if (v === 'open') return openRecipe(rec.id);
     if (v === 'del') { await store.remove(e.id); toast('Removed'); }
     return;
