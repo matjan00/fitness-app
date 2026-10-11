@@ -331,7 +331,8 @@ export function weekStreak(workouts, now = Date.now()) {
 // ---------- routines ----------
 // Routine exercise list rebuilt from a finished workout (keeps rep ranges like "8-12").
 // With an existing routine: exercises done today get today's numbers, the others stay as they were,
-// and exercises added during the workout are appended.
+// and exercises added during the workout are appended. A routine's set count only grows: a session
+// cut short (1 of 4 sets) must not quietly shrink the plan.
 export function routineFromWorkout(workout, old = null) {
   const fromW = (e, prev) => {
     const work = (e.sets || []).filter(isWorking);
@@ -341,7 +342,7 @@ export function routineFromWorkout(workout, old = null) {
     if (!isRange) reps = e.mode === 't' ? (top?.secs != null ? String(top.secs) : '') : (top?.reps != null ? String(top.reps) : String(reps));
     return {
       exercise_id: e.exercise_id,
-      sets: work.length || (e.sets || []).length || 1,
+      sets: Math.max(work.length || (e.sets || []).length || 1, Number(prev?.sets) || 0),
       reps,
       kg: e.mode !== 't' && top?.kg ? Number(top.kg) : null,
       rest: e.rest ?? prev?.rest ?? 90,
@@ -365,6 +366,37 @@ export function routineChanged(oldExs = [], newExs = []) {
     const n = newExs[i];
     return o.exercise_id !== n.exercise_id || Number(o.sets) !== Number(n.sets)
       || (Number(o.kg) || 0) !== (Number(n.kg) || 0) || String(o.reps ?? '') !== String(n.reps ?? '');
+  });
+}
+// The routine to suggest next: the one after the last routine you did, within its program
+// (Push → Pull → Legs → Push). With no history, the first routine as the Routines list shows it.
+// `rs` in list order, `ws` newest first.
+export function nextRoutine(rs = [], ws = []) {
+  if (!rs.length) return null;
+  const prog = (r) => (r.program || '').trim();
+  const byId = new Map(rs.map((r) => [r.id, r]));
+  const last = ws.find((w) => w.routine_id && byId.has(w.routine_id));
+  if (!last) {
+    const first = [...new Set(rs.map(prog))].sort((a, b) => (a === '' ? 1 : b === '' ? -1 : a.localeCompare(b)))[0];
+    return rs.find((r) => prog(r) === first);
+  }
+  const r = byId.get(last.routine_id);
+  const group = rs.filter((x) => prog(x) === prog(r));
+  return group[(group.indexOf(r) + 1) % group.length];
+}
+// Routine target as text: "4 × 8-12 @ 65 kg".
+export function targetText(x) {
+  if (!x) return '';
+  return `${x.sets} × ${x.reps || '?'}${x.kg ? ` @ ${fmtNum(x.kg)} kg` : ''}`;
+}
+// What an update would change, per exercise: [{ exercise_id, from, to }] (from = '' for an added exercise).
+export function routineDiff(oldExs = [], newExs = []) {
+  const left = [...oldExs];
+  return newExs.flatMap((n) => {
+    const i = left.findIndex((o) => o.exercise_id === n.exercise_id);
+    const o = i < 0 ? null : left.splice(i, 1)[0];
+    const from = targetText(o), to = targetText(n);
+    return from === to ? [] : [{ exercise_id: n.exercise_id, from, to }];
   });
 }
 

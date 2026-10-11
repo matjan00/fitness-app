@@ -40,6 +40,9 @@ function activate(screen) {
   // Stack order must follow open order: a full page opened from a sheet (e.g. "Change food" picker) would
   // otherwise sit behind it, because sheets have a fixed higher z-index than pages.
   el.style.zIndex = Math.min(95, 40 + 4 * stack.length + (opts.sheet ? 1 : 0));
+  el.setAttribute('role', 'dialog');
+  el.setAttribute('aria-modal', 'true');
+  screen.returnFocus = document.activeElement;
   document.body.append(el);
   stack.push(screen);
   history.pushState({ depth: stack.length }, '');
@@ -49,7 +52,35 @@ function activate(screen) {
   }
   requestAnimationFrame(() => el.classList.add('open'));
   document.body.classList.add('has-screen');
+  syncInert();
+  focusScreen(screen);
 }
+
+// Only the top screen is reachable by keyboard and screen readers; everything under it is inert.
+function syncInert() {
+  const behind = [$id('view'), $id('tabbar'), $id('banner')];
+  behind.forEach((x) => { if (x) x.inert = stack.length > 0; });
+  stack.forEach((s, i) => { s.el.inert = i < stack.length - 1; });
+}
+const $id = (id) => document.getElementById(id);
+
+// Name the dialog after its heading and move focus there, so a screen reader announces where you are.
+function focusScreen(screen) {
+  const h = screen.el.querySelector('.bar-title h1, .sheet-title, h1, h2');
+  if (screen.opts.label) screen.el.setAttribute('aria-label', screen.opts.label);
+  else if (h) {
+    h.id ||= `dlg-${Math.random().toString(36).slice(2, 8)}`;
+    screen.el.setAttribute('aria-labelledby', h.id);
+  }
+  if (screen.el.contains(document.activeElement)) return; // the screen focused its own field (e.g. search)
+  const target = h || screen.el.querySelector('.sheet, .scroll') || screen.el;
+  if (!target.hasAttribute('tabindex')) target.setAttribute('tabindex', '-1');
+  target.focus({ preventScroll: true });
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && stack.length && !e.defaultPrevented) top().close();
+});
 
 export function push(build, opts = {}) {
   const el = document.createElement('div');
@@ -99,6 +130,8 @@ function closeTop() {
   s.el.classList.add('closing');
   setTimeout(() => s.el.remove(), 220);
   if (!stack.length) document.body.classList.remove('has-screen');
+  syncInert();
+  if (s.returnFocus?.isConnected) s.returnFocus.focus({ preventScroll: true });
   try { s.opts.onClose?.(); } catch (e) { console.error(e); }
 }
 

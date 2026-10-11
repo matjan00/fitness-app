@@ -48,7 +48,7 @@ const PHASE_BLURB = {
 // Garmin Connect and writes a 'garmin-send' status record, which we pull (store.syncNow) and show here.
 const WATCH_POLL_MS = 10000;
 const WATCH_TIMEOUT_MS = 3 * 60 * 1000;
-const WATCH_SETUP_MSG = 'Sending to the watch needs a one-time setup — ask Claude.';
+const WATCH_SETUP_MSG = 'Sending workouts to the watch needs a one-time setup (the steps are in GARMIN-SETUP.md).';
 const WATCH_OK_MSG = 'On your watch ✓ — open Garmin Connect on your phone to sync the watch, then find it under Training › Workouts / today\'s workout.';
 const watchUi = new Map(); // sessionId -> { phase: 'sending'|'error'|'timeout', text }
 
@@ -103,7 +103,7 @@ async function callSendFunction(session) {
   try { body = await r.json(); } catch { /* not JSON */ }
   if (r.ok) return body || {};
   if (r.status === 404 || body?.error === 'not_configured') throw new Error(WATCH_SETUP_MSG);
-  if (r.status === 401) throw new Error('Log in to the app first (Settings, top-right on Home), then try again.');
+  if (r.status === 401) throw new Error('Log in first (person icon on Home), then try again.');
   if (r.status === 429) throw new Error(body?.message || 'Please wait a couple of minutes before sending again.');
   throw new Error(body?.message || body?.error || 'Could not start the send. Try again in a minute.');
 }

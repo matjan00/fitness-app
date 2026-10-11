@@ -8,7 +8,7 @@
 //   init()    optional, called once after data is loaded
 // Tabs re-render automatically whenever the store changes.
 
-import { $, $$, esc, icon, toast, local } from './util.js';
+import { $, $$, esc, icon, toast, local, errorCard } from './util.js';
 import * as store from './store.js';
 import { setRevealHandler, depth } from './nav.js';
 import * as gym from './gym.js';
@@ -56,7 +56,7 @@ function renderHome(el) {
   modules.map((m) => m.homeCard).filter(Boolean).sort((a, b) => a.order - b.order).forEach((c) => {
     const d = document.createElement('div');
     wrap.append(d);
-    try { c.render(d); } catch (e) { console.error(e); d.innerHTML = `<div class="card error">${esc(e.message)}</div>`; }
+    try { c.render(d); } catch (e) { console.error(e); d.innerHTML = errorCard('This card', e); }
   });
 }
 
@@ -66,9 +66,12 @@ function renderTab() {
   el.dataset.tab = current;
   try { t.render(el); } catch (e) {
     console.error(e);
-    el.innerHTML = `<div class="card"><p class="error">Something went wrong: ${esc(e.message)}</p></div>`;
+    el.innerHTML = errorCard(`The ${t.title} tab`, e);
   }
-  $$('#tabbar button').forEach((b) => b.classList.toggle('on', b.dataset.tab === current));
+  $$('#tabbar button').forEach((b) => {
+    b.classList.toggle('on', b.dataset.tab === current);
+    if (b.dataset.tab === current) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+  });
   renderBanner();
 }
 
@@ -97,7 +100,8 @@ export function showTab(id) {
 window.showTab = showTab;
 
 function buildTabbar() {
-  $('#tabbar').innerHTML = tabs.map((t) => `<button data-tab="${t.id}">${icon(t.icon)}<span>${esc(t.title)}</span></button>`).join('');
+  $('#tabbar').setAttribute('aria-label', 'Sections');
+  $('#tabbar').innerHTML = tabs.map((t) => `<button type="button" data-tab="${t.id}">${icon(t.icon)}<span>${esc(t.title)}</span></button>`).join('');
   $('#tabbar').addEventListener('click', (e) => {
     const b = e.target.closest('button[data-tab]');
     if (b) showTab(b.dataset.tab);
@@ -171,7 +175,7 @@ function login() {
     $('#login-skip').onclick = () => {
       local.set('skipLogin', true);
       box.hidden = true;
-      toast('Working offline on this device only. Log in from Settings (top-right on Home) to sync.');
+      toast('Offline mode: your data stays on this phone.', 6000, { label: 'Log in', run: () => me.openMe() });
       resolve();
     };
   });

@@ -5,14 +5,14 @@
 //   gym-lib.js       exercise library/picker, exercise detail, custom exercises
 //   gym-workout.js   active workout screen, rest timer, finish summary, editing past workouts
 //   gym-routines.js  routine editor + starter programs
-import { $, esc, icon, toast, local, mins, bigKg, niceDate, niceTime, relDay, clock } from './util.js';
+import { $, esc, icon, toast, local, mins, bigKg, niceDate, niceTime, relDay, clock, dayOf, today } from './util.js';
 import * as store from './store.js';
 import { isSetUp as cutPlanOn } from './cut.js';
 import { push, page, chooseSheet, confirmSheet } from './nav.js';
 import { chart, cssVar } from './charts.js';
 import {
   MUSCLE_GROUPS, workoutVolume, workoutDuration, bestSet, formatSet, weeklySeries, muscleSets, weekStreak, weekKey,
-  isWorking, e1rm, fmtNum, progressList, suggestNext, weightStep, deloadKg, formatMetric,
+  isWorking, e1rm, fmtNum, progressList, suggestNext, weightStep, deloadKg, formatMetric, nextRoutine,
 } from './gym-calc.js';
 import {
   loadDb, exName, groupsOf, workouts, routines, prsOf, settings, saveSettings, refreshTab, routineLastUsed,
@@ -40,8 +40,10 @@ export const tab = { id: 'gym', title: 'Gym', icon: 'gym', render };
 function render(el) {
   if (!SEGS.some(([k]) => k === seg)) seg = 'routines';
   const a = activeWorkout();
+  // With routines, the "Up next" routine card carries the main action; an empty workout is the fallback.
+  const lead = a || !routines().length;
   el.innerHTML = `<div class="page-head"><h1>Gym</h1></div>
-    <button class="primary block gx-start ${a ? 'gx-resume' : ''}">${icon(a ? 'play' : 'plus')} ${a ? `Resume workout · <span data-gx-elapsed>${elapsed(a)}</span>` : 'Start empty workout'}</button>
+    <button class="${lead ? 'primary' : 'ghost'} block gx-start ${a ? 'gx-resume' : ''}">${icon(a ? 'play' : 'plus')} ${a ? `Resume workout · <span data-gx-elapsed>${elapsed(a)}</span>` : 'Start empty workout'}</button>
     <div class="seg gx-seg">${SEGS.map(([k, v]) => `<button data-s="${k}" class="${seg === k ? 'on' : ''}">${v}</button>`).join('')}</div>
     <div class="gx-segbody"></div>`;
   handleImgErrors(el);
@@ -78,10 +80,12 @@ function renderRoutines(el) {
     groups.get(p).push(r);
   }
   const keys = [...groups.keys()].sort((a, b) => (a === '' ? 1 : b === '' ? -1 : a.localeCompare(b)));
-  el.innerHTML = `<div class="gx-rtools"><button class="soft gx-newr">${icon('plus')} New routine</button>
-      <button class="ghost gx-starters">${icon('folder')} Starter programs</button></div>
+  const next = activeWorkout() ? null : nextRoutine(rs, workouts());
+  el.innerHTML = `${next ? `<h3 class="section-title">Up next</h3>${routineCard(next, true)}` : ''}
     ${keys.map((k) => `<h3 class="section-title gx-prog">${icon(k ? 'folder' : 'list')} <span class="grow ellipsis">${esc(k || (keys.length > 1 ? 'Other routines' : 'My routines'))}</span><span class="gx-count">${groups.get(k).length}</span></h3>
-      <div class="stack">${groups.get(k).map(routineCard).join('')}</div>`).join('')}`;
+      <div class="stack">${groups.get(k).map((r) => routineCard(r)).join('')}</div>`).join('')}
+    <div class="gx-rtools"><button class="ghost gx-newr">${icon('plus')} New routine</button>
+      <button class="ghost gx-starters">${icon('folder')} Starter programs</button></div>`;
   $('.gx-newr', el).onclick = () => editRoutine();
   $('.gx-starters', el).onclick = addStarters;
   el.onclick = (e) => {
@@ -95,16 +99,16 @@ function renderRoutines(el) {
   };
 }
 
-function routineCard(r) {
+function routineCard(r, isNext = false) {
   const ex = r.exercises || [];
   const lastUsed = routineLastUsed(r.id);
   const sets = ex.reduce((a, x) => a + (Number(x.sets) || 0), 0);
-  return `<div class="card gx-rcard" data-r="${esc(r.id)}">
+  return `<div class="card gx-rcard ${isNext ? 'gx-next' : ''}" data-r="${esc(r.id)}">
     <div class="row between"><div class="grow"><h2 class="ellipsis">${esc(r.name)}</h2>
       <p class="tiny muted">${ex.length} exercise${ex.length === 1 ? '' : 's'} · ${sets} sets${lastUsed ? ` · last ${esc(relDay(lastUsed).toLowerCase())}` : ''}</p></div>
-      <button class="icon-btn gx-rmenu" aria-label="Routine options">${icon('more')}</button></div>
+      <button class="icon-btn gx-rmenu" aria-label="Options for ${esc(r.name)}">${icon('more')}</button></div>
     <p class="small muted gx-rsum">${ex.map((x) => esc(exName(x.exercise_id))).join(' · ') || 'No exercises'}</p>
-    <button class="primary gx-rgo">${icon('play')} Start</button>
+    <button class="${isNext ? 'primary' : 'ghost'} gx-rgo" aria-label="Start ${esc(r.name)}">${icon('play')} Start</button>
   </div>`;
 }
 
@@ -290,7 +294,7 @@ function renderProgress(el) {
     if (b) openExercise(b.dataset.x, 'records');
   };
   const labels = weeks.map((w) => new Date(`${w.week}T12:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }));
-  const color = cssVar('--gym') || '#f2542d';
+  const color = cssVar('--gym') || '#5a4fe0';
   const bg = weeks.map((_, i) => (i === weeks.length - 1 ? color : `${color}88`));
   const opts = (tick, label) => ({
     scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 6, maxRotation: 0 } }, y: { beginAtZero: true, ticks: { maxTicksLimit: 4, precision: 0, callback: tick } } },
@@ -315,6 +319,15 @@ function renderExercises(el) {
 }
 
 // ---------- home card ----------
+// Home has one primary action. The workout leads while one is running, or when you lift and haven't
+// trained today (the cut plan card leads instead when the plan is on); otherwise logging food does.
+export function gymLeadsHome() {
+  if (activeWorkout()) return true;
+  if (cutPlanOn()) return false;
+  const ws = workouts();
+  if (!ws.length && !routines().length) return false;
+  return !ws.some((w) => dayOf(w.started_at) === today());
+}
 export const homeCard = {
   order: 10,
   render(el) {
@@ -323,9 +336,13 @@ export const homeCard = {
     const week = ws.filter((w) => weekKey(w.started_at) === wk);
     const lastW = ws[0];
     const a = activeWorkout();
+    const plan = cutPlanOn();
+    const next = !a && !plan ? nextRoutine(routines(), ws) : null;
+    const lead = gymLeadsHome();
     const used = (r) => Date.parse(routineLastUsed(r.id) || '') || 0;
-    const rs = [...routines()].sort((x, y) => used(y) - used(x)).slice(0, 3);
+    const rs = [...routines()].filter((r) => r !== next).sort((x, y) => used(y) - used(x)).slice(0, 2);
     const lastPrs = lastW ? prsOf(lastW.id).length : 0;
+    const startLabel = a ? `Resume workout · <span data-gx-elapsed>${elapsed(a)}</span>` : plan ? 'Other workout' : next ? `Start ${esc(next.name)}` : 'Start workout';
     el.innerHTML = `<div class="card gx-home">
       <div class="card-head"><h2 class="gx-hh">${icon('gym')} Gym <span class="gx-hsub">this week</span></h2><button class="link gx-open">See all</button></div>
       <div class="stats gx-hstats">
@@ -336,15 +353,23 @@ export const homeCard = {
       ${lastW ? `<button class="gx-last" data-w="${esc(lastW.id)}"><span class="grow"><span class="tiny muted">Last workout</span>
           <b class="ellipsis">${esc(lastW.name || 'Workout')}</b><span class="small muted">${esc(relDay(lastW.started_at))} · ${mins(workoutDuration(lastW))} · ${bigKg(workoutVolume(lastW))}${lastPrs ? ` · ${lastPrs} PR${lastPrs > 1 ? 's' : ''}` : ''}</span></span>
           <svg class="chev" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>` : ''}
-      <button class="${a || !cutPlanOn() ? 'primary' : 'ghost'} block gx-hstart">${icon(a ? 'play' : 'plus')} ${a ? `Resume workout · <span data-gx-elapsed>${elapsed(a)}</span>` : cutPlanOn() ? 'Other workout' : 'Start workout'}</button>
-      ${!a && rs.length && !cutPlanOn() ? `<div class="chips gx-quick">${rs.map((r) => `<button class="chip" data-r="${esc(r.id)}">${icon('play')} ${esc(r.name)}</button>`).join('')}</div>` : ''}
+      ${next ? '<p class="tiny muted gx-upnext">Up next in your rotation</p>' : ''}
+      <button class="${lead ? 'primary' : 'ghost'} block gx-hstart ${a ? 'gx-resume' : ''}">${icon(a || next ? 'play' : 'plus')} ${startLabel}</button>
+      ${next ? `<div class="chips gx-quick">${rs.map((r) => `<button class="chip" data-r="${esc(r.id)}">${icon('play')} ${esc(r.name)}</button>`).join('')}<button class="chip" data-empty="1">${icon('plus')} Empty workout</button></div>` : ''}
     </div>`;
     $('.gx-open', el).onclick = () => window.showTab?.('gym');
-    $('.gx-hstart', el).onclick = () => (activeWorkout() ? openActive() : startWorkout());
+    $('.gx-hstart', el).onclick = () => (activeWorkout() ? openActive() : startWorkout(next || undefined));
     const lw = $('.gx-last', el);
     if (lw) lw.onclick = () => openWorkout(lw.dataset.w);
     const q = $('.gx-quick', el);
-    if (q) q.onclick = (e) => { const b = e.target.closest('[data-r]'); const r = b && store.get(b.dataset.r); if (r) startWorkout(r); };
+    if (q) {
+      q.onclick = (e) => {
+        if (e.target.closest('[data-empty]')) { startWorkout(); return; }
+        const b = e.target.closest('[data-r]');
+        const r = b && store.get(b.dataset.r);
+        if (r) startWorkout(r);
+      };
+    }
   },
 };
 
@@ -352,6 +377,8 @@ export const homeCard = {
 export function banner(el) {
   const a = activeWorkout();
   if (!a) return false;
+  // Home and Gym already show a Resume button; a second one in the banner just competes with it.
+  if (['home', 'gym'].includes(document.getElementById('view')?.dataset.tab)) return false;
   el.innerHTML = `<button class="gx-banner"><span class="gx-bdot"></span>
     <span class="grow gx-btxt"><b class="ellipsis">${esc(a.name || 'Workout')}</b><span class="tiny">In progress · <span data-gx-elapsed>${elapsed(a)}</span><span data-gx-restwrap hidden> · Rest <span data-gx-rest></span></span></span></span>
     <span class="gx-bgo">Resume</span></button>`;

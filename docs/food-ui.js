@@ -133,7 +133,9 @@ function foodRow(f, i, extra = '') {
 }
 
 // Opens a search screen; resolves with the chosen food or null.
-export function pickFood({ title = 'Choose food', query = '', hint = '' } = {}) {
+// Search screen. `shortcuts` ([{ value, label, icon }]) show as chips under the search box; picking one
+// resolves { shortcut: value } instead of a food (e.g. "From my recipes", "Quick add").
+export function pickFood({ title = 'Choose food', query = '', hint = '', shortcuts = [] } = {}) {
   return new Promise((resolve) => {
     let result = null;
     let q = query;
@@ -141,7 +143,8 @@ export function pickFood({ title = 'Choose food', query = '', hint = '' } = {}) 
     let list = [];
     push((el, s) => {
       el.innerHTML = page({ title, body: `
-        <div class="search">${icon('search')}<input id="fd-q" type="search" placeholder="Search food (Polish or English)" value="${esc(q)}" autocomplete="off"></div>
+        <div class="search">${icon('search')}<input id="fd-q" type="search" placeholder="Search food (Polish or English)" value="${esc(q)}" autocomplete="off" aria-label="Search food"></div>
+        ${shortcuts.length ? `<div class="chips fd-shortcuts">${shortcuts.map((o) => `<button class="chip" data-sc="${esc(o.value)}">${o.icon ? icon(o.icon) : ''}${esc(o.label)}</button>`).join('')}</div>` : ''}
         ${hint ? `<p class="tiny muted" style="margin:8px 4px 0">${esc(hint)}</p>` : ''}
         <div id="fd-res" class="card" style="margin-top:12px;padding-top:4px;padding-bottom:4px"></div>
         <div id="fd-off" style="margin-top:12px"></div>
@@ -149,7 +152,7 @@ export function pickFood({ title = 'Choose food', query = '', hint = '' } = {}) 
       const input = $('#fd-q', el);
       const draw = async () => {
         const res = $('#fd-res', el);
-        const index = await getIndex().catch((e) => { res.innerHTML = `<p class="error small">${esc(e.message)}</p>`; return null; });
+        const index = await getIndex().catch((e) => { res.innerHTML = `<p class="small" style="padding:12px 2px"><b>The food list couldn't load.</b> Check your connection and try again.<br><span class="tiny muted">${esc(e.message)}</span></p>`; return null; });
         if (!index) return;
         if (!q.trim()) {
           // recent foods from the diary
@@ -182,6 +185,8 @@ export function pickFood({ title = 'Choose food', query = '', hint = '' } = {}) 
       let timer;
       input.oninput = () => { q = input.value; off = null; clearTimeout(timer); timer = setTimeout(draw, 120); };
       el.onclick = (e) => {
+        const sc = e.target.closest('[data-sc]');
+        if (sc) { result = { shortcut: sc.dataset.sc }; s.close(); return; }
         const b = e.target.closest('.fd-food');
         if (!b) return;
         const i = Number(b.dataset.i);

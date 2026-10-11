@@ -12,6 +12,8 @@ import { renderLearn, loadLessons } from './food-learn.js';
 import { renderLibrary } from './food-library-ui.js';
 import { copyMeal, copyDay, moveEntry } from './diary-copy-ui.js';
 import { openShopping } from './shopping-ui.js';
+import { gymLeadsHome } from './gym.js';
+import { isSetUp as cutPlanOn } from './cut.js';
 
 export const tab = { id: 'food', title: 'Food', icon: 'food', render };
 
@@ -65,7 +67,7 @@ function renderDiary(box) {
       ${!t ? `<button class="soft block" id="fd-settargets" style="margin-top:12px">${icon('fire')} Set your daily targets</button>` : ''}
     </div>
     ${MEALS.map((m) => mealCard(m, entriesOf(day, m.key))).join('')}
-    ${entriesOf(day).length ? `<div class="center" style="margin-top:10px"><button class="link small" id="fd-copyday">${icon('swap')} Copy this whole day to another day</button></div>` : ''}
+    ${entriesOf(day).length ? `<div class="center" style="margin-top:10px"><button class="link small" id="fd-copyday">${icon('copy')} Copy this whole day to another day</button></div>` : ''}
     <h3 class="section-title">This week</h3>
     <div class="card" id="fd-week"></div>`;
 
@@ -114,12 +116,12 @@ function mealCard(m, list) {
   return `<div class="card fd-meal">
     <div class="card-head" style="margin-bottom:${list.length ? 6 : 0}px"><div><h2>${esc(m.label)}</h2>
       <p class="tiny muted">${list.length ? `${n0(s.kcal)} kcal · P ${n0(s.p)} · C ${n0(s.c)} · F ${n0(s.f)}` : 'Nothing yet'}</p></div>
-      <div class="row">${list.length ? `<button class="icon-btn fd-mv" data-copymeal="${m.key}" aria-label="Copy ${esc(m.label)} to another day or meal">${icon('swap')}</button>` : ''}
+      <div class="row">${list.length ? `<button class="icon-btn fd-mv" data-copymeal="${m.key}" aria-label="Copy ${esc(m.label)} to another day or meal">${icon('copy')}</button>` : ''}
       <button class="icon-btn fd-addbtn" data-add="${m.key}" aria-label="Add to ${esc(m.label)}">${icon('plus')}</button></div></div>
     ${list.length ? `<div class="list">${list.map((e) => `<div class="fd-row"><button class="list-item fd-entry" data-entry="${e.id}">
       <div class="grow"><div class="ellipsis">${esc(e.label)}</div><div class="sub">${esc(amountTxt(e))}</div></div>
       <div class="fd-entry-k"><b>${n0(e.kcal)}</b><span>kcal</span></div></button>
-      <button class="icon-btn fd-mv" data-move="${e.id}" aria-label="Move ${esc(e.label)} to another meal">${icon('swap')}</button></div>`).join('')}</div>` : ''}
+      <button class="icon-btn fd-mv" data-move="${e.id}" aria-label="Move ${esc(e.label)} to another meal">${icon('move')}</button></div>`).join('')}</div>` : ''}
   </div>`;
 }
 function amountTxt(e) {
@@ -130,23 +132,25 @@ function amountTxt(e) {
 }
 
 // ---------- adding ----------
+// "+" on a meal goes straight to search (the common case); recipes, quick add and copying
+// yesterday's meal are chips on that screen.
 async function addTo(meal) {
-  const y = entriesOf(addDays(day, -1), meal);
-  const opts = [
-    { value: 'recipe', label: 'From my recipes', icon: 'note' },
-    { value: 'food', label: 'Search food', icon: 'search' },
-    { value: 'quick', label: 'Quick add calories', icon: 'fire' },
+  const d = day;
+  const y = entriesOf(addDays(d, -1), meal);
+  const shortcuts = [
+    { value: 'recipe', label: 'My recipes', icon: 'note' },
+    { value: 'quick', label: 'Quick add kcal', icon: 'fire' },
   ];
-  if (y.length) opts.push({ value: 'copy', label: `Copy yesterday's ${mealLabel(meal).toLowerCase()} (${y.length})`, icon: 'swap' });
-  const v = await chooseSheet(`Add to ${mealLabel(meal)}`, opts);
-  if (v === 'recipe') pickRecipe(meal);
-  else if (v === 'food') addFood(meal);
-  else if (v === 'quick') quickAdd(meal);
-  else if (v === 'copy') {
+  if (y.length) shortcuts.push({ value: 'copy', label: `Yesterday's ${mealLabel(meal).toLowerCase()} (${y.length})`, icon: 'copy' });
+  const f = await pickFood({ title: `Add to ${mealLabel(meal)}`, shortcuts });
+  if (!f) return;
+  if (f.shortcut === 'recipe') pickRecipe(meal);
+  else if (f.shortcut === 'quick') quickAdd(meal);
+  else if (f.shortcut === 'copy') {
     const now = new Date().toISOString();
-    await store.putMany('meal', y.map(({ id, ...e }) => ({ ...e, day, t: now })));
-    toast(`Copied ${y.length} item${y.length > 1 ? 's' : ''}`);
-  }
+    const saved = await store.putMany('meal', y.map(({ id, ...e }) => ({ ...e, day: d, t: now })));
+    toast(`Copied ${y.length} item${y.length > 1 ? 's' : ''}`, 6000, saved?.length ? { label: 'Undo', run: () => undoAdd(saved) } : null);
+  } else await addPicked(meal, d, f);
 }
 
 function pickRecipe(meal) {
@@ -172,21 +176,22 @@ function pickRecipe(meal) {
   });
 }
 
-async function addFood(meal) {
-  const d = day;
-  const f = await pickFood({ title: `${mealLabel(meal)} · food` });
-  if (!f) return;
+async function addPicked(meal, d, f) {
   const last = store.all('meal').filter((e) => e.food?.id === f.id).sort((a, b) => (b.t || '').localeCompare(a.t || ''))[0];
   // Small countable things (egg, banana, slice…) default to pieces; everything else to 100 g.
   const byPiece = f.u?.piece && f.u.piece <= 150;
   const a = await amountSheet(f, { grams: last?.grams || 100, unit: last?.unit || (byPiece ? 'piece' : 'g'), qty: last?.qty ?? (byPiece ? 1 : undefined) });
   if (!a) return;
-  await saveFoodEntry({ day: d, meal, food: f, ...a });
-  toast(`Added to ${mealLabel(meal)}`);
+  const saved = await saveFoodEntry({ day: d, meal, food: f, ...a });
+  toast(`Added to ${mealLabel(meal)}`, 6000, { label: 'Undo', run: () => undoAdd([saved]) });
+}
+async function undoAdd(items) {
+  for (const x of items) await store.remove(x.id);
+  toast('Removed');
 }
 async function saveFoodEntry({ id, t, day: d, meal, food, grams, qty, unit }) {
   const m = macrosFor(food, grams);
-  await store.put('meal', {
+  return store.put('meal', {
     ...(id ? { id } : {}), t: t || new Date().toISOString(), day: d, meal, label: food.src === 'db' ? food.en : food.name,
     source: { type: 'food', src: food.src, id: food.id }, food: snap(food), grams, qty, unit, ...m,
   });
@@ -480,8 +485,8 @@ export const homeCard = {
           ${bar('Protein', s.p, t?.p, 'fd-bp')}
         </div></div>
       ${last ? `<p class="small muted fd-home-w">${icon('scale')} Weight ${n1(last.avg)} kg (7-day avg)${wc != null ? ` · ${wc > 0 ? '+' : ''}${n1(wc)} kg/week` : ''}</p>` : ''}
-      ${!t ? '<p class="small muted" style="margin-top:10px">Set your daily targets in Settings (top-right on Home) → Nutrition &amp; body.</p>' : left < 0 ? `<p class="small down" style="margin-top:10px">${n0(-left)} kcal over today's target</p>` : ''}
-      <button class="primary block" id="fd-hlog" style="margin-top:12px">${icon('plus')} Log food</button>
+      ${!t ? '<p class="small muted" style="margin-top:10px">Set your daily targets: person icon on Home → Nutrition &amp; body.</p>' : left < 0 ? `<p class="small down" style="margin-top:10px">${n0(-left)} kcal over today's target</p>` : ''}
+      <button class="${gymLeadsHome() || cutPlanOn() ? 'ghost' : 'primary'} block" id="fd-hlog" style="margin-top:12px">${icon('plus')} Log food</button>
     </div>`;
     $('#fd-hopen', el).onclick = () => { local.set('fd-view', 'diary'); day = today(); window.showTab('food'); };
     $('#fd-hlog', el).onclick = () => {

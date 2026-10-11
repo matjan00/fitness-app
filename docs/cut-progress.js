@@ -81,7 +81,7 @@ function drawWaist(el, c, checkins) {
   const rows = checkins.filter((x) => x.waist > 0);
   if (empty(el, 'cp-waist', rows.length ? '' : 'Measure your waist at the weekly check-in.')) return;
   chart('cp-waist', { type: 'line', data: { labels: rows.map((x) => short(x.forDay || x.day)), datasets: [
-    { label: 'Waist', data: rows.map((x) => x.waist), borderColor: cssVar('--accent'), backgroundColor: cssVar('--accent'), pointRadius: 3, borderWidth: 2, tension: 0.3 }] },
+    { label: 'Waist', data: rows.map((x) => x.waist), borderColor: cssVar('--text'), backgroundColor: cssVar('--text'), pointRadius: 3, borderWidth: 2, tension: 0.3 }] },
   options: { ...lineOpts(), plugins: { legend: { display: false } } } });
 }
 

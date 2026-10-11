@@ -8,7 +8,7 @@ import * as store from './store.js';
 import { push, chooseSheet, confirmSheet } from './nav.js';
 import {
   MODES, fmtNum, fmtDur, firstInt, previousSet, parseRepRange, suggestNext, weightStep, isStalled, deloadKg, exerciseSeries, lastSessions, exerciseRecords, setMetric, kindsFor, isWorking,
-  workoutVolume, workoutDuration, formatSet, bestSet, routineFromWorkout, routineChanged,
+  workoutVolume, workoutDuration, formatSet, bestSet, routineFromWorkout, routineChanged, routineDiff,
 } from './gym-calc.js';
 import {
   loadDb, exName, groupsOf, modeFor, restFor, settings, saveSettings, workouts, last, prsOf, getActive, saveActive, clearActive,
@@ -227,15 +227,18 @@ function openSession(sess, kind, original = null) {
     const p = sess2 && (sess2.mode || 'wr') === e.mode ? previousSet(sess2, i, e.sets) : null;
     const f = fillValues(e, i, prevMap);
     const prevTxt = p ? formatSet(p, e.mode) : '';
-    const inp = (field, ph, mode, hint) => `<input class="gx-in" data-f="${field}" type="text" inputmode="${mode}" enterkeyhint="${hint}" autocomplete="off" placeholder="${esc(ph || '–')}" value="${esc(s[field])}" aria-label="${field}">`;
+    // Screen readers hear "Weight in kg, set 2, Bench Press", not "kg" nineteen times.
+    const where = `set ${labels[i]}, ${exName(e.exercise_id, e.name)}`;
+    const FIELD = { kg: 'Weight in kg', reps: 'Reps', m: 'Minutes', s: 'Seconds' };
+    const inp = (field, ph, mode, hint) => `<input class="gx-in" data-f="${field}" type="text" inputmode="${mode}" enterkeyhint="${hint}" autocomplete="off" placeholder="${esc(ph || '–')}" value="${esc(s[field])}" aria-label="${esc(`${FIELD[field]}, ${where}`)}">`;
     const cells = e.mode === 't'
       ? inp('m', f.m, 'numeric', 'next') + inp('s', f.s, 'numeric', 'done')
       : inp('kg', f.kg || (e.mode === 'bw' ? '+0' : ''), 'decimal', 'next') + inp('reps', f.reps, 'numeric', 'done');
     return `<div class="gx-row t-${s.type} ${s.done ? 'done' : ''}" data-i="${i}">
-      <button class="gx-tag t-${s.type}" data-act="type" aria-label="Set type">${labels[i]}</button>
-      <button class="gx-prev" data-act="prev" ${p ? '' : 'disabled'}>${prevTxt ? esc(prevTxt) : '–'}</button>
+      <button class="gx-tag t-${s.type}" data-act="type" aria-label="${esc(`Change type of ${where}`)}">${labels[i]}</button>
+      <button class="gx-prev" data-act="prev" ${p ? `aria-label="${esc(`Use last time: ${prevTxt}`)}"` : 'disabled aria-label="No previous set"'}>${prevTxt ? esc(prevTxt) : '–'}</button>
       ${cells}
-      <button class="gx-chk" data-act="check" aria-label="Complete set">${icon('check')}</button>
+      <button class="gx-chk" data-act="check" aria-label="${esc(`Complete ${where}`)}" aria-pressed="${s.done ? 'true' : 'false'}">${icon('check')}</button>
       ${isPR(e, s) ? `<span class="gx-rowpr">${icon('trophy')}</span>` : ''}${markHtml(e, s)}
     </div>`;
   }
@@ -454,11 +457,12 @@ function openSession(sess, kind, original = null) {
         default:
       }
     };
-  }, { className: isActive ? 'gx-workout' : 'gx-workout gx-editing' });
+  }, { className: isActive ? 'gx-workout' : 'gx-workout gx-editing', label: isActive ? 'Workout' : 'Edit workout' });
 
   function updateRow(e, i, row) {
     const s = e.sets[i];
     row.classList.toggle('done', s.done);
+    $('.gx-chk', row)?.setAttribute('aria-pressed', s.done ? 'true' : 'false');
     $('.gx-rowpr', row)?.remove();
     $('.ct-mark', row)?.remove();
     const badge = (isPR(e, s) ? `<span class="gx-rowpr">${icon('trophy')}</span>` : '') + markHtml(e, s);
@@ -677,9 +681,7 @@ function summaryHtml({ w, prs, routine, routineDone, cut }) {
       </div>
       ${cut ? cutSummaryHtml(cut, w) : ''}
       ${prs.length ? `<h3 class="section-title">Personal records</h3>${prListHtml(prs)}` : ''}
-      ${routine ? `<div class="card gx-upd"><div class="row">${icon('sync')}<div class="grow"><b>Update “${esc(routine.r.name)}”?</b>
-          <p class="small muted">Use today's sets and weights as the new targets next time.</p></div></div>
-          <button class="soft block gx-updbtn" ${routineDone ? 'disabled' : ''}>${routineDone ? 'Routine updated ✓' : "Update routine with today's numbers"}</button></div>` : ''}
+      ${routine ? routineCardHtml(routine, routineDone) : ''}
       <h3 class="section-title">Exercises</h3>
       <div class="card list">${w.exercises.map((e) => {
         const b = bestSet(e);
@@ -689,16 +691,31 @@ function summaryHtml({ w, prs, routine, routineDone, cut }) {
       <button class="primary block gx-done" style="margin-top:18px">Done</button>
     </div>`;
 }
+// Offer to carry today's numbers into the routine, showing exactly what would change.
+function routineCardHtml(routine, done) {
+  const diff = routineDiff(routine.r.exercises || [], routine.next);
+  return `<div class="card gx-upd"><div class="row">${icon('sync')}<div class="grow"><b>${done ? `“${esc(routine.r.name)}” updated` : `Update “${esc(routine.r.name)}”?`}</b>
+      <p class="small muted">${done ? 'Next time starts from these targets.' : 'Next time would start from these targets. Set counts never go down.'}</p></div></div>
+    <ul class="gx-diff">${diff.map((d) => `<li><span class="ellipsis">${esc(exName(d.exercise_id))}</span>
+      <span class="gx-diffv">${d.from ? `<s>${esc(d.from)}</s>${icon('arrow')}` : '<em>New</em>'}<b>${esc(d.to)}</b></span></li>`).join('')}</ul>
+    ${done ? '' : '<button class="ghost block gx-updbtn">Update routine</button>'}</div>`;
+}
 function bindSummary(el, s, sum) {
   $('.gx-done', el).onclick = () => s.close();
   const u = $('.gx-updbtn', el);
   if (u) {
     u.onclick = async () => {
       const cur = store.get(sum.routine.r.id) || sum.routine.r;
+      const before = cur.exercises || [];
       await store.put('routine', { ...cur, exercises: sum.routine.next });
       sum.routineDone = true;
-      toast('Routine updated');
       s.render();
+      toast('Routine updated', 6000, { label: 'Undo', run: async () => {
+        await store.put('routine', { ...(store.get(cur.id) || cur), exercises: before });
+        sum.routineDone = false;
+        if (s.el?.isConnected) s.render();
+        toast('Routine restored');
+      } });
     };
   }
 }

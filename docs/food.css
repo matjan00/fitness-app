@@ -43,7 +43,7 @@
 .fd-sum-kcal b { font-size: 20px; font-weight: 780; }
 .card.fd-meal { margin-top: 12px; }
 .fd-meal .card-head h2 { font-size: 16px; }
-.fd-addbtn { background: var(--food-soft); color: var(--food); border-radius: 50%; width: 38px; height: 38px; flex: none; }
+.fd-addbtn { background: var(--food-soft); color: var(--food); border-radius: 50%; width: 44px; height: 44px; flex: none; }
 .fd-addbtn:active { background: var(--food-soft); filter: brightness(.95); }
 .fd-entry { padding: 10px 2px; }
 .fd-entry-k, .fd-food-k { text-align: right; line-height: 1.1; flex: none; }
@@ -182,8 +182,8 @@
 .fd-stepper button { width: 40px; height: 40px; border-radius: 50%; background: var(--card-2); font-size: 18px; font-weight: 700; }
 .fd-rate { display: flex; justify-content: center; gap: 6px; margin: 10px 0 18px; }
 .fd-rate button { font-size: 38px; line-height: 1; color: var(--line); }
-.fd-rate button.on { color: #e8a317; }
-.icon-btn.on { color: #d6455d; }
+.fd-rate button.on { color: var(--gold); }
+.icon-btn.on { color: var(--down); }
 .icon-btn.on svg { fill: currentColor; }
 .fd-viewseg button { white-space: nowrap; font-size: 12.5px; padding: 8px 9px; }
 
@@ -211,7 +211,7 @@
 .fd-metabtn:active { filter: brightness(.95); }
 .fd-metabtn.est { border: 1px dashed var(--line); }
 .fd-fsrc { display: flex; gap: 6px; flex-wrap: wrap; }
-.fd-heart { position: absolute; top: 6px; right: 6px; width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,.9); color: #d33; display: grid; place-items: center; font-size: 17px; }
+.fd-heart { position: absolute; top: 6px; right: 6px; width: 40px; height: 40px; border-radius: 50%; background: color-mix(in srgb, var(--card) 92%, transparent); color: var(--down); display: grid; place-items: center; font-size: 17px; }
 .fd-rcard-wrap { position: relative; display: flex; flex-direction: column; min-width: 0; }
 .fd-rcard-wrap > .fd-rcard { flex: 1; }
 .scroll:has(.fd-hero-img) :is(p, li, a, h2, h3) { overflow-wrap: anywhere; }

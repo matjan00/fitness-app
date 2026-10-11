@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   e1rm, muscleGroup, exGroups, defaultMode, computePRs, lastSessions, previousSet, weeklySeries, muscleSets,
   weekStreak, workoutVolume, workoutSetCount, bestSet, formatSet, parseDuration, fmtDur, firstInt, sortExercises,
-  matchesSearch, recentUse, exerciseRecords, exerciseSeries, routineFromWorkout, routineChanged, weekKey,
+  matchesSearch, recentUse, exerciseRecords, exerciseSeries, routineFromWorkout, routineChanged, routineDiff, targetText, nextRoutine, weekKey,
   parseRepRange, suggestNext, weightStep, trend, isStalled, deloadKg, progressList,
 } from '../docs/gym-calc.js';
 
@@ -178,6 +178,38 @@ test('routine update from a workout keeps rep ranges', () => {
   assert.deepEqual(ex2.map((x) => x.exercise_id), ['squat', 'bench', 'plank']);
   assert.deepEqual(ex2[0], old2.exercises[0]);
   assert.equal(formatSet(S(62.5, 6), 'wr', true), '62.5 kg × 6');
+});
+
+test('nextRoutine follows the rotation within a program', () => {
+  const rs = [
+    { id: 'push', name: 'Push', program: 'PPL' }, { id: 'pull', name: 'Pull', program: 'PPL' }, { id: 'legs', name: 'Legs', program: 'PPL' },
+    { id: 'fa', name: 'Full A', program: 'Full Body' }, { id: 'mine', name: 'Mine', program: '' },
+  ];
+  assert.equal(nextRoutine(rs, []).id, 'fa'); // first program alphabetically, "no program" last
+  assert.equal(nextRoutine(rs, [{ routine_id: 'push' }]).id, 'pull');
+  assert.equal(nextRoutine(rs, [{ routine_id: 'legs' }, { routine_id: 'pull' }]).id, 'push'); // wraps
+  assert.equal(nextRoutine(rs, [{ routine_id: null }, { routine_id: 'gone' }, { routine_id: 'pull' }]).id, 'legs');
+  assert.equal(nextRoutine(rs, [{ routine_id: 'mine' }]).id, 'mine');
+  assert.equal(nextRoutine([], []), null);
+});
+
+test('routine update never shrinks the set count, and the diff names what changes', () => {
+  const old = { exercises: [
+    { exercise_id: 'bench', sets: 4, reps: '6-8', kg: 60, rest: 120 },
+    { exercise_id: 'row', sets: 3, reps: '8-10', kg: 50, rest: 90 },
+  ] };
+  // Cut short: one bench set at a heavier weight, rows not done.
+  const w = W('w', '2026-01-01T10:00:00Z', [{ exercise_id: 'bench', mode: 'wr', rest: 120, sets: [S(62.5, 8)] }]);
+  const next = routineFromWorkout(w, old);
+  assert.equal(next[0].sets, 4);
+  assert.equal(next[0].kg, 62.5);
+  assert.deepEqual(next[1], old.exercises[1]);
+  assert.deepEqual(routineDiff(old.exercises, next), [{ exercise_id: 'bench', from: '4 × 6-8 @ 60 kg', to: '4 × 6-8 @ 62.5 kg' }]);
+  // An exercise added during the workout shows as new.
+  const w2 = W('w2', '2026-01-02T10:00:00Z', [{ exercise_id: 'curl', mode: 'wr', rest: 60, sets: [S(12, 10), S(12, 10)] }]);
+  const d2 = routineDiff(old.exercises, routineFromWorkout(w2, old));
+  assert.deepEqual(d2, [{ exercise_id: 'curl', from: '', to: '2 × 10 @ 12 kg' }]);
+  assert.equal(targetText({ sets: 3, reps: '60', kg: null }), '3 × 60');
 });
 
 test('parseRepRange reads ranges and single targets', () => {

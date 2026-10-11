@@ -17,6 +17,7 @@ import * as C from './run-coach.js';
 import { demoRuns, demoWorkouts } from './run-demo.js';
 import { runRow, wireRows, openRun, openAllRuns, feedbackHtml } from './run-detail.js';
 import * as RP from './run-plan-ui.js';
+import { logRun } from './cut-today.js';
 
 export const tab = { id: 'run', title: 'Run', icon: 'run', render: renderTab };
 export const homeCard = { order: 15, render: renderHome };
@@ -419,26 +420,34 @@ function renderSetup(el) {
     <div class="rn-hero rn-setup">
       <span class="rn-setup-ic">${icon('run')}</span>
       <h2>Your running coach</h2>
-      <p>Every run on your Garmin watch lands here automatically — with feedback on each run, your fitness and 5k/10k predictions, and a weekly plan to get faster.</p>
-      <div id="rn-connect" class="rn-connect">${garminBox()}</div>
+      <p>Feedback on every run, your fitness and 5k/10k predictions, and a weekly plan to get faster.</p>
+      <button class="rn-log-btn" data-a="log">${icon('plus')} Log a run</button>
       <button class="rn-demo-btn" data-a="demo">${icon('play')} Try with demo data</button>
     </div>
-    <h3 class="section-title">How it works</h3>
-    <div class="card rn-steps">
-      <div><span>1</span><p><b>Set up once.</b> Add your Garmin login as GitHub secrets — see GARMIN-SETUP.md, or ask Claude.</p></div>
-      <div><span>2</span><p><b>Runs to your watch.</b> Nothing to do here — a scheduled job pulls new runs from Garmin Connect every 3 hours.</p></div>
-      <div><span>3</span><p><b>Run.</b> New runs appear when you open this tab. The coach adapts your plan every week.</p></div>
+    <h3 class="section-title">Garmin</h3>
+    <div class="card stack-sm">
+      <div class="rn-garmin-row">
+        <span class="rn-garmin-logo">${icon('run')}</span>
+        <div class="grow"><b>Runs from your watch</b><p class="small muted">${esc(garminLine())}</p></div>
+        ${store.configured ? `<button class="icon-btn ${syncing ? 'rn-spin' : ''}" data-a="refresh" aria-label="Check for new runs" ${syncing ? 'disabled' : ''}>${icon('sync')}</button>` : ''}
+      </div>
+      <details class="rn-details"><summary>How Garmin runs get here</summary>
+        <div class="rn-steps">
+          <div><span>1</span><p><b>One-time setup.</b> Your Garmin login is stored as a secret for the app's sync job (the steps are in GARMIN-SETUP.md).</p></div>
+          <div><span>2</span><p><b>Runs come from your watch.</b> Every 3 hours a scheduled job copies new runs from Garmin Connect.</p></div>
+          <div><span>3</span><p><b>Open this tab.</b> New runs appear, and the coach adjusts your plan every week.</p></div>
+        </div></details>
     </div>`;
+  el.querySelector('[data-a="log"]').onclick = () => logRun();
   el.querySelector('[data-a="demo"]').onclick = startDemo;
   el.querySelector('[data-a="refresh"]')?.addEventListener('click', () => doSync(false));
 }
 
-function garminBox() {
-  if (!store.configured) return '<p class="small rn-setup-note">Online sync isn’t set up yet, so Garmin runs can’t appear here. You can explore everything with demo data meanwhile.</p>';
+// One plain sentence about the Garmin connection, for people rather than for the developer.
+function garminLine() {
+  if (!store.configured) return 'Needs online sync (log in from Settings). Until then, log runs by hand.';
   const st = garminStatus();
-  const text = st ? garminStatusText(st) : 'Setup: add your Garmin login as GitHub secrets — ask Claude. Once done, runs appear here automatically within a few hours.';
-  return `<p class="small rn-setup-note">${esc(text)}</p>
-    <button class="rn-garmin-btn" data-a="refresh" ${syncing ? 'disabled' : ''}>${icon('sync')} ${syncing ? 'Refreshing…' : 'Refresh'}</button>`;
+  return st ? garminStatusText(st) : 'Not connected yet. Once it is, new runs arrive by themselves within a few hours.';
 }
 
 // ---------- Home card ----------
@@ -448,7 +457,7 @@ function renderHome(el) {
   if (!runs.length) {
     el.innerHTML = `<button class="card rn-home rn-home-empty">
       <span class="rn-dot rn-t-long">${icon('run')}</span>
-      <div class="grow"><b>Running coach</b><p class="small muted">Runs synced automatically from Garmin get feedback, a fitness score and a weekly plan for a faster 5k and 10k.</p></div>
+      <div class="grow"><b>Running coach</b><p class="small muted">Log runs or connect Garmin to get feedback, a fitness score and a weekly plan for a faster 5k and 10k.</p></div>
       <span class="rn-chev">${icon('back')}</span></button>`;
     el.firstElementChild.onclick = () => window.showTab?.('run');
     return;
@@ -490,7 +499,7 @@ function renderMe(el) {
     <div class="card stack rn-me">
       <div class="rn-garmin-row">
         <span class="rn-garmin-logo">${icon('run')}</span>
-        <div class="grow"><b>Garmin</b><p class="small muted" id="rn-st-text">${esc(store.configured ? (st ? garminStatusText(st) : 'Setup: add your Garmin login as GitHub secrets — ask Claude.') : 'Needs online sync, which isn’t set up yet.')}</p></div>
+        <div class="grow"><b>Garmin</b><p class="small muted" id="rn-st-text">${esc(garminLine())}</p></div>
         <div id="rn-st-actions" class="row">${store.configured ? `<button class="icon-btn ${syncing ? 'rn-spin' : ''}" data-a="sync" aria-label="Refresh" ${syncing ? 'disabled' : ''}>${icon('sync')}</button>` : ''}</div>
       </div>
       ${plan ? RP.meGoalPlanHtml(plan) : `<div><p class="rn-label">Runs per week</p><div class="seg" id="rn-rpw">${[2, 3, 4, 5, 6].map((n) => `<button data-v="${n}" class="${ctx.runsPerWeek === n ? 'on' : ''}">${n}</button>`).join('')}</div></div>

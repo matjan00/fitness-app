@@ -96,9 +96,10 @@ function todaysRun() {
   return store.all('run').filter((r) => r.start && new Date(r.start).toDateString() === new Date(`${d}T12:00`).toDateString())
     .sort((a, b) => (+b.distance_m || 0) - (+a.distance_m || 0))[0] || null;
 }
-function logRun(kind) {
+// Manual run entry; `kind` is today's plan session (tempo, easy…) or null from the Run tab.
+export function logRun(kind = null) {
   push((el, s) => {
-    el.innerHTML = sheet({ title: `Log ${SESSION_LABEL[kind].toLowerCase()}`, body: `<form class="form ct-entry">
+    el.innerHTML = sheet({ title: kind ? `Log ${SESSION_LABEL[kind].toLowerCase()}` : 'Log a run', body: `<form class="form ct-entry">
       <div class="form-row"><label>Distance (km)<input name="km" inputmode="decimal" autocomplete="off"></label>
       <label>Time (mm:ss or h:mm:ss)<input name="t" inputmode="text" placeholder="32:30" autocomplete="off"></label></div>
       <p class="small muted ct-pace">&nbsp;</p>
@@ -112,7 +113,7 @@ function logRun(kind) {
       e.preventDefault();
       const km = parseNum(form.km.value), t = secs();
       if (!(km > 0 && t > 0)) { toast('Enter distance and time'); return; }
-      await store.put('run', { name: SESSION_LABEL[kind], type: 'running', sport: 'running', manual: true, start: new Date(Date.now() - t * 1000).toISOString(), distance_m: Math.round(km * 1000), moving_s: t, elapsed_s: t });
+      await store.put('run', { name: kind ? SESSION_LABEL[kind] : 'Run', type: 'running', sport: 'running', manual: true, start: new Date(Date.now() - t * 1000).toISOString(), distance_m: Math.round(km * 1000), moving_s: t, elapsed_s: t });
       toast('Run saved');
       s.close();
     };
@@ -205,8 +206,8 @@ function render(el) {
   const c = cutSettings();
   if (!c.startDate) {
     el.innerHTML = `<div class="card ct-today"><div class="card-head"><h2>Cut plan</h2></div>
-      <p class="small muted">11 weeks to 65 kg: daily checklist, workouts that progress from what you actually lift, weekly check-ins.</p>
-      <button class="primary block" id="ct-setup" style="margin-top:12px">Set up the plan</button></div>`;
+      <p class="small muted">A daily checklist, workouts that progress from what you actually lift, and weekly check-ins toward your goal weight.</p>
+      <button class="ghost block" id="ct-setup" style="margin-top:12px">Set up the plan</button></div>`;
     $('#ct-setup', el).onclick = openCutSettings;
     return;
   }

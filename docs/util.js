@@ -73,17 +73,38 @@ export const local = {
   del(k) { try { localStorage.removeItem(k); } catch { /* ignore */ } },
 };
 
-export function toast(msg, ms = 2600) {
+// Short message above the tab bar, announced to screen readers. With `action` ({ label, run }) it
+// carries a button (e.g. Undo) and stays up longer.
+export function toast(msg, ms = 2600, action = null) {
   let t = $('#toast');
   if (!t) {
     t = document.createElement('div');
     t.id = 'toast';
+    t.setAttribute('role', 'status');
+    t.setAttribute('aria-live', 'polite');
     document.body.append(t);
   }
   t.textContent = msg;
+  t.classList.toggle('has-action', !!action);
+  if (action) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = action.label;
+    b.onclick = () => { t.classList.remove('show'); action.run(); };
+    t.append(b);
+    ms = Math.max(ms, 6000);
+  }
   t.classList.add('show');
   clearTimeout(toast.timer);
   toast.timer = setTimeout(() => t.classList.remove('show'), ms);
+}
+
+// A part of the screen failed to draw: say what, reassure, offer a reload; keep the technical detail folded.
+export function errorCard(what, e) {
+  return `<div class="card err-card"><p><b>${esc(what)} couldn't load.</b></p>
+    <p class="small muted">Your data is safe. Reloading the app usually fixes this.</p>
+    ${e?.message ? `<details><summary class="small muted">Details</summary><p class="tiny muted">${esc(e.message)}</p></details>` : ''}
+    <button class="ghost" type="button" onclick="location.reload()">Reload</button></div>`;
 }
 
 export const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -113,6 +134,9 @@ const ICONS = {
   list: '<path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/>',
   up: '<path d="M6 15l6-6 6 6"/>',
   swap: '<path d="M7 4L3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7"/>',
+  arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+  copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/>',
+  move: '<path d="M4 12h11M11 7l5 5-5 5M20 5v14"/>',
   note: '<path d="M5 4h14v16H5zM9 9h6M9 13h6M9 17h3"/>',
   scale: '<path d="M4 4h16v16H4z"/><path d="M8 9a4 4 0 0 1 8 0l-4 1z"/>',
   fire: '<path d="M12 21c4 0 7-3 7-7 0-5-5-6-5-11-3 2-5 5-5 8-1-1-2-2-2-3-1 2-2 4-2 6 0 4 3 7 7 7z"/>',

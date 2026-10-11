@@ -79,7 +79,7 @@ export function mountLibrary(root, opts) {
     more();
   };
 
-  loadDb().then(filter).catch((e) => { listEl.innerHTML = `<p class="error small">${esc(e.message)}</p>`; });
+  loadDb().then(filter).catch((e) => { listEl.innerHTML = `<p class="small" style="padding:12px 2px"><b>The exercise list couldn't load.</b> Check your connection and try again.<br><span class="tiny muted">${esc(e.message)}</span></p>`; });
 
   const io = new IntersectionObserver((ents) => { if (ents.some((e) => e.isIntersecting)) more(); }, { rootMargin: '600px' });
   io.observe($('.gx-sentinel', root));
@@ -327,7 +327,7 @@ function recordsHtml(id, mode) {
 
 function recordsCharts(box, id, mode) {
   const series = exerciseSeries(workouts(), id).slice(-40);
-  const color = cssVar('--gym') || '#f2542d';
+  const color = cssVar('--gym') || '#5a4fe0';
   $$('canvas[data-k]', box).forEach((cv) => {
     const k = cv.dataset.k;
     const pts = series.filter((r) => r[k] > 0);

@@ -15,7 +15,13 @@ export function chart(canvas, config) {
   Chart.defaults.font.size = 11;
   Chart.defaults.plugins.legend.display = false;
   Chart.defaults.maintainAspectRatio = false;
-  Chart.defaults.animation.duration = 300;
+  Chart.defaults.animation.duration = matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 300;
+  // A canvas is invisible to screen readers: name it after its card ("Body weight chart").
+  if (!canvas.hasAttribute('aria-label')) {
+    const h = canvas.closest('.card')?.querySelector('h2, h3');
+    canvas.setAttribute('role', 'img');
+    canvas.setAttribute('aria-label', `${h ? h.textContent.trim() : 'Data'} chart`);
+  }
   const ch = new Chart(canvas, config);
   charts.set(canvas, ch);
   return ch;

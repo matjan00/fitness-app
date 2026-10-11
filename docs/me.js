@@ -1,7 +1,7 @@
 // "Me / settings" screen: sections contributed by the feature modules (body weight, targets, Garmin sync status…),
 // then account / sync and backup, which live here.
 
-import { $, esc, icon, toast, local, niceDate, niceTime } from './util.js';
+import { $, esc, icon, toast, local, niceDate, niceTime, errorCard } from './util.js';
 import * as store from './store.js';
 import * as gym from './gym.js';
 import * as food from './food.js';
@@ -40,7 +40,7 @@ function render(el, head = true) {
   [cut, gym, run, food].map((m) => m.meSection).filter(Boolean).sort((a, b) => a.order - b.order).forEach((s) => {
     const d = document.createElement('div');
     wrap.append(d);
-    try { s.render(d); } catch (e) { console.error(e); d.innerHTML = `<div class="card error">${esc(e.message)}</div>`; }
+    try { s.render(d); } catch (e) { console.error(e); d.innerHTML = errorCard('This section', e); }
   });
 
   renderSync($('#me-sync', el));

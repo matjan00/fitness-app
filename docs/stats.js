@@ -42,18 +42,17 @@ function render(el) {
     renderProgress($('#st-cut', el));
     return;
   }
-  const label = RANGES.find((r) => r.days === days).label;
   el.innerHTML = `<div class="page-head"><h1>Stats</h1></div>${viewSeg}
     <div class="seg st-range">${RANGES.map((r) => `<button data-days="${r.days}" class="${r.days === days ? 'on' : ''}">${r.label}</button>`).join('')}</div>
     <div class="stack st-cards">
       ${section('Calories', 'st-kcal')}
-      ${section('Protein, carbs &amp; fat', 'st-macros', 'Grams per day, dashed lines are your targets.')}
+      ${section('Protein, carbs &amp; fat', 'st-macros', targets() ? 'Grams per day. Dashed lines are your targets.' : 'Grams per day.')}
       ${section('Body weight', 'st-weight', 'Dots are weigh-ins, the line is the 7-day average.')}
       ${section('Running', 'st-run')}
       ${section('Gym sessions', 'st-gym')}
       ${section('Gym volume', 'st-vol', 'Total kg lifted (weight × reps) per week.')}
     </div>
-    <p class="tiny muted center" style="margin-top:16px">Showing the last ${esc(label)}.</p>`;
+    <p class="tiny muted center" style="margin-top:16px">Showing the last ${esc({ 7: '7 days', 30: '30 days', 90: '90 days' }[days] || 'year')}.</p>`;
   bindView();
   $$('.st-range button', el).forEach((b) => b.onclick = () => {
     days = Number(b.dataset.days);
@@ -98,7 +97,7 @@ function drawFood(el) {
   const food = cssVar('--food');
   const avg = averageLogged(daily);
   $('#st-kcal', el).closest('.st-card').querySelector('h2').insertAdjacentHTML('afterend',
-    `<p class="small muted">${weekly ? 'Average per logged day, by week.' : 'Per day.'} ${avg ? `Average ${n0(avg.kcal)} kcal${t ? ` of ${n0(t.kcal)} target` : ''} (${avg.days} days logged).` : ''}</p>`);
+    `<p class="small muted">${weekly ? 'Average per logged day, by week.' : 'Per day.'} ${avg ? `Average ${n0(avg.kcal)} kcal${t ? ` of ${n0(t.kcal)} target` : ''} (${avg.days} day${avg.days === 1 ? '' : 's'} logged).` : ''}</p>`);
   const sets = [{ type: 'bar', label: 'Eaten', data: val('kcal'), backgroundColor: food, borderRadius: 4, maxBarThickness: 18 }];
   if (t?.kcal) sets.push(target('Target', t.kcal, rows.length, cssVar('--text-2')));
   chart('st-kcal', base(labels, sets, { tooltip: { label: (c) => `${c.dataset.label}: ${n0(c.parsed.y)} kcal` } }));
@@ -116,7 +115,7 @@ function drawFood(el) {
 function drawWeight(el) {
   const s = weightSeries(store.all('bodyweight'), today(), days);
   if (!empty(el, 'st-weight', s.length ? '' : 'No weigh-ins in this period yet.')) return;
-  const col = cssVar('--accent');
+  const col = cssVar('--text');
   chart('st-weight', base(s.map((e) => shortDay(e.day)), [
     line('7-day average', s.map((e) => +e.avg.toFixed(2)), col, { backgroundColor: fade(col), fill: true }),
     { type: 'line', label: 'Weigh-in', data: s.map((e) => e.kg), showLine: false, pointRadius: 3, borderColor: col, backgroundColor: col },
