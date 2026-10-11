@@ -3,7 +3,7 @@ import { $, esc, toast, today, addDays, fromDay, niceDate, relDay } from './util
 import * as store from './store.js';
 import { push, sheet, chooseSheet } from './nav.js';
 import { MEALS, mealLabel } from './food-ui.js';
-import { copiedEntries, movedEntry, dayChoices, copyMessage } from './diary-copy.js';
+import { copiedEntries, movedEntry, dayChoices, copyMessage, copyTarget } from './diary-copy.js';
 
 const dayName = (d) => {
   const r = relDay(fromDay(d));
@@ -34,17 +34,38 @@ async function copyTo(entries, day, meal) {
   toast(copyMessage(entries.length, { mealName: meal ? mealLabel(meal) : null, dayName: dayName(day) }));
 }
 
-// Copy all entries of one meal (on `from`) to another day and/or meal.
+// One sheet for a meal copy: day (yesterday / today / tomorrow or any date) + meal. Resolves { day, meal } or null.
+// Same day and same meal are allowed, so e.g. lunch can be copied to dinner of the same day.
+function pickTarget(title, from, mealKey) {
+  return new Promise((resolve) => {
+    let result = null, day = from, meal = mealKey;
+    push((el, s) => {
+      const t = today();
+      const dayBtns = dayChoices(t, addDays).map((c) => `<button class="chip${c.day === day ? ' on' : ''}" data-day="${c.day}">${esc(c.label)}</button>`).join('');
+      el.innerHTML = sheet({ title, body: `
+        <p class="tiny muted" style="margin:0 4px 6px">Day</p>
+        <div class="chips" style="flex-wrap:wrap">${dayBtns}</div>
+        <input type="date" id="fd-cdate" value="${esc(day)}" style="margin-top:6px">
+        <p class="tiny muted" style="margin:14px 4px 6px">Into meal</p>
+        <div class="chips" style="flex-wrap:wrap">${MEALS.map((m) => `<button class="chip${m.key === meal ? ' on' : ''}" data-meal="${m.key}">${esc(m.label)}</button>`).join('')}</div>
+        <div class="sheet-actions" style="margin-top:14px"><button class="ghost" data-a="no">Cancel</button><button class="primary" data-a="ok">Copy</button></div>` });
+      const dateEl = $('#fd-cdate', el);
+      const sync = () => el.querySelectorAll('[data-day]').forEach((b) => b.classList.toggle('on', b.dataset.day === day));
+      el.querySelectorAll('[data-day]').forEach((b) => { b.onclick = () => { day = b.dataset.day; dateEl.value = day; sync(); }; });
+      dateEl.onchange = () => { if (dateEl.value) { day = dateEl.value; sync(); } };
+      el.querySelectorAll('[data-meal]').forEach((b) => { b.onclick = () => { meal = b.dataset.meal; el.querySelectorAll('[data-meal]').forEach((x) => x.classList.toggle('on', x === b)); }; });
+      $('[data-a=ok]', el).onclick = () => { result = copyTarget(day, meal); s.close(); };
+      $('[data-a=no]', el).onclick = () => s.close();
+    }, { sheet: true, onClose: () => resolve(result) });
+  });
+}
+
+// Copy all entries of one meal (on `from`) to any meal of any day, including the same day.
 export async function copyMeal(from, mealKey, entries) {
   if (!entries.length) return;
-  const day = await pickDay(`Copy ${mealLabel(mealKey).toLowerCase()} to which day?`, from);
-  if (!day) return;
-  const meal = await chooseSheet(`Copy into which meal on ${dayName(day)}?`, [
-    { value: mealKey, label: `${mealLabel(mealKey)} (same meal)`, icon: 'swap' },
-    ...MEALS.filter((m) => m.key !== mealKey).map((m) => ({ value: m.key, label: m.label })),
-  ]);
-  if (!meal) return;
-  await copyTo(entries, day, meal);
+  const target = await pickTarget(`Copy ${mealLabel(mealKey).toLowerCase()} to`, from, mealKey);
+  if (!target) return;
+  await copyTo(entries, target.day, target.meal);
 }
 
 // Copy a whole day (every meal keeps its place).
