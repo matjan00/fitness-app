@@ -551,7 +551,7 @@ export function openRecipe(id) {
       ${rec.steps?.length ? `<h3 class="section-title">Steps</h3><ol class="fd-steps">${rec.steps.map((st) => /:$/.test(st) && st.length < 50 ? `<li class="fd-step-head">${esc(st)}</li>` : `<li>${esc(st)}</li>`).join('')}</ol>` : ''}
       ${rec.notes ? `<h3 class="section-title">Notes</h3><div class="card"><p style="white-space:pre-wrap">${esc(rec.notes)}</p></div>` : ''}` });
     $('#fd-edit', el).onclick = () => editRecipe(rec, { id });
-    $('#fd-log', el).onclick = () => logRecipe(scale === 1 ? rec : { ...sc, title: `${rec.title} ${factorLabel(scale)}` });
+    $('#fd-log', el).onclick = () => logRecipe(scale === 1 ? rec : { ...sc, title: `${rec.title} ${factorLabel(scale)}`, scale });
     // Scale: update numbers and ingredient rows in place so typing in the boxes keeps focus.
     const paint = () => {
       const sc2 = scaledRecipe(rec, scale);
@@ -637,7 +637,7 @@ export function logRecipe(rec, { day = today(), meal = null, entry = null } = {}
         const a = parseNum($('#fd-amt', el).value);
         await store.put('meal', {
           ...(entry ? { id: entry.id, t: entry.t } : { t: new Date().toISOString() }), day: entry?.day || day, meal: m, label: rec.title,
-          source: { type: rec.lib ? 'library' : 'recipe', id: rec.id }, servings: mode === 'servings' ? a : null, grams: mode === 'grams' ? a : null,
+          source: { type: rec.lib ? 'library' : 'recipe', id: rec.id }, ...((rec.scale || entry?.scale) ? { scale: rec.scale || entry.scale } : {}), servings: mode === 'servings' ? a : null, grams: mode === 'grams' ? a : null,
           per: { kcal: ps.kcal, p: ps.p, c: ps.c, f: ps.f, grams: ps.grams },
           kcal: ps.kcal * f, p: ps.p * f, c: ps.c * f, f: ps.f * f,
         });
