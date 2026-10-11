@@ -219,3 +219,18 @@
 .fd-row:last-child { border-bottom: 0; }
 .fd-row .list-item { border-bottom: 0; flex: 1; min-width: 0; }
 .fd-mv { width: 40px; height: 40px; flex: none; color: var(--text-2); }
+
+/* Shopping list */
+.fd-shop-last { text-align: left; margin-bottom: 4px; }
+.fd-shop-rec { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--line); }
+.fd-shop-rec:last-child { border-bottom: 0; }
+.fd-shop-pick, .fd-shop-row { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; width: 100%; padding: 12px 2px; text-align: left; }
+.fd-shop-row { border-bottom: 1px solid var(--line); }
+.fd-shop-row:last-child { border-bottom: 0; }
+.fd-shop-box { flex: none; width: 22px; height: 22px; border-radius: 7px; border: 2px solid var(--text-3); display: grid; place-items: center; }
+.fd-shop-box svg { width: 14px; height: 14px; fill: none; stroke: var(--bg); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.fd-shop-pick.on .fd-shop-box, .fd-shop-row.done .fd-shop-box { background: var(--text); border-color: var(--text); }
+.fd-shop-row.done .grow { text-decoration: line-through; color: var(--text-3); }
+.fd-shop-srv { flex: none; display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-2); }
+.fd-shop-srv input { width: 56px; padding: 6px 8px; text-align: center; }
+.fd-shop-days { flex-wrap: wrap; }

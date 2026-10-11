@@ -31,6 +31,13 @@ export function dayChoices(today, addDays) {
   ];
 }
 
+// Validated copy target from the picker: { day, meal } or null when the day is not a YYYY-MM-DD date or the meal is unknown.
+// The target may equal the source (lunch -> dinner on the same day, or even the same meal again).
+export function copyTarget(day, meal) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day || '') || !MEAL_KEYS.includes(meal)) return null;
+  return { day, meal };
+}
+
 // Short toast text, e.g. "Copied 3 items to Lunch · Tomorrow".
 export function copyMessage(count, { mealName = null, dayName = '' } = {}) {
   const items = `${count} item${count === 1 ? '' : 's'}`;

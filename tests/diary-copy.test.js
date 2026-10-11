@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { copiedEntries, movedEntry, dayChoices, copyMessage } from '../docs/diary-copy.js';
+import { copiedEntries, movedEntry, dayChoices, copyMessage, copyTarget } from '../docs/diary-copy.js';
 
 const e = (id, meal, t, extra = {}) => ({ id, day: '2026-10-01', meal, t, label: id, source: { type: 'food', id: 'x' }, grams: 150, kcal: 200, p: 10, c: 20, f: 5, ...extra });
 const now = new Date('2026-10-02T10:00:00Z');
@@ -39,4 +39,11 @@ test('dayChoices and message', () => {
   assert.deepEqual(dayChoices('T', add).map((c) => [c.label, c.day]), [['Yesterday', 'T+-1'], ['Today', 'T'], ['Tomorrow', 'T+1']]);
   assert.equal(copyMessage(1, { mealName: 'Lunch', dayName: 'Tomorrow' }), 'Copied 1 item to Lunch · Tomorrow');
   assert.equal(copyMessage(3, { dayName: 'Today' }), 'Copied 3 items · Today');
+});
+
+test('copyTarget allows the same day / meal, rejects bad input', () => {
+  assert.deepEqual(copyTarget('2026-10-01', 'dinner'), { day: '2026-10-01', meal: 'dinner' });
+  assert.equal(copyTarget('', 'lunch'), null);
+  assert.equal(copyTarget(null, 'lunch'), null);
+  assert.equal(copyTarget('2026-10-01', 'brunch'), null);
 });

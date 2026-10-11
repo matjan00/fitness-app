@@ -11,6 +11,7 @@ import { loadFoods } from './food-db.js';
 import { renderLearn, loadLessons } from './food-learn.js';
 import { renderLibrary } from './food-library-ui.js';
 import { copyMeal, copyDay, moveEntry } from './diary-copy-ui.js';
+import { openShopping } from './shopping-ui.js';
 
 export const tab = { id: 'food', title: 'Food', icon: 'food', render };
 
@@ -30,10 +31,11 @@ function render(el) {
   const lessons = Boolean(settings().showLessons);
   const v = view() === 'learn' && !lessons ? 'diary' : view();
   const segs = [['diary', 'Diary'], ['library', 'Library'], ['recipes', 'My recipes'], ...(lessons ? [['learn', 'Learn']] : [])];
-  el.innerHTML = `<div class="page-head row between"><h1>Food</h1>
+  el.innerHTML = `<div class="page-head row between"><div class="row" style="gap:6px"><h1>Food</h1><button class="icon-btn" id="fd-shop" aria-label="Shopping list">${icon('list')}</button></div>
       <div class="seg fd-viewseg">${segs.map(([k, l]) => `<button data-v="${k}" class="${v === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
     <div id="fd-body"></div>`;
   $$('.fd-viewseg button', el).forEach((b) => { b.onclick = () => { local.set('fd-view', b.dataset.v); render(el); }; });
+  $('#fd-shop', el).onclick = openShopping;
   const body = $('#fd-body', el);
   if (v === 'recipes') renderBook(body); else if (v === 'library') renderLibrary(body); else if (v === 'learn') renderLearn(body); else renderDiary(body);
 }
@@ -239,7 +241,8 @@ async function editEntry(e) {
     const v = await chooseSheet(rec ? e.label : `${e.label} (recipe deleted)`, [
       ...(rec ? [{ value: 'edit', label: 'Change amount or meal', icon: 'edit' }, { value: 'open', label: 'Open recipe', icon: 'note' }] : []),
       { value: 'del', label: 'Remove from diary', icon: 'trash', danger: true }]);
-    if (v === 'edit') return logRecipe(rec, { entry: e });
+    // Use the per-serving numbers stored on the entry, so an entry logged from a scaled recipe keeps its scale.
+    if (v === 'edit') return logRecipe(e.per ? { id: rec.id, title: e.label, servings: 1, totals: { ...e.per } } : rec, { entry: e });
     if (v === 'open') return openRecipe(rec.id);
     if (v === 'del') { await store.remove(e.id); toast('Removed'); }
     return;
