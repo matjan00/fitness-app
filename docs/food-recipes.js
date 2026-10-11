@@ -551,7 +551,7 @@ export function openRecipe(id) {
       ${rec.steps?.length ? `<h3 class="section-title">Steps</h3><ol class="fd-steps">${rec.steps.map((st) => /:$/.test(st) && st.length < 50 ? `<li class="fd-step-head">${esc(st)}</li>` : `<li>${esc(st)}</li>`).join('')}</ol>` : ''}
       ${rec.notes ? `<h3 class="section-title">Notes</h3><div class="card"><p style="white-space:pre-wrap">${esc(rec.notes)}</p></div>` : ''}` });
     $('#fd-edit', el).onclick = () => editRecipe(rec, { id });
-    $('#fd-log', el).onclick = () => logRecipe(scale === 1 ? rec : { ...sc, title: `${rec.title} ${factorLabel(scale)}`, scale });
+    $('#fd-log', el).onclick = () => logRecipe(scale === 1 ? rec : { ...scaledRecipe(rec, scale), title: `${rec.title} ${factorLabel(scale)}`, scale });
     // Scale: update numbers and ingredient rows in place so typing in the boxes keeps focus.
     const paint = () => {
       const sc2 = scaledRecipe(rec, scale);
