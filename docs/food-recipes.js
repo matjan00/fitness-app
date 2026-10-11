@@ -6,9 +6,10 @@ import { push, page, sheet, confirmSheet, chooseSheet } from './nav.js';
 import { SUPABASE_URL, SUPABASE_KEY } from './config.js';
 import { parseIngredient, splitRecipeText, extractLinks, shortTitle, UNIT_LABEL } from './food-parse.js';
 import { bestMatch, toGrams, search as searchFoods } from './food-db.js';
-import { recipeTotals, perServing, macrosFor, ingredientStatus } from './food-calc.js';
+import { recipeTotals, perServing, macrosFor, ingredientStatus, sumEntries } from './food-calc.js';
+import { scaleIngredients, factorForKcal, clampFactor, factorLabel, QUICK_FACTORS } from './food-scale.js';
 import { CATEGORIES, suggestCategories, catLabel } from './food-cats.js';
-import { getIndex, snap, rememberMatch, remembered, pickFood, macroLine, img, MEALS, mealLabel } from './food-ui.js';
+import { getIndex, dayTargets, snap, rememberMatch, remembered, pickFood, macroLine, img, MEALS, mealLabel } from './food-ui.js';
 import { compressFile, compressRemote } from './food-photo.js';
 import { practisesChipsHtml, bindPractisesChips } from './food-learn.js';
 import { checkCardHtml, ingListHtml, bindEditing, foodsCached, metaChipsHtml, bindMeta } from './food-edit-ui.js';
@@ -494,14 +495,31 @@ export async function deleteRecipeFlow(id, done) {
   }
 }
 
+// kcal still free in today's target (null without a target); prefill for "Fit to calories".
+function kcalLeftToday() {
+  const t = dayTargets(today());
+  if (!t) return null;
+  const left = t.kcal - sumEntries(store.all('meal').filter((e) => e.day === today())).kcal;
+  return left > 0 ? Math.round(left / 5) * 5 : null;
+}
+
+// The recipe with every ingredient x factor (totals recomputed). Same id, so it can be logged or saved over the original.
+export const scaledRecipe = (rec, factor) => (factor === 1 ? rec : withTotals({ ...rec, ingredients: scaleIngredients(rec.ingredients || [], factor) }));
+
 export function openRecipe(id) {
+  let scale = 1; // multiplier for this page only, until "Apply to recipe" / "Save as new recipe"
+  let fit = null; // text in the "Fit to calories" box
   push((el, s) => {
     const rec = store.get(id);
     if (!rec) { el.innerHTML = page({ title: 'Recipe', body: '<div class="empty">This recipe was deleted.</div>' }); return; }
     const foods = foodsCached(() => s.render());
     const warns = foods ? checkRecipe(rec.ingredients || [], rec.servings, foods) : [];
-    const ps = recipePer(rec);
-    const t = rec.totals || recipeTotals(rec.ingredients);
+    const base = recipePer(rec);
+    const sc = scaledRecipe(rec, scale);
+    const ps = recipePer(sc);
+    const t = sc.totals || recipeTotals(sc.ingredients);
+    const left = kcalLeftToday();
+    if (fit == null) fit = left ? String(left) : '';
     const view = ownView(rec, recipePer, foods || {});
     const src = rec.source?.url ? (() => { try { return new URL(rec.source.url).hostname.replace(/^www\./, ''); } catch { return 'source'; } })() : null;
     const cats = Object.entries(rec.cats || {}).flatMap(([dim, keys]) => (keys || []).map((k) => catLabel(dim, k)));
@@ -513,17 +531,63 @@ export function openRecipe(id) {
         ${src ? `<a href="${esc(rec.source.url)}" target="_blank" rel="noopener noreferrer">${esc(rec.source.type === 'tiktok' ? 'TikTok' : rec.source.type === 'youtube' ? 'YouTube' : src)}${rec.source.author ? ` · ${esc(rec.source.author)}` : ''}</a>` : ''}</div>
       ${cats.length ? `<div class="fd-chipwrap" style="margin:10px 0 0">${cats.map((c) => `<span class="pill">${esc(c)}</span>`).join('')}</div>` : ''}
       ${practisesChipsHtml(rec)}
-      <div class="card fd-totals" style="margin-top:14px"><div class="row between"><div><p class="tiny muted">Per serving${ps.grams ? ` (${n0(ps.grams)} g)` : ''}</p><div class="fd-big">${n0(ps.kcal)} <span>kcal</span></div></div>
-        <div class="fd-pcf"><span class="fd-p">P ${n0(ps.p)} g</span><span class="fd-c">C ${n0(ps.c)} g</span><span class="fd-f">F ${n0(ps.f)} g</span></div></div>
+      <div class="card fd-totals" style="margin-top:14px"><div class="row between"><div><p class="tiny muted" id="fd-ps-l">Per serving${ps.grams ? ` (${n0(ps.grams)} g)` : ''}${scale !== 1 ? ` · ${factorLabel(scale)}` : ''}</p><div class="fd-big"><b id="fd-ps-k">${n0(ps.kcal)}</b> <span>kcal</span></div></div>
+        <div class="fd-pcf" id="fd-ps-m"><span class="fd-p">P ${n0(ps.p)} g</span><span class="fd-c">C ${n0(ps.c)} g</span><span class="fd-f">F ${n0(ps.f)} g</span></div></div>
         ${t.missing ? `<p class="fd-warn small">${icon('info')} ${t.missing} ingredient${t.missing > 1 ? 's' : ''} not counted — tap edit to fix.</p>` : ''}
         <button class="primary block" id="fd-log" style="margin-top:14px">${icon('plus')} Log to diary</button></div>
+      <div class="card fd-scale">
+        <div class="row between"><b>Scale</b><span class="tiny muted" id="fd-sc-note"></span></div>
+        <div class="chips" id="fd-sc-chips" style="margin-top:8px">${QUICK_FACTORS.map((q) => `<button class="chip" data-q="${q}">×${q}</button>`).join('')}
+          <label class="fd-gwrap"><input id="fd-sc-x" inputmode="decimal" aria-label="Multiplier" placeholder="×" value="${scale !== 1 ? scale : ''}"></label></div>
+        <p class="tiny muted" style="margin:10px 0 6px">Fit to calories: how many kcal should <b>1 serving</b> be?${left ? ` (${n0(left)} kcal left today)` : ''}</p>
+        <div class="row" style="gap:8px"><label class="fd-gwrap grow"><input id="fd-fit" inputmode="decimal" aria-label="Target kcal per serving" placeholder="kcal" value="${esc(fit)}">kcal</label>
+          <button class="ghost" id="fd-fit-go">Fit</button></div>
+        <div id="fd-sc-acts" class="row" style="gap:8px;margin-top:12px" hidden>
+          <button class="ghost grow" id="fd-sc-new">Save as new recipe</button><button class="ghost grow" id="fd-sc-apply">Apply to recipe</button></div>
+      </div>
       ${checkCardHtml(warns)}
       <h3 class="section-title">Ingredients</h3>
-      <div class="card"><div class="list">${ingListHtml(rec.ingredients || [])}</div></div>
+      <div class="card"><div class="list" id="fd-ings">${ingListHtml(sc.ingredients || [])}</div></div>
       ${rec.steps?.length ? `<h3 class="section-title">Steps</h3><ol class="fd-steps">${rec.steps.map((st) => /:$/.test(st) && st.length < 50 ? `<li class="fd-step-head">${esc(st)}</li>` : `<li>${esc(st)}</li>`).join('')}</ol>` : ''}
       ${rec.notes ? `<h3 class="section-title">Notes</h3><div class="card"><p style="white-space:pre-wrap">${esc(rec.notes)}</p></div>` : ''}` });
     $('#fd-edit', el).onclick = () => editRecipe(rec, { id });
-    $('#fd-log', el).onclick = () => logRecipe(rec);
+    $('#fd-log', el).onclick = () => logRecipe(scale === 1 ? rec : { ...sc, title: `${rec.title} ${factorLabel(scale)}` });
+    // Scale: update numbers and ingredient rows in place so typing in the boxes keeps focus.
+    const paint = () => {
+      const sc2 = scaledRecipe(rec, scale);
+      const p2 = recipePer(sc2);
+      $('#fd-ps-l', el).textContent = `Per serving${p2.grams ? ` (${n0(p2.grams)} g)` : ''}${scale !== 1 ? ` · ${factorLabel(scale)}` : ''}`;
+      $('#fd-ps-k', el).textContent = n0(p2.kcal);
+      $('#fd-ps-m', el).innerHTML = `<span class="fd-p">P ${n0(p2.p)} g</span><span class="fd-c">C ${n0(p2.c)} g</span><span class="fd-f">F ${n0(p2.f)} g</span>`;
+      const tmp = document.createElement('div');
+      tmp.innerHTML = ingListHtml(sc2.ingredients || []);
+      [...tmp.children].forEach((row, i) => { const cur = $('#fd-ings', el).children[i]; if (cur) cur.innerHTML = row.innerHTML; });
+      $$('#fd-sc-chips [data-q]', el).forEach((b) => b.classList.toggle('on', +b.dataset.q === scale));
+      $('#fd-sc-note', el).textContent = scale !== 1 ? `${factorLabel(scale)} · whole recipe ${n0(sc2.totals.kcal)} kcal` : '';
+      $('#fd-sc-acts', el).hidden = scale === 1;
+    };
+    const setScale = (f, { keepX = false } = {}) => { scale = clampFactor(f); if (!keepX) $('#fd-sc-x', el).value = scale !== 1 ? String(scale) : ''; paint(); };
+    $$('#fd-sc-chips [data-q]', el).forEach((b) => { b.onclick = () => setScale(+b.dataset.q); });
+    $('#fd-sc-x', el).oninput = (e) => { const n = parseNum(e.target.value); if (n > 0) setScale(n, { keepX: true }); };
+    $('#fd-fit', el).oninput = (e) => { fit = e.target.value; };
+    $('#fd-fit-go', el).onclick = () => {
+      const f = factorForKcal(parseNum($('#fd-fit', el).value), base.kcal);
+      if (f == null) { toast(base.kcal > 0 ? 'Enter the kcal you want per serving' : 'This recipe has no calories yet'); return; }
+      setScale(f);
+    };
+    $('#fd-sc-apply', el).onclick = async () => {
+      if (scale === 1) return;
+      if (await confirmSheet(`Change the saved ingredient amounts of "${rec.title}" to ${factorLabel(scale)}? The old amounts are replaced.`, { ok: 'Apply to recipe' })) {
+        await store.put('recipe', scaledRecipe(store.get(id), scale)); toast('Recipe updated'); scale = 1; s.render();
+      }
+    };
+    $('#fd-sc-new', el).onclick = async () => {
+      if (scale === 1) return;
+      const { id: _id, from_library: _fl, ...rest } = scaledRecipe(store.get(id), scale);
+      const copy = await store.put('recipe', { ...rest, title: `${rec.title} ${factorLabel(scale)}`, created: new Date().toISOString() });
+      toast('Saved as a new recipe'); s.close(); openRecipe(copy.id);
+    };
+    paint();
     $('#fd-del', el).onclick = async () => {
       const copy = !!rec.from_library;
       if (await confirmSheet(copy ? 'Delete your version and go back to the original library recipe?' : `Delete "${rec.title}"? This cannot be undone.`, { ok: copy ? 'Delete my version' : 'Delete recipe', danger: true })) {
