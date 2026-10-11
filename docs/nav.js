@@ -37,6 +37,9 @@ function flushWaiting() {
 
 function activate(screen) {
   const { el, opts } = screen;
+  // Stack order must follow open order: a full page opened from a sheet (e.g. "Change food" picker) would
+  // otherwise sit behind it, because sheets have a fixed higher z-index than pages.
+  el.style.zIndex = Math.min(95, 40 + 4 * stack.length + (opts.sheet ? 1 : 0));
   document.body.append(el);
   stack.push(screen);
   history.pushState({ depth: stack.length }, '');
