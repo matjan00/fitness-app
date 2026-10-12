@@ -1,9 +1,9 @@
-// Cut plan: red flags, adaptive maintenance (TDEE), missed-lift rescheduling and "was yesterday logged?".
+// Cut plan: red flags, adaptive maintenance (TDEE) and "was yesterday logged?".
 // Pure (no DOM, no store); covered by tests/cut-flags.test.js. Days are local 'YYYY-MM-DD' strings.
 
 import { addDays, weekOf } from './stats-calc.js';
 import { CUT_DEFAULTS, PLAN, emaTrend, trendOn, targetWeight, weekNumber, daysBetween } from './cut-calc.js';
-import { WEEK_TEMPLATE, isScheduled, sessionFor, sessionDone, dayFacts, minimumDaysInWeek, SESSION_LABEL } from './cut-day.js';
+import { weekTraining, dayFacts, minimumDaysInWeek, SESSION_LABEL } from './cut-day.js';
 import { e1rmOf, workingSets } from './cut-engine.js';
 import { MAIN_LIFTS } from './cut-calc.js';
 
@@ -27,30 +27,6 @@ export function adaptiveTdee(day, { weights = [], kcalOf = () => null, window = 
   return { tdee: Math.round(avg - ((b - a) * 7700) / window), avgKcal: Math.round(avg), days: kc.length, change: Math.round((b - a) * 100) / 100 };
 }
 
-// ---------- missed lifts ----------
-// Lift days planned before `day` in its week that were not made up: planned lift days minus days lifted so far.
-export function missedLifts(day, { workouts = [], startDate = null, travel = new Set() } = {}) {
-  const past = range(weekOf(day), addDays(day, -1)).filter((d) => (!startDate || d >= startDate) && !travel.has(d));
-  const planned = past.filter((d) => WEEK_TEMPLATE[weekday(d)] === 'lift');
-  const done = past.filter((d) => sessionDone('lift', d, { workouts })).length;
-  const n = Math.max(0, planned.length - done);
-  return n ? planned.filter((d) => !sessionDone('lift', d, { workouts })).slice(-n) : [];
-}
-
-// After a missed lift: the first day from `day` that doesn't follow a lift day, and the day after that for the
-// following lift (the next planned lift day if it is at least 2 days later, else 2 days later) — never two lifts in a row.
-// Returns { day, then } or null when no lift was missed this week.
-export function rescheduleLifts(day, { workouts = [], startDate = null, travel = new Set() } = {}) {
-  if (travel.has(day) || !missedLifts(day, { workouts, startDate, travel }).length) return null;
-  const doneOn = (d) => sessionDone('lift', d, { workouts });
-  let d = day;
-  if (doneOn(d)) return null;
-  while (doneOn(addDays(d, -1))) d = addDays(d, 1);
-  let then = addDays(d, 1);
-  while (!(WEEK_TEMPLATE[weekday(then)] === 'lift' && daysBetween(d, then) >= 2) && daysBetween(d, then) < 2) then = addDays(then, 1);
-  return { day: d, then };
-}
-
 // ---------- logging ----------
 // A day counts as logged when any of weight, sleep, steps or food was entered.
 export const isLogged = (day, src) => dayFacts(day, src).logged;
@@ -65,16 +41,16 @@ export function redFlags(day, src, cfg = {}, start = null) {
   const inPlan = (d) => d >= c.startDate && d < day;
   const facts = (d) => dayFacts(d, src);
 
-  // 2 scheduled sessions missed in a week (this week so far, or last week)
-  for (const ws of [weekOf(day), addDays(weekOf(day), -7)]) {
-    const missed = range(ws, addDays(ws, 6)).filter((d) => inPlan(d)).filter((d) => {
-      const s = sessionFor(d, { workouts: src.workouts, routineCut: src.routineCut, dailies: src.dailies });
-      return isScheduled(s.kind) && !sessionDone(s.kind, d, src);
-    });
-    if (missed.length >= 2) {
-      flags.push({ key: 'missed', text: `${missed.length} planned sessions missed ${ws === weekOf(day) ? 'this week' : 'last week'}` });
-      break;
-    }
+  // Training: 3 gym + 2 runs a week on any days. Flag this week once the goal no longer fits in the days left
+  // (today still counts as a day left), else last week if it ended short. Weeks that began before the plan don't count.
+  const wsrc = { workouts: src.workouts || [], runs: src.runs || [], dailies: src.dailies || [] };
+  const now = weekTraining(day, { ...wsrc, through: addDays(day, -1) });
+  const last = weekTraining(addDays(weekOf(day), -7), { ...wsrc, through: addDays(weekOf(day), -1) });
+  const short = (w) => `gym ${w.lift}/${w.goal.lift}, runs ${w.run}/${w.goal.run}`;
+  if (weekOf(day) >= c.startDate && !now.onTrack) {
+    flags.push({ key: 'missed', text: `Behind on training: ${short(now)} with ${now.daysLeft} day${now.daysLeft === 1 ? '' : 's'} left this week` });
+  } else if (addDays(weekOf(day), -7) >= c.startDate && !last.complete) {
+    flags.push({ key: 'missed', text: `Last week's training fell short: ${short(last)}` });
   }
 
   // protein under the minimum 3 days in a row (unlogged days count as missed)

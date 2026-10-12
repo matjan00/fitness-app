@@ -3,7 +3,7 @@
 
 import { addDays } from './stats-calc.js';
 import { CUT_DEFAULTS, emaTrend, trendOn, targetWeight, weekNumber } from './cut-calc.js';
-import { isScheduled } from './cut-day.js';
+import { WEEK_GOAL, sessionDone } from './cut-day.js';
 import { e1rmOf, workingSets } from './cut-engine.js';
 import { MAIN_LIFTS } from './cut-calc.js';
 
@@ -16,9 +16,10 @@ const STRENGTH = { progressed: 1, held: 0.8, dropped: 0, completed: 1 };
 export const GRADES = [[0.9, 'A'], [0.8, 'B'], [0.7, 'C'], [0.6, 'D'], [0.5, 'E']];
 export const gradeOf = (pct) => GRADES.find(([min]) => pct >= min)?.[1] || 'F';
 
-// statusOf(day) → { status, facts, session, done } (cut-today.statusOf). workouts: finished workouts with .cut.session.
+// statusOf(day) → { status, facts, session, done } (cut-today.statusOf). workouts: all workouts (finished ones with
+// .cut.session also score the lifts); runs: all runs.
 // Returns the numbers the review shows and the grade.
-export function weekSummary(checkinDay, { statusOf, weights = [], workouts = [], cfg = {}, start = null, checkinDone = true } = {}) {
+export function weekSummary(checkinDay, { statusOf, weights = [], workouts = [], runs = [], cfg = {}, start = null, checkinDone = true } = {}) {
   const c = { ...CUT_DEFAULTS, ...cfg };
   // The plan week that ended on or before the check-in day (its last day only counts once it is over).
   let from = addDays(checkinDay, -7), to = addDays(checkinDay, -1);
@@ -34,14 +35,21 @@ export function weekSummary(checkinDay, { statusOf, weights = [], workouts = [],
   const wk = weekNumber(c.startDate, to);
   const green = days.filter((d) => d.status === 'green').length;
   const yellow = days.filter((d) => d.status === 'yellow').length;
-  const sched = days.filter((d) => isScheduled(d.session.kind));
-  const done = sched.filter((d) => d.done).length;
+  // Sessions: days with a gym workout and days with a run, against the weekly 3 + 2 (extras don't make up for the other).
+  const inWeek = days.map((d) => d.day);
+  const lifted = inWeek.filter((d) => sessionDone('lift', d, { workouts })).length;
+  const ran = inWeek.filter((d) => sessionDone('easy', d, { runs })).length;
+  // Travel days shrink the goal in proportion, as on the Today card.
+  const share = (7 - days.filter((d) => d.facts?.travel).length) / 7;
+  const goal = { lift: Math.round(WEEK_GOAL.lift * share), run: Math.round(WEEK_GOAL.run * share) };
+  const planned = goal.lift + goal.run;
+  const done = Math.min(lifted, goal.lift) + Math.min(ran, goal.run);
   const sessions = workouts.filter((w) => w?.cut?.session && w.started_at.slice(0, 10) >= from && w.started_at.slice(0, 10) <= to);
   const strength = sessions.length ? avg(sessions.map((w) => STRENGTH[w.cut.session] ?? 0.8)) : null;
   // The grade is the average of these parts (0–1); the review shows the ones that pulled it down.
   const partList = [
     { key: 'days', label: 'Green days', value: days.length ? (green + yellow * 0.5) / days.length : 0 },
-    { key: 'sessions', label: 'Sessions done', value: sched.length ? done / sched.length : 1 },
+    { key: 'sessions', label: 'Sessions done', value: planned ? done / planned : 1 },
     { key: 'checkin', label: 'Check-in', value: checkinDone ? 1 : 0 },
     ...(strength != null ? [{ key: 'strength', label: 'Lifts', value: strength }] : []),
   ];
@@ -52,7 +60,7 @@ export function weekSummary(checkinDay, { statusOf, weights = [], workouts = [],
     trendFrom: tFrom, trendTo: tTo, change: tFrom != null && tTo != null ? Math.round((tTo - tFrom) * 100) / 100 : null,
     target: start ? targetWeight(start, c.goalWeight, c.rate, wk) : null,
     kcal: f('kcal'), protein: f('p'), steps: f('steps'), sleep: f('sleep'),
-    sessionsDone: done, sessionsPlanned: sched.length,
+    sessionsDone: done, sessionsPlanned: planned, gymDone: lifted, runsDone: ran, goal,
     strength, sessions: sessions.map((w) => w.cut.session),
     score, grade: gradeOf(score), parts: partList,
   };

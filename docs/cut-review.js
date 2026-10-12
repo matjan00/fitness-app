@@ -37,7 +37,7 @@ function buildReview(ci) {
   const src = sources();
   const tg = currentTargets(c);
   const st = (d) => statusOf(d, src, c, tg.kcal);
-  const summary = weekSummary(ci, { statusOf: st, weights: src.weights, workouts: src.workouts, cfg: c, start: startWeight(c) });
+  const summary = weekSummary(ci, { statusOf: st, weights: src.weights, workouts: src.workouts, runs: src.runs, cfg: c, start: startWeight(c) });
   const last14 = range(addDays(ci, -14), addDays(ci, -1)).filter((d) => d >= c.startDate);
   const compliance = last14.length ? last14.filter((d) => ['green', 'yellow'].includes(st(d).status)).length / last14.length : 0;
   const sugg = suggestions({ weights: src.weights, checkinDay: ci, week: summary.week, compliance, targets: tg, cfg: c, liftDrop: liftChange(src.workouts, addDays(ci, -1)), sleep: summary.sleep });
@@ -67,7 +67,7 @@ export function openReview(ci = dueCheckin()) {
         ${s.protein != null ? `<div class="row between"><span>Protein (avg)</span><b>${vs(s.protein, tg.p, ' g')}</b></div>` : ''}
         ${s.steps != null ? `<div class="row between"><span>Steps (avg)</span><b>${vs(s.steps, c.steps)}</b></div>` : ''}
         ${s.sleep != null ? `<div class="row between"><span>Sleep (avg)</span><b>${vs(s.sleep, c.sleep, ' h', 1)}</b></div>` : ''}
-        <div class="row between"><span>Sessions</span><b>${s.sessionsDone} / ${s.sessionsPlanned}</b></div>
+        <div class="row between"><span>Training</span><b>gym ${s.gymDone}/${s.goal.lift} · runs ${s.runsDone}/${s.goal.run}</b></div>
         ${s.sessions.length ? `<div class="row between"><span>Lifts</span><b>${esc(s.sessions.map((x) => x[0].toUpperCase() + x.slice(1)).join(' · '))}</b></div>` : ''}
         <div class="row between"><span>Compliance (2 weeks)</span><b>${n0(compliance * 100)}%</b></div>
       </div>

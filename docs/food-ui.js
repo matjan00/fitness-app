@@ -23,7 +23,7 @@ export function dayTargets(d) {
   const t = targets();
   if (!t) return null;
   const cut = store.getConfig('cut', {});
-  const extra = liftDayExtra(d, { cfg: cut, workouts: store.all('workout') });
+  const extra = liftDayExtra(d, { cfg: cut, workouts: store.all('workout'), dailies: store.all('daily') });
   return extra ? { ...t, kcal: t.kcal + extra, c: Math.round((t.c || 0) + extra / 4), liftDay: extra } : t;
 }
 export async function saveSettings(patch) {

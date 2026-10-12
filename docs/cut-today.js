@@ -6,10 +6,10 @@ import * as store from './store.js';
 import { push, sheet } from './nav.js';
 import { startWorkout } from './gym-workout.js';
 import { cutSettings, currentTargets, openCutSettings, openPlan, addCutRoutines, startWeight, isSetUp } from './cut.js';
-import { ROUTINES, PLAN, PROGRAM_NAME, EASY_PACE, weekNumber, daysToGoal, daysBetween, emaTrend, trendOn, targetWeight } from './cut-calc.js';
-import { redFlags, rescheduleLifts, isLogged } from './cut-flags.js';
+import { PLAN, PROGRAM_NAME, EASY_PACE, weekNumber, daysToGoal, daysBetween, emaTrend, trendOn, targetWeight } from './cut-calc.js';
+import { redFlags, isLogged } from './cut-flags.js';
 import { reviewNeeded, openReview, dueCheckin, checkinFor } from './cut-review.js';
-import { travelDays, liftDayExtra, nextLift, sessionFor, sessionDone, dayFacts, dayStatus, streak, weekStreak, minimumDaysInWeek, SESSION_LABEL } from './cut-day.js';
+import { liftDayExtra, sessionFor, sessionDone, dayFacts, dayStatus, streak, weekStreak, minimumDaysInWeek, weekTraining, TRAIN_CHOICES, SESSION_LABEL } from './cut-day.js';
 
 const STATUS = { green: ['Green day', 'up'], yellow: ['Yellow day', 'gold'], red: ['Red day', 'down'], open: ['In progress', ''] };
 
@@ -21,7 +21,6 @@ export function sources() {
     workouts: store.all('workout'), runs: store.all('run'), checkins: store.all('checkin'), routineCut,
   };
 }
-const dayName = (d) => (d === today() ? 'today' : d === addDays(today(), 1) ? 'tomorrow' : new Date(`${d}T12:00`).toLocaleDateString('en-GB', { weekday: 'long' }));
 export const currentFlags = (c = cutSettings()) => redFlags(today(), sources(), c, startWeight(c));
 export async function saveDaily(day, patch) {
   const cur = store.all('daily').find((d) => d.day === day);
@@ -35,10 +34,11 @@ async function saveWeight(day, kg) {
 // Status of any day (shared with streaks and, later, the weekly review).
 export function statusOf(day, src = sources(), cfg = cutSettings(), kcalTarget = currentTargets(cfg).kcal) {
   const f = dayFacts(day, src);
-  const session = sessionFor(day, { workouts: src.workouts, routineCut, dailies: src.dailies });
+  const session = sessionFor(day, { workouts: src.workouts, runs: src.runs, routineCut, dailies: src.dailies });
   const done = sessionDone(session.kind, day, src);
-  const target = kcalTarget ? kcalTarget + liftDayExtra(day, { cfg, workouts: src.workouts }) : kcalTarget;
-  return { facts: f, session, done, ...dayStatus(f, { kcalTarget: target, cfg, session, done, isToday: day === today() }) };
+  const week = weekTraining(day, src);
+  const target = kcalTarget ? kcalTarget + liftDayExtra(day, { cfg, workouts: src.workouts, dailies: src.dailies }) : kcalTarget;
+  return { facts: f, session, done, week, ...dayStatus(f, { kcalTarget: target, cfg, session, done, week, isToday: day === today() }) };
 }
 
 // ---------- quick entry sheets ----------
@@ -178,6 +178,24 @@ function planTravel() {
 }
 
 // ---------- the card ----------
+// Today's pick (Gym / Run / No training) and the week's 3 gym + 2 runs: done so far and whether it still fits.
+function trainingHtml(st, day, src) {
+  const w = st.week; // counts include today
+  const freeToday = !st.done && !sessionDone('lift', day, src) && !sessionDone('easy', day, src);
+  const need = w.liftLeft + w.runLeft;
+  const days = w.daysLeft + (freeToday ? 1 : 0);
+  const sum = `Gym ${w.lift}/${w.goal.lift} · runs ${w.run}/${w.goal.run}`;
+  const line = w.complete ? `${sum} · week done`
+    : need <= days ? `${sum} · ${need} to go in ${days} day${days === 1 ? '' : 's'}, on track`
+      : `${sum} · ${need} to go but only ${days} day${days === 1 ? '' : 's'} left`;
+  const sel = st.session.chosen || st.done ? st.session.choice : null;
+  const label = Object.fromEntries(TRAIN_CHOICES)[st.session.choice];
+  return `<div class="row between" style="margin:2px 0 6px"><h3 class="ct-sub">Today's training</h3>
+      ${sel ? '' : `<span class="tiny muted">Suggested: ${esc(label)}</span>`}</div>
+    <div class="seg ct-train" role="group" aria-label="Today's training">${TRAIN_CHOICES.map(([v, t]) => `<button type="button" data-v="${v}" class="${v === sel ? 'on' : ''}" aria-pressed="${v === sel}">${t}</button>`).join('')}</div>
+    <p class="tiny ${need > days ? 'down' : 'muted'} ct-weekline">${esc(line)}</p>`;
+}
+
 function sessionBlock(sess, done, wk) {
   const plan = PLAN[Math.min(Math.max(wk, 1), PLAN.length) - 1];
   if (sess.kind === 'lift') {
@@ -198,7 +216,7 @@ function sessionBlock(sess, done, wk) {
       ${run ? `<p class="small" style="margin-top:6px">${n1((+run.distance_m || 0) / 1000)} km · ${fmtPace(pace)}/km average${vs != null ? ` · ${sess.kind === 'easy' ? (vs > 0 ? 'easy enough' : `${fmtPace(-vs)} faster than easy pace`) : `${vs <= 0 ? `${fmtPace(-vs)} faster` : `${fmtPace(vs)} slower`} than ${target}/km (whole run incl. warm-up)`}` : ''}</p>`
         : `<button class="ghost block" id="ct-logrun" style="margin-top:10px">${icon('plus')} Log run by hand</button><p class="tiny muted" style="margin-top:4px">Garmin runs appear by themselves after the next sync.</p>`}</div>`;
   }
-  const note = { steps: 'No session — hit your steps.', travel: 'Weigh in this morning. Calories and steps are optional, roughly is fine.' }[sess.kind] || 'Rest. Check-in day is the day for measurements and photos.';
+  const note = { steps: 'No session — hit your steps.', travel: 'Weigh in this morning. Calories and steps are optional, roughly is fine.' }[sess.kind] || 'No session today. Hit your steps; on check-in day, take measurements and photos.';
   return `<div class="ct-sess"><b>${SESSION_LABEL[sess.kind]}</b><p class="small muted">${note}</p></div>`;
 }
 
@@ -216,12 +234,6 @@ function render(el) {
   const tg = currentTargets(c);
   const st = statusOf(day, src, c, tg.kcal);
   const f = st.facts;
-  const resched = rescheduleLifts(day, { workouts: src.workouts, startDate: c.startDate, travel: travelDays(src.dailies) });
-  if (resched?.day === day && st.session.kind !== 'lift') {
-    const letter = nextLift(src.workouts, day, routineCut);
-    st.session = { kind: 'lift', letter, routine: ROUTINES.find((r) => r.key === letter) };
-    st.done = sessionDone('lift', day, src);
-  }
   const flags = redFlags(day, src, c, startWeight(c));
   const start = startWeight(c);
   const trend = trendOn(emaTrend(src.weights), day);
@@ -253,8 +265,8 @@ function render(el) {
     ${flags.length ? `<details class="ct-flags"><summary>${icon('flag')} ${flags.length === 1 ? esc(flags[0].text) : `${flags.length} red flags`}</summary>
       ${flags.length > 1 ? flags.map((x) => `<p>${esc(x.text)}</p>`).join('') : ''}</details>` : ''}
     ${reviewBtn()}
+    ${wk > 0 && !f.travel ? trainingHtml(st, day, src) : ''}
     ${wk > 0 ? sessionBlock(st.session, st.done, wk) : ''}
-    ${resched && !st.done ? `<p class="small ct-note">${icon('info')} Missed a lift: ${resched.day === day ? 'do it today' : `next lift ${dayName(resched.day)}`}, the one after ${dayName(resched.then)}.</p>` : ''}
     <div class="row between" style="margin:14px 0 4px"><h3 class="ct-sub">Today</h3><span class="pill ${stCls}">${stLabel}</span></div>
     <div class="list">
       ${row('weight', 'Weight', v(f.weight == null ? null : n1(f.weight), ' kg'), trend != null ? `trend ${n1(trend)} kg${plan && !plan.buffer && start ? ` · target ${n1(targetWeight(start, c.goalWeight, c.rate, wk))} by ${new Date(`${addDays(c.startDate, wk * 7 - 1)}T12:00`).toLocaleDateString('en-GB', { weekday: 'short' })}` : ''}` : '')}
@@ -273,6 +285,7 @@ function render(el) {
   $('#ct-plan', el).onclick = openPlan;
   $$('.ct-item', el).forEach((b) => { b.onclick = () => editItem(['protein', 'kcal'].includes(b.dataset.k) ? 'food' : b.dataset.k, day, f); });
   bindDayType(el, day, f, minUsed);
+  $$('.ct-train button', el).forEach((b) => { b.onclick = () => saveDaily(day, { train: b.dataset.v }); });
   $('#ct-trip', el).onclick = planTravel;
   $('#ct-review', el)?.addEventListener('click', () => openReview());
   $('#ct-yday', el).onclick = () => openDay(addDays(day, -1));
@@ -292,7 +305,7 @@ export function openDay(day) {
       const f = st.facts;
       const [stLabel, stCls] = STATUS[st.status];
       el.innerHTML = sheet({ title: new Date(`${day}T12:00`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' }), body: `
-        <div class="row between" style="margin-bottom:8px"><span class="small muted">${esc(SESSION_LABEL[st.session.kind])}${st.session.routine ? ` (${esc(st.session.routine.name)})` : ''}</span><span class="pill ${stCls}">${stLabel}</span></div>
+        <div class="row between" style="margin-bottom:8px"><span class="small muted">${st.session.chosen || st.done || day >= today() ? `${esc(SESSION_LABEL[st.session.kind])}${st.session.routine ? ` (${esc(st.session.routine.name)})` : ''}` : 'No training'}</span><span class="pill ${stCls}">${stLabel}</span></div>
         <div class="list">${st.checks.map((x) => `<div class="list-item"><span class="ct-tick ${x.ok ? 'ok' : x.warn ? 'warn' : ''}">${icon(x.ok ? 'check' : 'close')}</span><div class="grow">${esc(x.label)}</div></div>`).join('')}</div>
         <div class="fab-row" style="margin-top:12px;flex-wrap:wrap">
           <button class="ghost" data-k="weight">Weight${f.weight != null ? ` ${n1(f.weight)}` : ''}</button>

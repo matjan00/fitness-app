@@ -17,14 +17,54 @@ test('rotation never skips: next lift follows the last finished A/B/C workout', 
   assert.equal(liftLetter({ routine_id: 'r1', name: 'x' }, (id) => (id === 'r1' ? 'C' : null)), 'C');
 });
 
-test('sessionFor uses the example week', () => {
-  assert.equal(sessionFor('2026-10-12').kind, 'lift'); // Monday
-  assert.equal(sessionFor('2026-10-12').routine.name, 'Upper A');
-  assert.equal(sessionFor('2026-10-13').kind, 'easy');
-  assert.equal(sessionFor('2026-10-15').kind, 'quality');
-  assert.equal(sessionFor('2026-10-17').kind, 'steps');
-  assert.equal(sessionFor('2026-10-18').kind, 'rest');
-  assert.equal(sessionFor('2026-10-14', { workouts: [W('2026-10-12', 'Upper A')] }).letter, 'B');
+const R = (day) => ({ start: `${day}T07:00:00`, distance_m: 5000 });
+
+test('sessionFor: your pick wins, else what you did, else the suggestion', () => {
+  // nothing done, nothing picked → the bigger gap first (gym 3 vs runs 2)
+  const s = sessionFor('2026-10-12');
+  assert.equal(s.kind, 'lift');
+  assert.equal(s.chosen, false);
+  assert.equal(s.routine.name, 'Upper A');
+  // picks
+  assert.equal(sessionFor('2026-10-12', { dailies: [{ day: '2026-10-12', train: 'run' }] }).kind, 'easy');
+  assert.equal(sessionFor('2026-10-12', { dailies: [{ day: '2026-10-12', train: 'none' }] }).kind, 'rest');
+  assert.equal(sessionFor('2026-10-12', { dailies: [{ day: '2026-10-12', train: 'lift' }] }).chosen, true);
+  // the week's second run is the quality run
+  assert.equal(sessionFor('2026-10-15', { runs: [R('2026-10-13')], dailies: [{ day: '2026-10-15', train: 'run' }] }).kind, 'quality');
+  // a run done today without a pick shows as today's session
+  assert.equal(sessionFor('2026-10-14', { runs: [R('2026-10-14')] }).choice, 'run');
+  assert.equal(sessionFor('2026-10-14', { workouts: [W('2026-10-12', 'Upper A')], dailies: [{ day: '2026-10-14', train: 'lift' }] }).letter, 'B');
+});
+
+test('weekly goal: 3 gym + 2 runs on any days, judged by whether it still fits', async () => {
+  const { weekTraining, suggestTraining } = await import('../docs/cut-day.js');
+  // Mon 12 – Sun 18. Gym Mon, run Tue; as of Wed evening 3 sessions are left for Thu–Sun.
+  const src = { workouts: [W('2026-10-12', 'Upper A')], runs: [R('2026-10-13')] };
+  const w = weekTraining('2026-10-14', src);
+  assert.deepEqual([w.lift, w.run, w.liftLeft, w.runLeft, w.daysLeft, w.onTrack], [1, 1, 2, 1, 4, true]);
+  // nothing until Friday evening: 5 left, 2 days → behind
+  assert.equal(weekTraining('2026-10-16').onTrack, false);
+  // exactly enough days still counts as on track; a complete week is complete
+  assert.equal(weekTraining('2026-10-13', { workouts: [W('2026-10-12', 'Upper A')] }).onTrack, true);
+  const full = { workouts: ['12', '14', '16'].map((d) => W(`2026-10-${d}`, 'Upper A')), runs: [R('2026-10-13'), R('2026-10-15')] };
+  assert.equal(weekTraining('2026-10-16', full).complete, true);
+  // two sessions on one day count once each kind
+  assert.equal(weekTraining('2026-10-12', { workouts: [W('2026-10-12', 'Upper A'), W('2026-10-12', 'Arms')] }).lift, 1);
+  // travel days shrink the goal: 3 away → 2 gym + 1 run, and they aren't days left
+  const away = weekTraining('2026-10-14', { dailies: ['2026-10-16', '2026-10-17', '2026-10-18'].map((day) => ({ day, travel: true })) });
+  assert.deepEqual([away.goal.lift, away.goal.run, away.daysLeft, away.onTrack], [2, 1, 1, false]);
+  // suggestions: no gym two days in a row while a run is due; nothing once the week is done
+  assert.equal(suggestTraining('2026-10-13', { workouts: [W('2026-10-12', 'Upper A')] }), 'run');
+  assert.equal(suggestTraining('2026-10-14', src), 'lift');
+  assert.equal(suggestTraining('2026-10-17', full), 'none');
+});
+
+test('day status: the session check is "week on track", not "today\'s planned session"', () => {
+  const f = { weight: 73, p: 150, kcal: 1750, steps: 10000, sleep: 7.5 };
+  const onTrack = { lift: 1, run: 0, goal: { lift: 3, run: 2 }, onTrack: true };
+  assert.equal(dayStatus(f, { kcalTarget: 1750, session: { kind: 'rest' }, week: onTrack }).status, 'green');
+  assert.equal(dayStatus(f, { kcalTarget: 1750, session: { kind: 'lift' }, done: false, week: onTrack }).status, 'green'); // skipped, still fine
+  assert.equal(dayStatus(f, { kcalTarget: 1750, week: { ...onTrack, onTrack: false } }).status, 'red');
 });
 
 test('sessionDone', () => {
@@ -83,8 +123,8 @@ test('streaks', () => {
 test('lifting-day calorie bonus', async () => {
   const { liftDayExtra } = await import('../docs/cut-day.js');
   const cfg = { startDate: '2026-10-12', liftDayBonus: 150 };
-  assert.equal(liftDayExtra('2026-10-12', { cfg }), 150); // Monday = planned lift day
-  assert.equal(liftDayExtra('2026-10-13', { cfg }), 0); // Tuesday = easy run
+  assert.equal(liftDayExtra('2026-10-12', { cfg, dailies: [{ day: '2026-10-12', train: 'lift' }] }), 150); // picked Gym
+  assert.equal(liftDayExtra('2026-10-13', { cfg, dailies: [{ day: '2026-10-13', train: 'run' }] }), 0);
   assert.equal(liftDayExtra('2026-10-13', { cfg, workouts: [W('2026-10-13', 'Upper B')] }), 150); // lifted anyway
   assert.equal(liftDayExtra('2026-10-12', { cfg: { startDate: '2026-10-12' } }), 0); // no bonus set
   assert.equal(liftDayExtra('2026-10-05', { cfg }), 0); // before the start

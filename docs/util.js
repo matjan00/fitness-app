@@ -87,6 +87,10 @@ export function toast(msg, ms = 2600, action = null) {
   t.textContent = msg;
   t.classList.toggle('has-action', !!action);
   if (action) {
+    t.textContent = '';
+    const m = document.createElement('span');
+    m.textContent = msg;
+    t.append(m);
     const b = document.createElement('button');
     b.type = 'button';
     b.textContent = action.label;

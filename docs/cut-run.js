@@ -36,7 +36,7 @@ const PURPOSE = {
 };
 
 // [{ week, phase, type, title, purpose, warmup, main, cooldown, totalKm, targetPace, hrGuidance, tips }] in order:
-// each week's easy run (Tue in the example week) then its quality run (Thu).
+// each week's easy run (its first run) then its quality run (its second).
 export function cutRunSessions(maxHr = null) {
   const out = [];
   for (const w of PLAN) {

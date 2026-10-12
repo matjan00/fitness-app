@@ -1,18 +1,51 @@
-// Cut plan, one day at a time: the session scheduled for a day, the "green day" rules and streaks.
+// Cut plan, one day at a time: the day's session (your Gym / Run / No training pick), the weekly
+// training goal, the "green day" rules and streaks.
 // Pure (no DOM, no store); covered by tests/cut-day.test.js. Days are local 'YYYY-MM-DD' strings.
 
 import { addDays, weekOf } from './stats-calc.js';
 import { CUT_DEFAULTS, ROUTINES } from './cut-calc.js';
 
-const weekday = (s) => new Date(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10)).getDay(); // 0 = Sunday
 const pad = (n) => String(n).padStart(2, '0');
 const localDay = (iso) => { const d = new Date(iso); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
 const num = (x) => (x == null || x === '' ? null : Number.isFinite(+x) ? +x : null);
 
-// Example week from the plan (order flexible): Mon lift · Tue easy run · Wed lift · Thu quality run · Fri lift · Sat steps · Sun rest.
-export const WEEK_TEMPLATE = { 1: 'lift', 2: 'easy', 3: 'lift', 4: 'quality', 5: 'lift', 6: 'steps', 0: 'rest' };
-export const SESSION_LABEL = { lift: 'Upper body', easy: 'Easy run', quality: 'Quality run', steps: 'Steps only', rest: 'Rest', travel: 'Travel day' };
+// Training is chosen day by day (Gym / Run / No training). What counts is the week (Monday–Sunday):
+// 3 gym sessions and 2 runs, on whichever days suit you.
+export const WEEK_GOAL = { lift: 3, run: 2 };
+export const TRAIN_CHOICES = [['lift', 'Gym'], ['run', 'Run'], ['none', 'No training']];
+export const SESSION_LABEL = { lift: 'Upper body', easy: 'Easy run', quality: 'Quality run', steps: 'Steps only', rest: 'No training', travel: 'Travel day' };
 export const isScheduled = (kind) => kind === 'lift' || kind === 'easy' || kind === 'quality';
+const range = (from, to) => { const out = []; for (let d = from; d <= to; d = addDays(d, 1)) out.push(d); return out; };
+const isTravel = (d, dailies) => dailies.some((x) => x && x.day === d && x.travel === true);
+const choiceOn = (d, dailies) => dailies.find((x) => x && x.day === d)?.train || null;
+
+// The week's training so far (days up to and including `through`) and whether the goal can still be met:
+// one session a day on the days left after `through`. Travel days aren't held against you: they don't count
+// as days left, and each one shrinks the week's goal in proportion (3 travel days → 2 gym + 1 run).
+// Returns { lift, run, goal, liftLeft, runLeft, daysLeft, onTrack, complete }.
+export function weekTraining(day, { workouts = [], runs = [], dailies = [], through = day, goal: full = WEEK_GOAL } = {}) {
+  const from = weekOf(day);
+  const to = addDays(from, 6);
+  const away = range(from, to).filter((d) => isTravel(d, dailies)).length;
+  const goal = { lift: Math.round((full.lift * (7 - away)) / 7), run: Math.round((full.run * (7 - away)) / 7) };
+  const sofar = through < from ? [] : range(from, through < to ? through : to);
+  const lift = sofar.filter((d) => sessionDone('lift', d, { workouts })).length;
+  const run = sofar.filter((d) => sessionDone('easy', d, { runs })).length;
+  const liftLeft = Math.max(0, goal.lift - lift);
+  const runLeft = Math.max(0, goal.run - run);
+  const daysLeft = through >= to ? 0 : range(through < from ? from : addDays(through, 1), to).filter((d) => !isTravel(d, dailies)).length;
+  return { lift, run, goal, liftLeft, runLeft, daysLeft, onTrack: liftLeft + runLeft <= daysLeft, complete: liftLeft + runLeft === 0 };
+}
+
+// What to do on a day nobody chose for: whatever the week still needs, the bigger gap first,
+// but never gym two days in a row while a run is still due. 'none' once the week is complete.
+export function suggestTraining(day, src = {}) {
+  const w = weekTraining(day, { ...src, through: addDays(day, -1) });
+  if (w.complete) return 'none';
+  const liftedYesterday = sessionDone('lift', addDays(day, -1), { workouts: src.workouts || [] });
+  if (w.liftLeft && !(liftedYesterday && w.runLeft) && w.liftLeft >= w.runLeft) return 'lift';
+  return w.runLeft ? 'run' : 'lift';
+}
 
 // Letter (A/B/C) of a workout: from its routine (cut: 'A') or its name ("Upper B").
 export function liftLetter(w, routineCut = () => null) {
@@ -32,13 +65,22 @@ export function nextLift(workouts = [], day, routineCut) {
   return last ? 'ABC'[('ABC'.indexOf(last.letter) + 1) % 3] : 'A';
 }
 
-// What is planned for a day: { kind, letter?, routine? }.
-export function sessionFor(day, { workouts = [], routineCut, dailies = [] } = {}) {
-  if (dailies.some((d) => d && d.day === day && d.travel === true)) return { kind: 'travel' };
-  const kind = WEEK_TEMPLATE[weekday(day)];
-  if (kind !== 'lift') return { kind };
+// The session for a day: { kind, choice, chosen, letter?, routine? }.
+// `choice` is what you picked (Gym / Run / No training); without a pick, what you actually did that day,
+// else the suggestion. A run is the week's easy run first, then the quality run.
+export function sessionFor(day, { workouts = [], runs = [], routineCut, dailies = [] } = {}) {
+  if (isTravel(day, dailies)) return { kind: 'travel', choice: 'none', chosen: false };
+  const picked = choiceOn(day, dailies);
+  const choice = picked
+    || (sessionDone('lift', day, { workouts }) ? 'lift' : sessionDone('easy', day, { runs }) ? 'run' : suggestTraining(day, { workouts, runs, dailies }));
+  const base = { choice, chosen: Boolean(picked) };
+  if (choice === 'none') return { kind: 'rest', ...base };
+  if (choice === 'run') {
+    const before = weekTraining(day, { workouts, runs, dailies, through: addDays(day, -1) }).run;
+    return { kind: before >= 1 ? 'quality' : 'easy', ...base };
+  }
   const letter = nextLift(workouts, day, routineCut);
-  return { kind, letter, routine: ROUTINES.find((r) => r.key === letter) };
+  return { kind: 'lift', ...base, letter, routine: ROUTINES.find((r) => r.key === letter) };
 }
 
 // Was the day's session done? Lift: a finished workout that day. Run: a run that day.
@@ -73,17 +115,22 @@ export function dayFacts(day, { weights = [], dailies = [], meals = [] } = {}) {
 //  yellow: everything else green but steps 8,000–9,999, or a minimum day (weigh-in + protein ≥ 140 + 6,000 steps)
 //  red: anything else. 'open' = today, not finished yet and not green.
 // Returns { status, checks: [{ key, label, ok, warn }] , minimumMet }.
-export function dayStatus(f, { kcalTarget = null, cfg = {}, session = { kind: 'rest' }, done = false, isToday = false } = {}) {
+// `week` (from weekTraining, as of the end of the day) makes the session check "still on track for the
+// week's 3 gym + 2 runs" rather than "did the planned session".
+export function dayStatus(f, { kcalTarget = null, cfg = {}, session = { kind: 'rest' }, done = false, isToday = false, week = null } = {}) {
   const c = { ...CUT_DEFAULTS, ...cfg };
   if (f.travel) return travelStatus(f, { kcalTarget, c, isToday });
   const planned = isScheduled(session.kind);
+  const sessionCheck = week
+    ? { key: 'session', label: `Week on track: gym ${week.lift}/${week.goal.lift} · runs ${week.run}/${week.goal.run}`, ok: week.onTrack }
+    : { key: 'session', label: planned ? `${SESSION_LABEL[session.kind]} done` : 'No session planned', ok: !planned || done };
   const checks = [
     { key: 'weight', label: 'Weighed in', ok: f.weight != null },
     { key: 'protein', label: `Protein ≥ ${c.proteinMin} g`, ok: f.p != null && f.p >= c.proteinMin },
     { key: 'kcal', label: kcalTarget ? `Calories ${kcalTarget - c.kcalBand}–${kcalTarget + c.kcalBand}` : 'Calories logged', ok: f.kcal != null && (!kcalTarget || Math.abs(f.kcal - kcalTarget) <= c.kcalBand) },
     { key: 'steps', label: `Steps ≥ ${c.steps.toLocaleString('en-GB')}`, ok: f.steps != null && f.steps >= c.steps, warn: f.steps != null && f.steps >= c.stepsMin && f.steps < c.steps },
     { key: 'sleep', label: `Sleep ≥ ${c.sleep} h`, ok: f.sleep != null && f.sleep >= c.sleep },
-    { key: 'session', label: planned ? `${SESSION_LABEL[session.kind]} done` : 'No session planned', ok: !planned || done },
+    sessionCheck,
   ];
   const minimumMet = f.weight != null && f.p != null && f.p >= c.proteinMin && f.steps != null && f.steps >= 6000;
   let status;
@@ -133,12 +180,12 @@ export const minimumDaysInWeek = (day, dailies = []) => {
   return dailies.filter((d) => d && d.minimum === true && weekOf(d.day) === w).length;
 };
 
-// Extra kcal on a cut-plan lifting day (weekly review: "+150 kcal on lifting days"). A lifting day is a planned lift
-// day of the example week or any day with a finished workout. 0 when there is no bonus or the plan hasn't started.
-export function liftDayExtra(day, { cfg = {}, workouts = [] } = {}) {
+// Extra kcal on a cut-plan lifting day (weekly review: "+150 kcal on lifting days"). A lifting day is a day you
+// chose Gym for or any day with a finished workout. 0 when there is no bonus or the plan hasn't started.
+export function liftDayExtra(day, { cfg = {}, workouts = [], dailies = [] } = {}) {
   const bonus = +cfg.liftDayBonus || 0;
   if (!bonus || !cfg.startDate || !day || day < cfg.startDate) return 0;
-  const lift = WEEK_TEMPLATE[weekday(day)] === 'lift' || workouts.some((w) => w && w.ended_at && w.started_at && localDay(w.started_at) === day);
+  const lift = choiceOn(day, dailies) === 'lift' || workouts.some((w) => w && w.ended_at && w.started_at && localDay(w.started_at) === day);
   return lift ? bonus : 0;
 }
 

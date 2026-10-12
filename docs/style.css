@@ -323,9 +323,10 @@ input[type=search]::-webkit-search-cancel-button {
   max-width: calc(100vw - 32px); transition: opacity .2s, transform .2s; text-align: center;
 }
 #toast.show { opacity: 1; transform: translate(-50%, 0); }
-#toast.has-action { display: flex; align-items: center; gap: 14px; text-align: left; padding: 6px 6px 6px 16px; white-space: nowrap; }
+#toast.has-action { display: flex; align-items: center; gap: 12px; text-align: left; padding: 6px 6px 6px 16px; width: max-content; }
+#toast.has-action span { min-width: 0; }
 #toast.has-action.show { pointer-events: auto; }
-#toast button { flex: none; padding: 9px 12px; border-radius: 10px; font-weight: 700; color: var(--bg); text-decoration: underline; text-underline-offset: 3px; }
+#toast button { flex: none; white-space: nowrap; padding: 9px 12px; border-radius: 10px; font-weight: 700; color: var(--bg); text-decoration: underline; text-underline-offset: 3px; }
 #toast button:active { background: color-mix(in srgb, var(--bg) 15%, transparent); }
 
 /* ---------- charts ---------- */

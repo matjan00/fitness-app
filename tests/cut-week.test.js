@@ -25,21 +25,22 @@ test('week summary and grade', () => {
   const weights = days('2026-10-12', 14).map((d, i) => ({ day: d, kg: 73 - i * 0.1 }));
   const workouts = [{ started_at: '2026-10-19T10:00:00', ended_at: '2026-10-19T11:00:00', cut: { session: 'progressed' } },
     { started_at: '2026-10-21T10:00:00', ended_at: '2026-10-21T11:00:00', cut: { session: 'held' } }];
-  const s = weekSummary('2026-10-26', { statusOf, weights, workouts, cfg, start: 73 });
+  const runs = [{ start: '2026-10-20T07:00:00' }, { start: '2026-10-22T07:00:00' }];
+  const s = weekSummary('2026-10-26', { statusOf, weights, workouts, runs, cfg, start: 73 });
   assert.equal(s.from, '2026-10-19');
   assert.equal(s.to, '2026-10-25');
   assert.equal(s.green, 6);
-  assert.equal(s.sessionsDone, 2);
-  assert.equal(s.sessionsPlanned, 3);
+  assert.equal(s.sessionsDone, 4); // gym 2/3 + runs 2/2
+  assert.equal(s.sessionsPlanned, 5);
   assert.equal(s.strength, 0.9);
   assert.equal(s.week, 2);
   assert.equal(s.target, 71.5);
   assert.ok(s.change < 0);
-  // (6/7 + 2/3 + 1 + 0.9) / 4 ≈ 0.856 → B
+  // (6/7 + 4/5 + 1 + 0.9) / 4 ≈ 0.889 → B
   assert.equal(s.grade, 'B');
   assert.deepEqual(s.parts.map((x) => x.key), ['days', 'sessions', 'checkin', 'strength']);
-  assert.equal(s.parts[1].value, 2 / 3);
-  assert.equal(weekSummary('2026-10-26', { statusOf, weights, workouts, cfg, start: 73, checkinDone: false }).grade, 'D'); // ≈ 0.606
+  assert.equal(s.parts[1].value, 4 / 5);
+  assert.equal(weekSummary('2026-10-26', { statusOf, weights, workouts, runs, cfg, start: 73, checkinDone: false }).grade, 'D'); // ≈ 0.639
 });
 
 test('adjustment rules', () => {

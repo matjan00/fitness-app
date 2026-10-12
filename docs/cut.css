@@ -9,6 +9,7 @@
 .ct-sess { background: var(--card-2); border-radius: var(--radius-sm); padding: 12px; }
 .ct-sess p { margin-top: 4px; }
 .ct-sub { font-size: 15px; margin: 0; }
+.ct-weekline { margin: 6px 2px 10px; }
 .ct-item { gap: 12px; min-height: 52px; }
 .ct-tick { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; flex: none; background: var(--card-2); color: var(--text-3); }
 .ct-tick svg { width: 16px; height: 16px; }

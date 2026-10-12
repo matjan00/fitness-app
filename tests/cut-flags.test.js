@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { adaptiveTdee, missedLifts, rescheduleLifts, redFlags, isLogged } from '../docs/cut-flags.js';
+import { adaptiveTdee, redFlags, isLogged } from '../docs/cut-flags.js';
 import { addDays } from '../docs/stats-calc.js';
 
 const W = (day, name, extra = {}) => ({ name, started_at: `${day}T10:00:00`, ended_at: `${day}T11:00:00`, exercises: [], ...extra });
@@ -18,19 +18,6 @@ test('adaptive TDEE from 21 days of calories and the trend change', () => {
   assert.equal(adaptiveTdee('2026-10-21', { weights: [], kcalOf: () => 1750 }), null);
 });
 
-test('missed lifts and the next free day (never two lifts in a row)', () => {
-  // week of Mon 2026-10-12: A done Mon, Wed missed; today is Thu
-  const workouts = [W('2026-10-12', 'Upper A')];
-  assert.deepEqual(missedLifts('2026-10-15', { workouts }), ['2026-10-14']);
-  assert.deepEqual(missedLifts('2026-10-15', { workouts, startDate: '2026-10-15' }), []);
-  // Wed missed, today Thu (Wed had no lift) → Upper B today, the next lift moves from Fri to Sat
-  assert.deepEqual(rescheduleLifts('2026-10-15', { workouts }), { day: '2026-10-15', then: '2026-10-17' });
-  // lifted yesterday (B done late on Thu) → not today; Sat, then Mon
-  assert.deepEqual(rescheduleLifts('2026-10-16', { workouts: [W('2026-10-12', 'Upper A'), W('2026-10-15', 'Upper B')] }), null);
-  assert.deepEqual(rescheduleLifts('2026-10-16', { workouts: [W('2026-10-15', 'Upper B')] }), { day: '2026-10-17', then: '2026-10-19' });
-  assert.equal(rescheduleLifts('2026-10-15', { workouts: [W('2026-10-12', 'Upper A'), W('2026-10-14', 'Upper B')] }), null);
-});
-
 test('logged day', () => {
   assert.equal(isLogged('2026-10-12', { weights: [{ day: '2026-10-12', kg: 73 }], dailies: [], meals: [] }), true);
   assert.equal(isLogged('2026-10-12', { weights: [], dailies: [{ day: '2026-10-12', minimum: true }], meals: [] }), false);
@@ -42,7 +29,7 @@ test('red flags: protein, weigh-ins, missed sessions, minimum days, sleep', () =
   const cfg = { startDate: '2026-10-12', checkinDay: 0 };
   // Thursday 15th: Mon/Tue/Wed sessions missed, nothing logged
   const f = redFlags('2026-10-15', base(), cfg, 73).map((x) => x.key);
-  assert.ok(f.includes('missed'));
+  assert.ok(f.includes('missed')); // 5 sessions left, 4 days (Thu–Sun)
   assert.ok(f.includes('protein'));
   assert.ok(f.includes('weighin'));
   const good = base({
@@ -83,5 +70,18 @@ test('travel days are not held against you', () => {
   const f = redFlags('2026-10-15', { weights, dailies, meals: [], workouts: [], runs: [], checkins: [] }, cfg, 73).map((x) => x.key);
   assert.ok(!f.includes('missed'));
   assert.ok(!f.includes('protein'));
-  assert.equal(rescheduleLifts('2026-10-15', { travel: new Set(dailies.map((d) => d.day)) }), null);
+});
+
+test('red flags: training is judged on the week, not on fixed days', () => {
+  const cfg = { startDate: '2026-10-12', checkinDay: 0 };
+  const R = (day) => ({ start: `${day}T07:00:00`, distance_m: 5000 });
+  const weights = days('2026-10-12', 12).map((d) => ({ day: d, kg: 73 }));
+  // Mon–Wed off, Thursday morning: 5 sessions fit in Thu–Sun? No (4 days) → behind
+  assert.ok(redFlags('2026-10-15', base({ weights }), cfg, 73).some((x) => x.key === 'missed'));
+  // two done on Mon/Tue: 3 left for Thu–Sun → fine, whichever days they were
+  const two = base({ weights, workouts: [W('2026-10-13', 'Upper A')], runs: [R('2026-10-12')] });
+  assert.ok(!redFlags('2026-10-15', two, cfg, 73).some((x) => x.key === 'missed'));
+  // next week: last week ended at 1 gym + 1 run → flagged as short
+  const f = redFlags('2026-10-20', two, cfg, 73).find((x) => x.key === 'missed');
+  assert.match(f.text, /Last week.*gym 1\/3, runs 1\/2/);
 });
