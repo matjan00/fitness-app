@@ -91,6 +91,20 @@ export function sessionDone(kind, day, { workouts = [], runs = [] } = {}) {
 }
 
 // Facts of one day from the records: weigh-in, daily log, food diary sums (used when kcal/protein were not typed in).
+// Steps the phone counted for a daily record (the steps-webhook edge function writes them the morning
+// after), or null.
+function phoneSteps(d) {
+  return d?.stepsSource === 'phone' ? num(d.stepsPhone) ?? num(d.steps) : null;
+}
+
+// Daily-record patch for steps added by hand: they go on top of the phone's count, now and when the
+// phone's count arrives later (supabase/functions/steps-webhook/logic.js mergeSteps adds stepsExtra).
+export function handStepsPatch(d, extra) {
+  const phone = phoneSteps(d);
+  const add = num(extra);
+  return { steps: phone == null && add == null ? null : (phone || 0) + (add || 0), stepsExtra: add };
+}
+
 export function dayFacts(day, { weights = [], dailies = [], meals = [] } = {}) {
   const w = weights.find((e) => e && e.day === day);
   const d = dailies.find((e) => e && e.day === day) || null;
@@ -102,6 +116,8 @@ export function dayFacts(day, { weights = [], dailies = [], meals = [] } = {}) {
     weight: w ? +w.kg : null,
     sleep: num(d?.sleepHours),
     steps: num(d?.steps),
+    stepsPhone: phoneSteps(d),
+    stepsExtra: num(d?.stepsExtra),
     kcal: pick('kcal'), p: pick('p'), c: pick('c'), f: pick('f'),
     minimum: d?.minimum === true,
     travel: d?.travel === true,

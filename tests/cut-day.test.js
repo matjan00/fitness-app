@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { nextLift, sessionFor, sessionDone, dayFacts, dayStatus, streak, weekStreak, minimumDaysInWeek, liftLetter } from '../docs/cut-day.js';
+import { nextLift, sessionFor, sessionDone, dayFacts, dayStatus, streak, weekStreak, minimumDaysInWeek, liftLetter, handStepsPatch } from '../docs/cut-day.js';
 
 const W = (day, name, extra = {}) => ({ name, started_at: `${day}T10:00:00`, ended_at: `${day}T11:00:00`, ...extra });
 
@@ -140,4 +140,18 @@ test('travel days: only the weigh-in counts', () => {
   // no session expected; the rotation is unaffected
   assert.equal(sessionFor('2026-10-12', { dailies: [{ day: '2026-10-12', travel: true }] }).kind, 'travel');
   assert.equal(sessionFor('2026-10-14', { dailies: [{ day: '2026-10-12', travel: true }] }).letter, 'A');
+});
+
+test('handStepsPatch adds hand steps on top of the phone count', () => {
+  assert.deepEqual(handStepsPatch(null, 2000), { steps: 2000, stepsExtra: 2000 });
+  assert.deepEqual(handStepsPatch({ steps: 8400, stepsPhone: 8400, stepsSource: 'phone' }, 2000), { steps: 10400, stepsExtra: 2000 });
+  assert.deepEqual(handStepsPatch({ steps: 10400, stepsPhone: 8400, stepsExtra: 2000, stepsSource: 'phone' }, 500), { steps: 8900, stepsExtra: 500 });
+  assert.deepEqual(handStepsPatch({ steps: 10400, stepsPhone: 8400, stepsExtra: 2000, stepsSource: 'phone' }, null), { steps: 8400, stepsExtra: null });
+  assert.deepEqual(handStepsPatch({ steps: 2000, stepsExtra: 2000 }, null), { steps: null, stepsExtra: null });
+  // an old typed whole-day total is replaced by what is typed now
+  assert.deepEqual(handStepsPatch({ steps: 9000 }, 1000), { steps: 1000, stepsExtra: 1000 });
+  const f = dayFacts('2026-10-12', { dailies: [{ day: '2026-10-12', steps: 10400, stepsPhone: 8400, stepsExtra: 2000, stepsSource: 'phone' }] });
+  assert.equal(f.steps, 10400);
+  assert.equal(f.stepsPhone, 8400);
+  assert.equal(f.stepsExtra, 2000);
 });

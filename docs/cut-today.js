@@ -9,7 +9,7 @@ import { cutSettings, currentTargets, openCutSettings, openPlan, addCutRoutines,
 import { PLAN, PROGRAM_NAME, EASY_PACE, weekNumber, daysToGoal, daysBetween, emaTrend, trendOn, targetWeight } from './cut-calc.js';
 import { redFlags, isLogged } from './cut-flags.js';
 import { reviewNeeded, openReview, dueCheckin, checkinFor } from './cut-review.js';
-import { liftDayExtra, sessionFor, sessionDone, dayFacts, dayStatus, streak, weekStreak, minimumDaysInWeek, weekTraining, TRAIN_CHOICES, SESSION_LABEL } from './cut-day.js';
+import { liftDayExtra, sessionFor, sessionDone, dayFacts, dayStatus, handStepsPatch, streak, weekStreak, minimumDaysInWeek, weekTraining, TRAIN_CHOICES, SESSION_LABEL } from './cut-day.js';
 
 const STATUS = { green: ['Green day', 'up'], yellow: ['Yellow day', 'gold'], red: ['Red day', 'down'], open: ['In progress', ''] };
 
@@ -76,9 +76,14 @@ function editItem(key, day, f) {
     });
   }
   if (key === 'steps') {
-    return entrySheet('Steps', [{ name: 'n', label: 'Steps', value: f.steps, mode: 'numeric' }], async (v) => {
-      await daily({ steps: v.n == null ? null : Math.round(v.n) });
-    });
+    const note = f.stepsPhone != null
+      ? `Your phone counted ${n0(f.stepsPhone)}. Steps you add here go on top.`
+      : 'Only steps your phone did not count (e.g. walking without it). The phone\'s count is added to this the morning after.';
+    return entrySheet('Steps added by hand', [{ name: 'n', label: 'Steps', value: f.stepsExtra, mode: 'numeric' }], async (v) => {
+      if (v.n != null && !(v.n >= 0 && v.n <= 100000)) { toast('Enter a number of steps'); return false; }
+      const cur = store.all('daily').find((d) => d.day === day);
+      await daily(handStepsPatch(cur, v.n == null ? null : Math.round(v.n)));
+    }, note);
   }
   // food: day totals from the separate food app (empty = use the Food tab diary)
   return entrySheet('Food totals', [
@@ -271,7 +276,7 @@ function render(el) {
     <div class="list">
       ${row('weight', 'Weight', v(f.weight == null ? null : n1(f.weight), ' kg'), trend != null ? `trend ${n1(trend)} kg${plan && !plan.buffer && start ? ` · target ${n1(targetWeight(start, c.goalWeight, c.rate, wk))} by ${new Date(`${addDays(c.startDate, wk * 7 - 1)}T12:00`).toLocaleDateString('en-GB', { weekday: 'short' })}` : ''}` : '')}
       ${row('sleep', 'Sleep', v(f.sleep == null ? null : n1(f.sleep), ' h'))}
-      ${row('steps', 'Steps', v(f.steps == null ? null : n0(f.steps)))}
+      ${row('steps', 'Steps', v(f.steps == null ? null : n0(f.steps)), f.stepsPhone != null && f.stepsExtra ? `phone ${n0(f.stepsPhone)} + ${n0(f.stepsExtra)} by hand` : '')}
       ${row(f.travel ? 'kcal' : 'protein', 'Food', food)}
     </div>
     ${dayTypeHtml(f, st, minUsed)}
