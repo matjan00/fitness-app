@@ -5,6 +5,7 @@ import {
   weekStreak, workoutVolume, workoutSetCount, bestSet, formatSet, parseDuration, fmtDur, firstInt, sortExercises,
   matchesSearch, recentUse, exerciseRecords, exerciseSeries, routineFromWorkout, routineChanged, routineDiff, targetText, nextRoutine, weekKey,
   parseRepRange, suggestNext, weightStep, trend, isStalled, deloadKg, progressList,
+  weightCarry,
 } from '../docs/gym-calc.js';
 
 const W = (id, date, exercises) => ({ id, name: id, started_at: date, ended_at: new Date(Date.parse(date) + 3600e3).toISOString(), exercises });
@@ -273,4 +274,32 @@ test('progressList summarises each exercise, newest first', () => {
   assert.equal(list[0].sessions, 2);
   assert.equal(list[0].lastSets[0].kg, 62.5);
   assert.equal(list[1].trend, null);
+});
+
+test('weight autofill: later untouched or autofilled sets follow, manual ones stay', () => {
+  const s = (kg, o = {}) => ({ type: 'n', kg, reps: '', done: false, ...o });
+  assert.deepEqual(weightCarry([s('8'), s(''), s('')], 0, ''), [1, 2], 'empty targets fill');
+  assert.deepEqual(weightCarry([s('80'), s('8'), s('8')], 0, '8'), [1, 2], 'targets holding the old value follow');
+  assert.deepEqual(weightCarry([s('80'), s('8'), s('60'), s('8')], 0, '8'), [1, 3], 'manual different value is kept');
+  assert.deepEqual(weightCarry([s('80'), s('', { done: true }), s('')], 0, ''), [2], 'done sets untouched');
+  assert.deepEqual(weightCarry([s('20', { type: 'w' }), s(''), s('', { type: 'w' })], 0, ''), [2], 'warm-up does not feed working sets');
+  assert.deepEqual(weightCarry([s('80'), s('', { type: 'w' }), s(''), s('', { type: 'd' })], 0, ''), [2, 3], 'working does not feed warm-ups');
+  assert.deepEqual(weightCarry([s('8'), s('8'), s('80'), s('8')], 2, '8'), [3], 'earlier sets untouched');
+  assert.deepEqual(weightCarry([s(80), s(null), s(80)], 0, 80), [1, 2], 'numbers and null handled');
+});
+
+test('alarm WAV is a valid, loud, 16-bit mono PCM file', async () => {
+  const { alarmWav } = await import('../docs/gym-calc.js');
+  const w = alarmWav(24000), v = new DataView(w.buffer);
+  const tag = (o) => String.fromCharCode(...w.slice(o, o + 4));
+  assert.equal(tag(0), 'RIFF');
+  assert.equal(tag(8), 'WAVE');
+  assert.equal(tag(36), 'data');
+  assert.equal(v.getUint32(4, true), w.length - 8);
+  assert.equal(v.getUint32(40, true), w.length - 44);
+  assert.equal(v.getUint32(24, true), 24000);
+  let peak = 0;
+  for (let o = 44; o < w.length; o += 2) peak = Math.max(peak, Math.abs(v.getInt16(o, true)));
+  assert.ok(peak > 30000 && peak < 32767);
+  assert.ok(w.length / 2 / 24000 > 1.4);
 });

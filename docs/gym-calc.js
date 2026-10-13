@@ -69,6 +69,20 @@ export function e1rm(kg, reps) {
 }
 
 export const isWorking = (set) => set && set.type !== 'w';
+
+// Typing a weight into set i: indices of later sets that follow it (not done, same warm-up/working side,
+// weight empty or still the old value, i.e. untouched or autofilled).
+export function weightCarry(sets, i, oldVal) {
+  const old = String(oldVal ?? '');
+  const out = [];
+  for (let j = i + 1; j < sets.length; j++) {
+    const t = sets[j];
+    if (t.done || (t.type === 'w') !== (sets[i].type === 'w')) continue;
+    const kg = String(t.kg ?? '');
+    if (kg === '' || kg === old) out.push(j);
+  }
+  return out;
+}
 export const setVolume = (set, mode = 'wr') => (mode === 't' || !set ? 0 : (Number(set.kg) || 0) * (Number(set.reps) || 0));
 
 export function formatSet(set, mode = 'wr', unit = false) {
@@ -486,4 +500,26 @@ export function progressList(workouts) {
     rows.push(row);
   }
   return rows.sort((a, b) => Date.parse(b.last) - Date.parse(a.last));
+}
+
+// Rest-timer alarm as a 16-bit mono WAV: two bursts of three loud, saturated (harmonic-rich) beeps near 2.5-3 kHz.
+export function alarmWav(rate = 24000) {
+  const beeps = [[0, 2500], [0.2, 2500], [0.4, 3000], [0.95, 2500], [1.15, 2500], [1.35, 3000]];
+  const len = 0.12, total = 1.6, n = Math.floor(total * rate);
+  const pcm = new Int16Array(n);
+  for (const [t, f] of beeps) {
+    const s0 = Math.floor(t * rate), m = Math.floor(len * rate);
+    for (let i = 0; i < m && s0 + i < n; i++) {
+      const env = Math.min(1, i / (0.008 * rate), (m - i) / (0.015 * rate));
+      pcm[s0 + i] = Math.round(Math.tanh(2.2 * Math.sin((2 * Math.PI * f * i) / rate)) / Math.tanh(2.2) * 0.95 * env * 32767);
+    }
+  }
+  const out = new Uint8Array(44 + n * 2), v = new DataView(out.buffer);
+  const str = (o, s) => { for (let i = 0; i < s.length; i++) out[o + i] = s.charCodeAt(i); };
+  str(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); str(8, 'WAVEfmt ');
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  str(36, 'data'); v.setUint32(40, n * 2, true);
+  for (let i = 0; i < n; i++) v.setInt16(44 + i * 2, pcm[i], true);
+  return out;
 }

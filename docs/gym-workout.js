@@ -8,7 +8,7 @@ import * as store from './store.js';
 import { push, chooseSheet, confirmSheet } from './nav.js';
 import {
   MODES, fmtNum, fmtDur, firstInt, previousSet, parseRepRange, suggestNext, weightStep, isStalled, deloadKg, exerciseSeries, lastSessions, exerciseRecords, setMetric, kindsFor, isWorking,
-  workoutVolume, workoutDuration, formatSet, bestSet, routineFromWorkout, routineChanged, routineDiff,
+  workoutVolume, workoutDuration, weightCarry, alarmWav, formatSet, bestSet, routineFromWorkout, routineChanged, routineDiff,
 } from './gym-calc.js';
 import {
   loadDb, exName, groupsOf, modeFor, restFor, settings, saveSettings, workouts, last, prsOf, getActive, saveActive, clearActive,
@@ -289,7 +289,10 @@ function openSession(sess, kind, original = null) {
         <div class="gx-shead"><span>SET</span><span>PREVIOUS</span>${heads}<span class="gx-hchk">${icon('check')}</span></div>
         ${e.sets.map((_, i) => rowHtml(e, i, labels)).join('')}
       </div>
-      <button class="gx-addset" data-act="addset">${icon('plus')} Add set</button>
+      <div class="gx-setbtns">
+        <button class="gx-addset" data-act="addset">${icon('plus')} Add set</button>
+        <button class="gx-addset gx-rmset" data-act="rmset" ${e.sets.length ? '' : 'disabled'}>${icon('minus')} Remove set</button>
+      </div>
     </section>`;
   }
 
@@ -356,8 +359,18 @@ function openSession(sess, kind, original = null) {
       if (t.classList.contains('gx-note')) { e.note = t.value; autosize([t]); save(); return; }
       if (t.classList.contains('gx-in')) {
         const row = t.closest('.gx-row');
-        const set = e.sets[+row.dataset.i];
+        const i = +row.dataset.i;
+        const set = e.sets[i];
+        const old = set[t.dataset.f];
         set[t.dataset.f] = t.value;
+        if (t.dataset.f === 'kg' && e.mode !== 't' && t.value !== String(old ?? '')) {
+          const rows = $$('.gx-row', row.parentNode);
+          for (const j of weightCarry(e.sets, i, old)) {
+            e.sets[j].kg = t.value;
+            const inp = $('.gx-in[data-f="kg"]', rows[j]);
+            if (inp) inp.value = t.value;
+          }
+        }
         save();
         if (set.done) updateRow(e, +row.dataset.i, row);
       }
@@ -446,6 +459,15 @@ function openSession(sess, kind, original = null) {
         case 'addset': {
           const lastSet = e.sets[e.sets.length - 1];
           e.sets.push(newSet(lastSet ? { kg: lastSet.kg, reps: lastSet.reps, m: lastSet.m, s: lastSet.s, tk: lastSet.tk, tr: lastSet.tr, type: lastSet.type === 'w' ? 'n' : lastSet.type } : {}));
+          save();
+          s.render();
+          return;
+        }
+        case 'rmset': {
+          const lastSet = e.sets[e.sets.length - 1];
+          if (!lastSet) return;
+          if (lastSet.done && !(await confirmSheet('Remove the last set? It is already logged.', { ok: 'Remove', danger: true }))) return;
+          e.sets.pop();
           save();
           s.render();
           return;
@@ -767,35 +789,70 @@ export function tick() {
 }
 
 function buzz(p) {
-  try { if (navigator.userActivation?.hasBeenActive !== false) navigator.vibrate?.(p); } catch { /* ignore */ }
+  try { navigator.vibrate?.(p); } catch { /* ignore */ }
 }
+// Android: an <audio> element asks for audio focus (WebAudio doesn't), so Spotify ducks/pauses. iOS: audioSession.
+let clip = null;
+let clipReady = false;
 function unlockAudio() {
   try {
     if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
     if (audio.state === 'suspended') audio.resume();
   } catch { audio = null; }
+  try {
+    if (!clip) { clip = new Audio(URL.createObjectURL(new Blob([alarmWav()], { type: 'audio/wav' }))); clip.preload = 'auto'; }
+    if (!clipReady) {
+      clip.muted = true;
+      clip.play().then(() => { clip.pause(); clip.currentTime = 0; clip.muted = false; clipReady = true; }).catch(() => { clip.muted = false; });
+    }
+  } catch { clip = null; }
+}
+function duck() {
+  try {
+    const s = navigator.audioSession;
+    if (!s) return () => {};
+    const was = s.type;
+    s.type = 'transient';
+    return () => { try { s.type = was; } catch { /* ignore */ } };
+  } catch { return () => {}; }
+}
+function beepWebAudio() {
+  const t0 = audio.currentTime + 0.02;
+  const comp = audio.createDynamicsCompressor();
+  comp.connect(audio.destination);
+  [0, 0.2, 0.4, 0.95, 1.15, 1.35].forEach((d, i) => {
+    const o = audio.createOscillator();
+    const g = audio.createGain();
+    o.type = 'square';
+    o.frequency.value = i % 3 === 2 ? 3000 : 2500;
+    g.gain.setValueAtTime(0.0001, t0 + d);
+    g.gain.exponentialRampToValueAtTime(0.6, t0 + d + 0.01);
+    g.gain.setValueAtTime(0.6, t0 + d + 0.10);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + d + 0.12);
+    o.connect(g).connect(comp);
+    o.start(t0 + d);
+    o.stop(t0 + d + 0.14);
+  });
 }
 function alarm() {
-  buzz([250, 120, 250]);
+  buzz([400, 150, 400, 150, 400]);
   toast('Rest over — next set!');
   if (!settings().sound) return;
+  const restore = duck();
+  let done = false;
+  const end = () => { if (!done) { done = true; restore(); } };
+  setTimeout(end, 2200);
+  const fallback = () => {
+    try { unlockAudio(); if (audio) beepWebAudio(); } catch { /* ignore */ }
+  };
   try {
-    unlockAudio();
-    if (!audio) return;
-    const t0 = audio.currentTime + 0.02;
-    [0, 0.22, 0.44].forEach((d, i) => {
-      const o = audio.createOscillator();
-      const g = audio.createGain();
-      o.type = 'sine';
-      o.frequency.value = i === 2 ? 1175 : 880;
-      g.gain.setValueAtTime(0.0001, t0 + d);
-      g.gain.exponentialRampToValueAtTime(0.35, t0 + d + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.0001, t0 + d + 0.18);
-      o.connect(g).connect(audio.destination);
-      o.start(t0 + d);
-      o.stop(t0 + d + 0.2);
-    });
-  } catch { /* ignore */ }
+    if (!clip) return fallback();
+    clip.muted = false;
+    clip.volume = 1;
+    clip.currentTime = 0;
+    clip.onended = end;
+    clip.play().catch(fallback);
+  } catch { fallback(); }
 }
 
 // ---------- keep the screen on ----------

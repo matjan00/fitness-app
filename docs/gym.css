@@ -104,6 +104,9 @@
   font-size: 14px; font-weight: 650; display: flex; align-items: center; justify-content: center; gap: 6px;
 }
 .gx-addset svg { width: 17px; height: 17px; }
+.gx-setbtns { display: flex; gap: 8px; }
+.gx-setbtns .gx-addset { flex: 1; width: auto; min-height: 44px; }
+.gx-rmset:disabled { opacity: .4; }
 .gx-addex { margin-top: 16px; }
 .gx-discard, .gx-delete { margin-top: 10px; background: transparent; }
 
