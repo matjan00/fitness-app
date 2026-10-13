@@ -163,5 +163,44 @@ class TestPureHelpers(unittest.TestCase):
         self.assertTrue(plan["skipped"] > 0)
 
 
+class TestSleep(unittest.TestCase):
+    def test_sleep_hours(self):
+        self.assertEqual(gs.sleep_hours({"dailySleepDTO": {"sleepTimeSeconds": 26460}}), 7.3)
+        self.assertIsNone(gs.sleep_hours({"dailySleepDTO": {"sleepTimeSeconds": None}}))
+        self.assertIsNone(gs.sleep_hours({"dailySleepDTO": {"sleepTimeSeconds": 0}}))
+        self.assertIsNone(gs.sleep_hours({}))
+        self.assertIsNone(gs.sleep_hours(None))
+
+    def test_sleep_days_first_vs_incremental(self):
+        from datetime import date
+        first = gs.sleep_days({}, date(2026, 10, 13))
+        self.assertEqual(len(first), gs.FIRST_SLEEP_DAYS)
+        self.assertEqual(first[-1], "2026-10-13")
+        inc = gs.sleep_days({"sleep_sync_done": True}, date(2026, 10, 13))
+        self.assertEqual(inc, ["2026-10-07", "2026-10-08", "2026-10-09", "2026-10-10", "2026-10-11", "2026-10-12", "2026-10-13"])
+
+    def test_merge_sleep_new_day(self):
+        self.assertEqual(gs.merge_sleep(None, "2026-10-13", 7.3), {"day": "2026-10-13", "sleepHours": 7.3, "sleepSource": "garmin"})
+
+    def test_merge_sleep_keeps_other_fields(self):
+        out = gs.merge_sleep({"day": "2026-10-13", "steps": 9000, "sleepHours": None}, "2026-10-13", 6.8)
+        self.assertEqual(out["steps"], 9000)
+        self.assertEqual(out["sleepHours"], 6.8)
+
+    def test_merge_sleep_never_overwrites_hand_typed(self):
+        self.assertIsNone(gs.merge_sleep({"day": "2026-10-13", "sleepHours": 8}, "2026-10-13", 6.8))
+        self.assertEqual(gs.merge_sleep({"day": "2026-10-13", "sleepHours": 8}, "2026-10-13", 6.8, replace_typed=True)["sleepHours"], 6.8)
+
+    def test_merge_sleep_updates_garmin_value_and_skips_unchanged(self):
+        prev = {"day": "2026-10-13", "sleepHours": 6.5, "sleepSource": "garmin"}
+        self.assertEqual(gs.merge_sleep(prev, "2026-10-13", 6.8)["sleepHours"], 6.8)
+        self.assertIsNone(gs.merge_sleep(prev, "2026-10-13", 6.5))
+        self.assertIsNone(gs.merge_sleep(prev, "2026-10-13", None))
+
+    def test_daily_record_id_stable(self):
+        self.assertEqual(gs.daily_record_id(USER, "2026-10-13"), gs.daily_record_id(USER, "2026-10-13"))
+        self.assertNotEqual(gs.daily_record_id(USER, "2026-10-13"), gs.daily_record_id(USER, "2026-10-12"))
+
+
 if __name__ == "__main__":
     unittest.main()

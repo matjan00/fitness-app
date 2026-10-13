@@ -3,7 +3,12 @@ name: Garmin sync
 on:
   schedule:
     - cron: "17 */3 * * *"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      replace_typed_sleep:
+        description: "Replace sleep you typed in by hand with Garmin's (last 7 days)"
+        type: boolean
+        default: false
 
 # Sync and send never log in to Garmin at the same time.
 concurrency:
@@ -26,8 +31,9 @@ jobs:
       - name: Run unit tests (no network)
         run: python scripts/test_garmin_sync.py -v
 
-      - name: Sync Garmin runs
+      - name: Sync Garmin runs and sleep
         env:
+          REPLACE_TYPED_SLEEP: ${{ inputs.replace_typed_sleep }}
           GARMIN_EMAIL: ${{ secrets.GARMIN_EMAIL }}
           GARMIN_PASSWORD: ${{ secrets.GARMIN_PASSWORD }}
           GARMIN_TOKENS: ${{ secrets.GARMIN_TOKENS }}

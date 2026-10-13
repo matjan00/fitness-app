@@ -4,6 +4,10 @@ Your runs now sync from Garmin Connect automatically, for free — a robot (a "G
 in as you every 3 hours, downloads your new runs, and saves them so the app can show them. You
 only need to do this setup once.
 
+The same job also fills in **sleep** (hours actually asleep, from the watch) in the cut plan's
+daily log. Sleep you type in by hand is kept; to replace it with Garmin's, run the workflow by
+hand and tick **Replace sleep you typed in by hand**.
+
 This uses an **unofficial** way of talking to Garmin (there's no free official one), so two things
 to know up front:
 - If your Garmin account has **two-step verification** (a code texted or app-generated at login),

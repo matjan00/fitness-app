@@ -72,7 +72,7 @@ function editItem(key, day, f) {
   if (key === 'sleep') {
     return entrySheet('Sleep last night', [{ name: 'h', label: 'Hours', value: f.sleep }], async (v) => {
       if (v.h != null && !(v.h >= 0 && v.h <= 16)) { toast('Enter hours, e.g. 7.5'); return false; }
-      await daily({ sleepHours: v.h });
+      await daily({ sleepHours: v.h, sleepSource: null }); // typed by hand: the Garmin sync leaves it alone
     });
   }
   if (key === 'steps') {

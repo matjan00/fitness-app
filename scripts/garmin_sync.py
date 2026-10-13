@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
-"""Pull running activities from Garmin Connect (unofficial API via the garminconnect / garth
-libraries) and upsert them into the Supabase `records` table as kind 'run', in the same record
-shape the app's coach/detail views already expect (see supabase/functions/strava/map.js).
+"""Pull running activities and nightly sleep from Garmin Connect (unofficial API via the
+garminconnect / garth libraries) and upsert them into the Supabase `records` table. Runs become
+kind 'run', in the same record shape the app's coach/detail views already expect (see
+supabase/functions/strava/map.js). Sleep goes into the cut plan's 'daily' records as sleepHours
+(with sleepSource 'garmin'); a value typed in by hand in the app is never overwritten.
 
 Runs on a schedule from .github/workflows/garmin-sync.yml. This repo (and its Actions logs) are
 PUBLIC — never print activity data, names, HR, locations, emails, user ids or tokens. Only counts
@@ -41,6 +43,9 @@ BEST_EFFORT_DISTANCES = [
 
 STATUS_KIND = "garmin-status"
 RUN_KIND = "run"
+DAILY_KIND = "daily"
+FIRST_SLEEP_DAYS = 30
+INCREMENTAL_SLEEP_DAYS = 7
 NAMESPACE = uuid.UUID("6f2f5a3e-6a1a-4a55-9c2e-6d0d6a1a3b10")  # fixed namespace for this app's uuid5 ids
 
 
@@ -253,6 +258,40 @@ def plan_sync(activities, existing_by_garmin_id):
     return {"to_fetch": to_fetch[:MAX_DETAIL_FETCHES], "unchanged": unchanged, "skipped": max(0, len(to_fetch) - MAX_DETAIL_FETCHES)}
 
 
+def daily_record_id(user_id, day):
+    return str(uuid.uuid5(NAMESPACE, f"{user_id}:daily:{day}"))
+
+
+def sleep_hours(sleep_data):
+    """Hours actually asleep (light + deep + REM, awake time excluded) from a get_sleep_data
+    response, rounded to 0.1 h. None when the watch recorded no sleep that night."""
+    dto = (sleep_data or {}).get("dailySleepDTO") or {}
+    secs = _num(dto.get("sleepTimeSeconds"))
+    if not secs or secs <= 0:
+        return None
+    return round(secs / 3600, 1)
+
+
+def sleep_days(status, today):
+    """Calendar days (YYYY-MM-DD, oldest first) to fetch sleep for. Garmin files a night under
+    the day you woke up, which is the day the app's "Sleep last night" belongs to."""
+    n = INCREMENTAL_SLEEP_DAYS if (status or {}).get("sleep_sync_done") else FIRST_SLEEP_DAYS
+    return [(today - timedelta(days=i)).isoformat() for i in range(n - 1, -1, -1)]
+
+
+def merge_sleep(existing, day, hours, replace_typed=False):
+    """New data for the daily record of `day`, or None if nothing should change. Sleep typed in
+    by hand (sleepHours set without sleepSource 'garmin') wins unless replace_typed is set."""
+    cur = dict(existing or {})
+    typed_by_hand = cur.get("sleepHours") is not None and cur.get("sleepSource") != "garmin"
+    if hours is None or (typed_by_hand and not replace_typed):
+        return None
+    if cur.get("sleepHours") == hours and cur.get("sleepSource") == "garmin":
+        return None
+    cur.update({"day": day, "sleepHours": hours, "sleepSource": "garmin"})
+    return cur
+
+
 # ---------------------------------------------------------------------------
 # Supabase REST (network)
 # ---------------------------------------------------------------------------
@@ -309,6 +348,24 @@ def fetch_existing_runs(supabase_url, secret_key, user_id):
         gid = (row.get("data") or {}).get("garmin_id")
         if gid:
             out[str(gid)] = row["data"]
+    return out
+
+
+def fetch_dailies(supabase_url, secret_key, user_id, since_day):
+    """Existing daily rows from since_day on, keyed by day -> (id, data). If a day somehow has
+    several rows, keep the most recently updated one."""
+    status, body = _http(
+        "GET",
+        f"{supabase_url}/rest/v1/records?user_id=eq.{user_id}&kind=eq.{DAILY_KIND}&deleted=eq.false&select=id,data,updated_at&order=updated_at.asc",
+        supabase_headers(secret_key),
+    )
+    if status >= 300:
+        raise RuntimeError("Could not read the daily log from Supabase.")
+    out = {}
+    for row in body or []:
+        day = (row.get("data") or {}).get("day")
+        if day and day >= since_day:
+            out[day] = (row["id"], row["data"])
     return out
 
 
@@ -417,6 +474,37 @@ def laps_from_detail(detail):
     return []
 
 
+def fetch_sleep(client, day):
+    try:
+        return client.get_sleep_data(day) or {}
+    except Exception:
+        return {}
+
+
+def sync_sleep(client, supabase_url, secret_key, user_id, status):
+    """Fetch recent nights and write sleepHours into the daily log. Returns nights saved."""
+    days = sleep_days(status, datetime.now(timezone.utc).date())
+    existing = fetch_dailies(supabase_url, secret_key, user_id, days[0])
+    replace_typed = os.environ.get("REPLACE_TYPED_SLEEP") == "true"
+    rows = []
+    for day in days:
+        hours = sleep_hours(fetch_sleep(client, day))
+        rec_id, data = existing.get(day, (daily_record_id(user_id, day), None))
+        new = merge_sleep(data, day, hours, replace_typed)
+        if new is not None:
+            rows.append({
+                "id": rec_id,
+                "user_id": user_id,
+                "kind": DAILY_KIND,
+                "data": new,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "deleted": False,
+            })
+        time.sleep(DETAIL_SLEEP_S)
+    upsert_records(supabase_url, secret_key, rows)
+    return len(rows)
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -502,11 +590,21 @@ def main():
         log(f"Could not save runs: {e}")
         return 1
 
+    # A sleep problem must not fail the run sync.
+    sleep_ok = True
+    try:
+        nights = sync_sleep(client, supabase_url, secret_key, user_id, prior_status)
+        log(f"Garmin sleep: saved {nights} night(s).")
+    except Exception as e:
+        sleep_ok = False
+        log(f"Could not sync sleep: {type(e).__name__}")
+
     runs_total = len(existing) + len([r for r in rows if str(r["data"].get("garmin_id")) not in existing])
     new_status = {
         "last_sync_at": datetime.now(timezone.utc).isoformat(),
         "runs_total": runs_total,
         "full_sync_done": True,
+        "sleep_sync_done": sleep_ok or bool(prior_status.get("sleep_sync_done")),
         "last_error": None,
     }
     try:
