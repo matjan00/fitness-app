@@ -9,7 +9,7 @@ import { push, page } from './nav.js';
 import * as foodUi from './food-ui.js';
 import { loadDb, exById } from './gym-data.js';
 import {
-  CUT_DEFAULTS, CUT_TARGETS, PROGRAM_NAME, EASY_PACE, routineRecords, planWeeks, weekNumber, startWeightFrom,
+  CUT_DEFAULTS, CUT_TARGETS, PROGRAM_NAME, ROUTINES_REV, EASY_PACE, routineRecords, planWeeks, weekNumber, startWeightFrom,
   targetsChanged, daysToGoal,
 } from './cut-calc.js';
 import { adaptiveTdee } from './cut-flags.js';
@@ -58,6 +58,21 @@ export async function addCutRoutines() {
   const recs = routineRecords(Date.now()).map((r) => ({ ...r, exercises: r.exercises.filter((x) => exById(x.exercise_id)) }));
   await store.putMany('routine', recs);
   toast('Added Upper A, B and C to Gym');
+}
+
+// Saved Upper A / B / C from an older plan get the plan's current exercises (kg kept for exercises that stay).
+export async function syncCutRoutines() {
+  const old = store.all('routine').filter((r) => r.program === PROGRAM_NAME && r.cut && (r.rev || 1) < ROUTINES_REV);
+  if (!old.length) return;
+  await loadDb().catch(() => {});
+  const fresh = routineRecords();
+  await store.putMany('routine', old.map((r) => {
+    const f = fresh.find((x) => x.cut === r.cut);
+    if (!f) return { ...r, rev: ROUTINES_REV };
+    const kg = new Map((r.exercises || []).map((x) => [x.exercise_id, x.kg]));
+    const exercises = f.exercises.filter((x) => exById(x.exercise_id)).map((x) => ({ ...x, kg: kg.get(x.exercise_id) ?? null }));
+    return { ...r, name: f.name, rev: ROUTINES_REV, exercises };
+  }));
 }
 
 // ---------- settings page ----------

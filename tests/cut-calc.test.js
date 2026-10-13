@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  PLAN, ROUTINES, MAIN_LIFTS, routineRecords, weekNumber, startWeightFrom, targetWeight, planWeeks,
+  PLAN, ROUTINES, ROUTINES_REV, MAIN_LIFTS, routineRecords, weekNumber, startWeightFrom, targetWeight, planWeeks,
   projectedWeight, daysToGoal, emaTrend, trendOn, targetsChanged,
 } from '../docs/cut-calc.js';
 
@@ -19,12 +19,13 @@ test('every plan exercise and swap exists in the exercise library', () => {
 
 test('routines match Part 1 (A/B/C, sets × reps, rest)', () => {
   assert.deepEqual(ROUTINES.map((r) => r.name), ['Upper A', 'Upper B', 'Upper C']);
-  assert.deepEqual(ROUTINES[0].exercises.map((x) => `${x.sets}x${x.reps}`), ['4x6-10', '4x8-10', '3x12-15', '3x10-12', '3x12-20']);
+  assert.deepEqual(ROUTINES[0].exercises.map((x) => `${x.sets}x${x.reps}`), ['4x6-10', '4x8-10', '3x12-15', '3x12-15', '3x10-12', '3x12-20']);
   assert.equal(ROUTINES[2].exercises.length, 6);
   const recs = routineRecords(5);
   assert.equal(recs[1].order, 6);
   assert.equal(recs[0].program, 'Cut 11 weeks');
   assert.deepEqual(recs[0].exercises[0], { exercise_id: 'Leverage_Chest_Press', sets: 4, reps: '6-10', kg: null, rest: 150 });
+  assert.equal(recs[0].rev, ROUTINES_REV);
 });
 
 test('plan has 11 weeks + 2 buffer, deloads in 5 and 10, checkpoints in 4 and 8', () => {

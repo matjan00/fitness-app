@@ -5,7 +5,7 @@ import { $, $$, esc, icon, toast, today, n0, n1, parseNum, addDays, local } from
 import * as store from './store.js';
 import { push, sheet } from './nav.js';
 import { startWorkout } from './gym-workout.js';
-import { cutSettings, currentTargets, openCutSettings, openPlan, addCutRoutines, startWeight, isSetUp } from './cut.js';
+import { cutSettings, currentTargets, openCutSettings, openPlan, addCutRoutines, syncCutRoutines, startWeight, isSetUp } from './cut.js';
 import { PLAN, PROGRAM_NAME, EASY_PACE, weekNumber, daysToGoal, daysBetween, emaTrend, trendOn, targetWeight } from './cut-calc.js';
 import { redFlags, isLogged } from './cut-flags.js';
 import { reviewNeeded, openReview, dueCheckin, checkinFor } from './cut-review.js';
@@ -291,6 +291,7 @@ function render(el) {
   $('#ct-yday', el).onclick = () => openDay(addDays(day, -1));
   $('#ct-logrun', el)?.addEventListener('click', () => logRun(st.session.kind));
   $('#ct-start', el)?.addEventListener('click', async () => {
+    await syncCutRoutines();
     let r = store.all('routine').find((x) => x.program === PROGRAM_NAME && x.cut === st.session.letter);
     if (!r) { await addCutRoutines(); r = store.all('routine').find((x) => x.program === PROGRAM_NAME && x.cut === st.session.letter); }
     if (r) startWorkout(r);
@@ -340,6 +341,7 @@ export function init() {
     const msg = reminderText();
     if (msg) toast(msg, 4500);
   }, 600);
+  setTimeout(() => syncCutRoutines().catch(() => {}), 1500);
   scheduleReminders();
 }
 

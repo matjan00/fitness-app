@@ -71,25 +71,26 @@ Target trend weight = start − 0.75 × week (example from 73kg):
 ## Strength (3x/week upper body, rotate A → B → C)
 Week 1: work up to a weight where each set ends with ~2 reps in reserve. That becomes your baseline.
 
-Upper body only in the gym; your legs get trained by the two runs and the daily steps. Abs are crunches only.
+Upper body only in the gym; your legs get trained by the two runs and the daily steps. Abs are machine crunches only.
 
 **Upper A**
 | Exercise | Sets × reps | Rest |
 |---|---|---|
 | Machine Chest Press | 4 × 6–10 | 2–3 min |
-| Chest-Supported DB Row | 4 × 8–10 | 2 min |
+| Chest-Supported T-Bar Row | 4 × 8–10 | 2 min |
+| Pec Deck Fly | 3 × 12–15 | 60 s |
 | DB Lateral Raise | 3 × 12–15 | 60 s |
 | DB Curl | 3 × 10–12 | 60 s |
-| Crunch (weighted or cable) | 3 × 12–20 | 60 s |
+| Machine Crunch (weighted) | 3 × 12–20 | 60 s |
 
 **Upper B**
 | Exercise | Sets × reps | Rest |
 |---|---|---|
 | Overhead Press | 4 × 6–8 | 2–3 min |
-| Pull-Up (or Lat Pulldown) | 4 × 6–10 | 2 min |
+| Lat Pulldown (or Pull-Up) | 4 × 6–10 | 2 min |
 | Reverse Pec Deck | 3 × 12–15 | 60 s |
 | Triceps Pushdown | 3 × 12–15 | 60 s |
-| Crunch (weighted or cable) | 3 × 12–20 | 60 s |
+| Machine Crunch (weighted) | 3 × 12–20 | 60 s |
 
 **Upper C**
 | Exercise | Sets × reps | Rest |
@@ -99,7 +100,7 @@ Upper body only in the gym; your legs get trained by the two runs and the daily 
 | DB Lateral Raise | 3 × 12–15 | 60 s |
 | Hammer Curl | 3 × 10–12 | 60 s |
 | Overhead Triceps Extension | 3 × 12–15 | 60 s |
-| Crunch (weighted or cable) | 3 × 12–20 | 60 s |
+| Machine Crunch (weighted) | 3 × 12–20 | 60 s |
 
 **Progression (double progression):**
 - When all sets hit the **top** of the rep range → next time add **+2.5kg** (presses, rows, pulldowns). Isolation exercises and crunches: add reps first, then the smallest weight jump. Pull-ups: add reps, then weight once you hit 4 × 10.
@@ -132,7 +133,7 @@ Every exercise is compared with the **last time you did that same exercise**, us
 - **Held:** no main lift dropped (counts as a pass, especially in weeks 6–11)
 - **Dropped:** any main lift dropped. Two "Dropped" sessions in a row trigger the strength red flag.
 
-Main lifts: Machine Chest Press, Overhead Press, Chest-Supported DB Row, Pull-Up/Lat Pulldown, Incline DB Press. In deload weeks, sessions are judged only on completion, not on performance.
+Main lifts: Machine Chest Press, Overhead Press, Chest-Supported T-Bar Row, Lat Pulldown/Pull-Up, Incline DB Press. In deload weeks, sessions are judged only on completion, not on performance.
 
 **Deload weeks (5, 10):** same weights, 2 sets instead of 3–4, no grinding reps.
 
@@ -209,7 +210,7 @@ Implement on top of the existing `fit` app. Keep the existing tech stack and sty
 - **Trend weight:** exponential moving average of daily weights (α = 0.1); show both raw and trend.
 - **Projected line:** start − rate × weeks, flattening at the goal.
 - **Adaptive maintenance (TDEE):** after 14+ days of data, TDEE = avg kcal − (Δ trend kg × 7,700 / days), on a rolling 21-day window. Show it next to the initial estimate.
-- **e1RM** per main lift (Machine Chest Press, Overhead Press, Chest-Supported DB Row, Pull-Up/Lat Pulldown) (Epley: weight × (1 + reps/30)) from the best set of each session.
+- **e1RM** per main lift (Machine Chest Press, Overhead Press, Chest-Supported T-Bar Row, Lat Pulldown/Pull-Up) (Epley: weight × (1 + reps/30)) from the best set of each session.
 - **Progression engine:** after every session, apply the Part 1 "Workout judging" rules to the sets actually logged: store a verdict per exercise (Beat / Matched / Dropped) and per session (Progressed / Held / Dropped), and pre-fill the next session's weight and target reps from those actual results. Track consecutive below-range and no-improvement counts per exercise for the −5% / −10% rules. Swapped exercises are judged against their own history.
 - **Day status:** green / yellow / red per the Part 1 rules.
 - **Week grade:** % of green days + workouts done/scheduled + check-in done + strength score (Progressed = 100%, Held = 80%, Dropped = 0% per session, averaged) → A (≥ 90%), B (≥ 80%), C (≥ 70%), D (≥ 60%), E (≥ 50%), F (< 50%).

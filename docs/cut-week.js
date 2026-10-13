@@ -146,7 +146,7 @@ export function weightChart(weights = [], cfg = {}, start = null, day) {
 
 // Best-set e1RM per session for each main lift (weight × reps sets only; Pull-Up and Lat Pulldown together):
 // { [label]: [{ day, e1rm }] }.
-export const LIFT_LABELS = { Leverage_Chest_Press: 'Chest press', Standing_Military_Press: 'Overhead press', Dumbbell_Incline_Row: 'DB row', Pullups: 'Pull-up / pulldown', 'Wide-Grip_Lat_Pulldown': 'Pull-up / pulldown', Incline_Dumbbell_Press: 'Incline DB press' };
+export const LIFT_LABELS = { Leverage_Chest_Press: 'Chest press', Standing_Military_Press: 'Overhead press', 'Lying_T-Bar_Row': 'T-bar row', Pullups: 'Pull-up / pulldown', 'Wide-Grip_Lat_Pulldown': 'Pull-up / pulldown', Incline_Dumbbell_Press: 'Incline DB press' };
 export function liftSeries(workouts = [], since = '') {
   const out = {};
   for (const w of [...workouts].filter((x) => x?.ended_at && x.started_at.slice(0, 10) >= since).sort((a, b) => a.started_at.localeCompare(b.started_at))) {

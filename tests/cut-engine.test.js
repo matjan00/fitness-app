@@ -72,7 +72,7 @@ test('session verdict', () => {
 });
 
 test('plan slots, swaps and text', () => {
-  assert.equal(planSlot('Wide-Grip_Lat_Pulldown').name, 'Pull-Up');
+  assert.equal(planSlot('Pullups').name, 'Lat Pulldown');
   assert.equal(planSlot('Side_Lateral_Raise', 'C').reps, '12-15');
   assert.equal(planSlot('nope'), null);
   assert.deepEqual(range('12-20'), { lo: 12, hi: 20 });

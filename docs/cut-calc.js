@@ -51,18 +51,19 @@ export const EASY_PACE = '6:30–6:45/km';
 // Upper A → B → C. kind: 'main' compound (also judged as a main lift), 'compound', 'iso' (isolation),
 // 'crunch', 'pullup' (reps first, weight once 4 × 10). alt = suggested swap (judged on its own history).
 const E = (exercise_id, name, sets, reps, rest, kind, alt = null) => ({ exercise_id, name, sets, reps, rest, kind, alt });
-const CRUNCH = E('Cable_Crunch', 'Crunch (weighted or cable)', 3, '12-20', 60, 'crunch', 'Ab_Crunch_Machine');
+const CRUNCH = E('Ab_Crunch_Machine', 'Machine Crunch (weighted)', 3, '12-20', 60, 'crunch', 'Cable_Crunch');
 export const ROUTINES = [
   { key: 'A', name: 'Upper A', exercises: [
     E('Leverage_Chest_Press', 'Machine Chest Press', 4, '6-10', 150, 'main', 'Dumbbell_Bench_Press'),
-    E('Dumbbell_Incline_Row', 'Chest-Supported DB Row', 4, '8-10', 120, 'main'),
+    E('Lying_T-Bar_Row', 'Chest-Supported T-Bar Row', 4, '8-10', 120, 'main', 'Dumbbell_Incline_Row'),
+    E('Butterfly', 'Pec Deck Fly', 3, '12-15', 60, 'iso', 'Cable_Crossover'),
     E('Side_Lateral_Raise', 'DB Lateral Raise', 3, '12-15', 60, 'iso'),
     E('Dumbbell_Bicep_Curl', 'DB Curl', 3, '10-12', 60, 'iso'),
     CRUNCH,
   ] },
   { key: 'B', name: 'Upper B', exercises: [
     E('Standing_Military_Press', 'Overhead Press', 4, '6-8', 150, 'main', 'Dumbbell_Shoulder_Press'),
-    E('Pullups', 'Pull-Up', 4, '6-10', 120, 'pullup', 'Wide-Grip_Lat_Pulldown'),
+    E('Wide-Grip_Lat_Pulldown', 'Lat Pulldown', 4, '6-10', 120, 'main', 'Pullups'),
     E('Reverse_Machine_Flyes', 'Reverse Pec Deck', 3, '12-15', 60, 'iso'),
     E('Triceps_Pushdown', 'Triceps Pushdown', 3, '12-15', 60, 'iso'),
     CRUNCH,
@@ -77,13 +78,15 @@ export const ROUTINES = [
   ] },
 ];
 export const PROGRAM_NAME = 'Cut 11 weeks';
+// Bump when ROUTINES change: saved routines older than this are updated to the plan (syncCutRoutines).
+export const ROUTINES_REV = 2;
 // Main lifts (Pull-Up and Lat Pulldown count as one).
-export const MAIN_LIFTS = ['Leverage_Chest_Press', 'Standing_Military_Press', 'Dumbbell_Incline_Row', 'Pullups', 'Wide-Grip_Lat_Pulldown', 'Incline_Dumbbell_Press'];
+export const MAIN_LIFTS = ['Leverage_Chest_Press', 'Standing_Military_Press', 'Lying_T-Bar_Row', 'Pullups', 'Wide-Grip_Lat_Pulldown', 'Incline_Dumbbell_Press'];
 
 // Routine records for the gym module ({ name, program, exercises:[{exercise_id, sets, reps, kg, rest}] }).
 export function routineRecords(order = 0) {
   return ROUTINES.map((r, i) => ({
-    name: r.name, program: PROGRAM_NAME, order: order + i, cut: r.key,
+    name: r.name, program: PROGRAM_NAME, order: order + i, cut: r.key, rev: ROUTINES_REV,
     exercises: r.exercises.map((x) => ({ exercise_id: x.exercise_id, sets: x.sets, reps: x.reps, kg: null, rest: x.rest })),
   }));
 }
