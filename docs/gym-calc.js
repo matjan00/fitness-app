@@ -90,7 +90,7 @@ export function formatSet(set, mode = 'wr', unit = false) {
   if (mode === 't') return set.secs != null ? fmtDur(set.secs) : '';
   if (mode === 'bw') {
     if (set.reps == null) return '';
-    return set.kg ? `+${fmtNum(set.kg)} × ${set.reps}` : `${set.reps} reps`;
+    return set.kg ? `+${fmtNum(set.kg)} × ${set.reps}` : `${set.reps} rep${set.reps === 1 ? '' : 's'}`;
   }
   if (set.reps == null) return '';
   return `${fmtNum(set.kg || 0)}${unit ? ' kg' : ''} × ${set.reps}`;
@@ -143,7 +143,7 @@ export function setMetric(set, kind, mode = 'wr') {
   }
 }
 export function formatMetric(kind, v) {
-  if (kind === 'reps') return `${v} reps`;
+  if (kind === 'reps') return `${v} rep${v === 1 ? '' : 's'}`;
   if (kind === 'secs') return fmtDur(v);
   return `${fmtNum(v)} kg`;
 }

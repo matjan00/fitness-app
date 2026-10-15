@@ -5,8 +5,9 @@
 .ct-week p { margin-top: 4px; }
 
 /* Today card (cut-today.js) */
+.ct-headstats { margin: 2px 0 14px; }
 .ct-today .card-head { align-items: flex-start; }
-.ct-sess { background: var(--card-2); border-radius: var(--radius-sm); padding: 12px; }
+.ct-sess { padding: 12px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .ct-sess p { margin-top: 4px; }
 .ct-sub { font-size: 15px; margin: 0; }
 .ct-weekline { margin: 6px 2px 10px; }
@@ -27,16 +28,15 @@
 .ct-verdict { margin-top: 14px; }
 
 /* Red flags, trend, notes */
-.ct-flags { background: var(--down-soft); color: var(--down-ink); border-radius: var(--radius-sm); padding: 0 12px; margin-bottom: 12px; font-size: 14px; font-weight: 600; }
+.ct-flags { background: var(--gold-soft); color: var(--gold); border-radius: var(--radius-sm); padding: 0 12px; margin-bottom: 12px; font-size: 14px; font-weight: 600; }
 .ct-flags summary { display: flex; gap: 8px; align-items: center; min-height: 44px; cursor: pointer; list-style: none; overflow-wrap: anywhere; }
 .ct-flags summary::-webkit-details-marker { display: none; }
 .ct-flags summary::after { content: '›'; margin-left: auto; font-size: 18px; transition: transform .2s; }
 .ct-flags[open] summary::after { transform: rotate(90deg); }
 .ct-flags p { padding: 0 0 10px 24px; overflow-wrap: anywhere; }
-.ct-flags svg, .ct-note svg, .ct-banner svg, .ct-revdone svg { width: 16px; height: 16px; flex: none; margin-top: 2px; }
+.ct-flags svg, .ct-note svg, .ct-revdone svg { width: 16px; height: 16px; flex: none; margin-top: 2px; }
 .ct-trend { margin: -4px 0 12px; color: var(--text-2); }
 .ct-note { display: flex; gap: 8px; margin-top: 10px; color: var(--text-2); }
-.ct-banner { display: flex; gap: 8px; align-items: center; width: 100%; padding: 10px 16px; background: var(--down-soft); color: var(--down-ink); font-weight: 650; font-size: 14px; text-align: left; }
 
 /* Weekly review (cut-review.js) */
 .ct-big { font-size: 40px; line-height: 1.1; font-weight: 800; }

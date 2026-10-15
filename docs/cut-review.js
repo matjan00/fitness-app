@@ -58,7 +58,7 @@ export function openReview(ci = dueCheckin()) {
     el.innerHTML = page({ title: 'Weekly review', back: completed, body: `
       <p class="small muted" style="margin:0 2px 12px">Week ${s.week} · ${esc(new Date(`${s.from}T12:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }))} – ${esc(new Date(`${s.to}T12:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }))}. The numbers vs your targets, plainly.</p>
       <div class="card ct-grade"><div class="row between"><div><p class="tiny muted">Week grade</p><b class="ct-big">${s.grade}</b></div>
-        <div class="small" style="text-align:right">${n0(s.score * 100)}%<br><span class="muted">${s.green} green · ${s.yellow} yellow of ${s.days} days</span></div></div>
+        <div class="small" style="text-align:right">${n0(s.score * 100)}%<br><span class="muted">${s.green} green · ${s.yellow} yellow of ${s.days} day${s.days === 1 ? '' : 's'}</span></div></div>
         ${s.parts.some((x) => x.value < 0.8) ? `<p class="small" style="margin-top:8px">Pulled down by: ${s.parts.filter((x) => x.value < 0.8).sort((a, b) => a.value - b.value).map((x) => `<b>${esc(x.label)} ${n0(x.value * 100)}%</b>`).join(', ')}</p>` : ''}</div>
       <div class="card stack-sm" style="margin-top:12px">
         <div class="row between"><span>Trend</span><b>${s.trendFrom != null && s.trendTo != null ? `${n1(s.trendFrom)} → ${n1(s.trendTo)} kg (${s.change > 0 ? '+' : ''}${n1(s.change)})` : '–'}</b></div>

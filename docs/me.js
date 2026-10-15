@@ -1,7 +1,7 @@
 // "Me / settings" screen: sections contributed by the feature modules (body weight, targets, Garmin sync status…),
 // then account / sync and backup, which live here.
 
-import { $, esc, icon, toast, local, niceDate, niceTime, errorCard } from './util.js';
+import { $, esc, icon, toast, local, niceDate, niceTime, errorCard, friendlyError } from './util.js';
 import * as store from './store.js';
 import * as gym from './gym.js';
 import * as food from './food.js';
@@ -13,7 +13,7 @@ import { push, page } from './nav.js';
 // Opened as a full-screen page from the icon at the top-right of Home (see app.js).
 export function openMe() {
   push((el) => {
-    el.innerHTML = page({ title: 'Me / settings', body: '' });
+    el.innerHTML = page({ title: 'Settings', body: '' });
     render($('.scroll', el), false);
   });
 }
@@ -59,9 +59,9 @@ function render(el, head = true) {
     if (!f) return;
     try {
       const n = await store.importAll(JSON.parse(await f.text()));
-      toast(`Restored ${n} items`);
+      toast(`Restored ${n} item${n === 1 ? '' : 's'}`);
     } catch (ex) {
-      toast(ex.message);
+      toast(friendlyError(ex, 'That file is not a Fit backup.'), 4000);
     }
   };
 }
@@ -128,6 +128,6 @@ async function renderSync(box) {
       <button class="icon-btn" id="me-syncnow" aria-label="Sync now">${icon('sync')}</button>
     </div>
     <button class="link small" id="me-logout" style="margin-top:12px">Log out</button>`;
-  $('#me-syncnow', box).onclick = () => store.syncNow().then(() => toast('Synced')).catch((e) => toast(e.message));
+  $('#me-syncnow', box).onclick = () => store.syncNow().then(() => toast('Synced')).catch((e) => toast(friendlyError(e, 'Sync failed. Try again in a moment.'), 4000));
   $('#me-logout', box).onclick = async () => { await store.signOut(); renderSync(box); };
 }

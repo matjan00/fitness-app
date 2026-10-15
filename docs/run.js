@@ -9,7 +9,7 @@
 // ({ last_sync_at, runs_total, full_sync_done, last_error }). Settings live in store config 'run':
 // { runs_per_week, focus: '5k'|'10k', max_hr }.
 
-import { $, $$, esc, icon, toast, niceDate, relDay, mins } from './util.js';
+import { $, $$, esc, icon, toast, niceDate, relDay, mins, friendlyError } from './util.js';
 import * as store from './store.js';
 import { push, sheet } from './nav.js';
 import { chart, fade, cssVar } from './charts.js';
@@ -112,7 +112,7 @@ async function doSync(silent) {
     await store.syncNow();
     if (!silent) toast('Refreshed', 2000);
   } catch (e) {
-    if (!silent) toast(e.message || 'Could not refresh', 4000);
+    if (!silent) toast(friendlyError(e, 'Could not refresh. Try again in a moment.'), 4000);
   } finally {
     syncing = false;
     rerender();
@@ -134,6 +134,16 @@ function stopDemo() {
 
 // ---------- small render helpers ----------
 const pct = (a, b) => (b > 0 ? Math.round((a / b - 1) * 100) : null);
+const signed = (d) => `${d >= 0 ? '+' : '−'}${Math.abs(d)}%`;
+// This week vs the same days of last week (Mon → now), so a Thursday isn't compared with a full week.
+function weekChange(ctx) {
+  const now = new Date(ctx.now);
+  const mon = new Date(now); mon.setHours(0, 0, 0, 0); mon.setDate(mon.getDate() - ((now.getDay() + 6) % 7));
+  const wk = 7 * 864e5;
+  const km = (lo, hi) => ctx.runs.filter((r) => { const t = new Date(r.start).getTime(); return t >= lo && t <= hi; })
+    .reduce((s, r) => s + (+r.distance_m || 0) / 1000, 0);
+  return pct(km(mon.getTime(), now.getTime()), km(mon.getTime() - wk, now.getTime() - wk));
+}
 const kmTxt = (k) => (k >= 100 ? String(Math.round(k)) : (Math.round(k * 10) / 10).toFixed(1));
 const weekTitle = (ms) => new Date(ms).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 const TONE_ICON = { good: 'check', tip: 'info', warn: 'info', info: 'note', pr: 'trophy' };
@@ -198,11 +208,11 @@ function renderTab(el) {
 function heroHtml(ctx) {
   const { thisWeek: tw, lastWeek: lw } = ctx.review;
   const target = ctx.plan.targetKm;
-  const d = pct(tw.km, lw.km);
+  const d = weekChange(ctx);
   const avgPace = tw.km ? tw.secs / tw.km : null;
   return `<div class="rn-hero">
     <div class="row between"><span class="rn-hero-label">This week</span>
-      ${d != null ? `<span class="rn-hero-chip">${d >= 0 ? '+' : ''}${d}% vs last week</span>` : ''}</div>
+      ${d != null ? `<span class="rn-hero-chip">${signed(d)} vs same days last week</span>` : ''}</div>
     <div class="rn-big">${kmTxt(tw.km)}<small> km</small></div>
     <div class="rn-hero-track"><i style="width:${Math.min(100, target ? (tw.km / target) * 100 : 0).toFixed(1)}%"></i></div>
     <p class="rn-hero-sub">${tw.km >= target ? 'Weekly target reached — great work!' : `${kmTxt(Math.max(0, target - tw.km))} km to go of ~${Math.round(target)} km planned`}</p>
@@ -229,7 +239,8 @@ function fitnessHtml(ctx) {
   const first = hist[0]?.vdot, last = est.vdot;
   const delta = first && hist.length > 1 ? last - first : null;
   const e = est.effort;
-  const range = (p) => (Math.round(p.hi) - Math.round(p.lo) >= 5 ? `<small>${C.fmtTime(p.lo)}–${C.fmtTime(p.hi)}</small>` : '');
+  // The cross-check is whichever end of the range isn't the prediction itself.
+  const range = (p) => { const o = Math.abs(p.lo - p.s) > Math.abs(p.hi - p.s) ? p.lo : p.hi; return Math.abs(Math.round(o) - Math.round(p.s)) >= 5 ? `<small>Riegel ${C.fmtTime(o)}</small>` : ''; };
   return `<div class="card rn-fit">
     <div class="card-head"><h2>Fitness</h2><button class="icon-btn rn-info" data-a="vdot-info" aria-label="About the fitness score">${icon('info')}</button></div>
     <div class="rn-fit-row">
@@ -251,7 +262,7 @@ function vdotInfo() {
       title: 'How the coach measures fitness',
       body: `<div class="stack-sm small rn-sheet-text">
         <p><b>VDOT</b> is a running fitness score from coach Jack Daniels. It comes from your fastest recent efforts (races, time trials, and the best 1 mile / 5k / 10k segments found inside your runs) over the last 8 weeks.</p>
-        <p>From VDOT the app predicts your 5k and 10k times and sets your <b>training paces</b>. The small range under a prediction is a cross-check with the Riegel formula.</p>
+        <p>From VDOT the app predicts your 5k and 10k times and sets your <b>training paces</b>. The small time under a prediction is a cross-check with the Riegel formula, shown when the two disagree.</p>
         <p>The score only rises when you run a fast effort — so an all-out 5k every 4–8 weeks keeps it accurate.</p>
         <p class="muted">Predictions assume you've trained for the distance. Heat, hills and wind make real times slower.</p>
       </div><button class="primary block" data-nav="back" style="margin-top:16px">Got it</button>`,
@@ -271,8 +282,8 @@ function planHtml(ctx) {
   const plan = nextWeek ? ctx.nextPlan : ctx.plan, today = ctx.today;
   const next = nextWeek ? null : today.session;
   const todayBody = today.kind === 'done' && today.run_id
-    ? `<button class="rn-today rn-today-done" data-today-run="${esc(today.run_id)}"><span class="rn-today-k">Today</span><b>${esc(today.title)} ${icon('check')}</b><p>${esc(today.detail)}</p></button>`
-    : `<div class="rn-today rn-today-${esc(today.kind)}"><span class="rn-today-k">Today</span><b>${esc(today.title)}</b><p>${esc(today.detail)}</p></div>`;
+    ? `<button class="rn-today rn-today-done" data-today-run="${esc(today.run_id)}"><b>Today: ${esc(today.title)} ${icon('check')}</b><p>${esc(today.detail)}</p></button>`
+    : `<div class="rn-today rn-today-${esc(today.kind)}"><b>Today: ${esc(today.title)}</b><p>${esc(today.detail)}</p></div>`;
   return `<div class="card rn-plan">
     <div class="card-head"><h2>${nextWeek ? 'Next week' : "This week's plan"}</h2><span class="pill rn-pill-run">~${Math.round(plan.targetKm)} km · ${ctx.runsPerWeek} runs</span></div>
     <div class="seg rn-plan-seg"><button data-plan="this" class="${nextWeek ? '' : 'on'}">This week</button><button data-plan="next" class="${nextWeek ? 'on' : ''}">Next week</button></div>
@@ -381,7 +392,7 @@ function drawTabCharts(el, ctx) {
       },
       options: {
         scales: { x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 6 } }, y: { beginAtZero: true, ticks: { maxTicksLimit: 5 } } },
-        plugins: { tooltip: { callbacks: { title: (it) => `Week of ${it[0].label}`, label: (it) => ` ${it.raw} km · ${weeks[it.dataIndex].runs} runs` } } },
+        plugins: { tooltip: { callbacks: { title: (it) => `Week of ${it[0].label}`, label: (it) => ` ${it.raw} km · ${weeks[it.dataIndex].runs} run${weeks[it.dataIndex].runs === 1 ? '' : 's'}` } } },
       },
     });
   }
@@ -466,7 +477,7 @@ function renderHome(el) {
   const { thisWeek: tw, lastWeek: lw } = ctx.review;
   const last = ctx.runs[0];
   const fb = C.runFeedback(last, ctx)[0];
-  const d = pct(tw.km, lw.km);
+  const d = weekChange(ctx);
   const today = ctx.today;
   const plan = demo ? null : RP.getPlan();
   el.innerHTML = `<div class="card rn-home" role="button" tabindex="0">
@@ -474,13 +485,13 @@ function renderHome(el) {
     <div class="rn-home-week">
       <div><b>${kmTxt(tw.km)}<small> km</small></b><span>this week</span></div>
       <div><b>${kmTxt(lw.km)}<small> km</small></b><span>last week</span></div>
-      <div><b class="${d == null ? '' : d >= 0 ? 'up' : 'muted'}">${d == null ? '–' : `${d >= 0 ? '+' : ''}${d}%`}</b><span>change</span></div>
+      <div><b class="${d == null ? '' : d >= 0 ? 'up' : 'muted'}">${d == null ? '–' : signed(d)}</b><span>vs same days</span></div>
     </div>
     <button class="rn-home-last" data-run="${esc(last.id)}">
       <p class="small"><b>${esc(last.name || 'Run')}</b> <span class="muted">· ${esc(relDay(last.start))} · ${C.km(last.distance_m).toFixed(1)} km · ${C.fmtPace(C.paceOf(last))}/km</span></p>
       ${fb ? `<p class="small rn-home-fb rn-fb-${esc(fb.tone)}">${icon(TONE_ICON[fb.tone] || 'info')}<span>${esc(fb.text)}</span></p>` : ''}
     </button>
-    ${plan ? RP.homeNextSessionHtml(plan, ctx.now) : `<div class="rn-home-today"><span class="rn-today-k">Today</span><b>${esc(today.title)}</b><p class="small muted">${esc(today.detail)}</p></div>`}
+    ${plan ? RP.homeNextSessionHtml(plan, ctx.now) : `<div class="rn-home-today"><b>Today: ${esc(today.title)}</b><p class="small muted">${esc(today.detail)}</p></div>`}
   </div>`;
   const card = el.firstElementChild;
   card.onclick = () => window.showTab?.('run');

@@ -8,7 +8,7 @@
 //   init()    optional, called once after data is loaded
 // Tabs re-render automatically whenever the store changes.
 
-import { $, $$, esc, icon, toast, local, errorCard } from './util.js';
+import { $, $$, esc, icon, toast, local, errorCard, friendlyError } from './util.js';
 import * as store from './store.js';
 import { setRevealHandler, depth } from './nav.js';
 import * as gym from './gym.js';
@@ -44,7 +44,7 @@ function renderHome(el) {
   el.innerHTML = `<div class="page-head"><p class="muted">${new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
     <h1>${greeting()}</h1>
     <button class="sync-line" id="app-sync" hidden></button>
-    <button class="icon-btn me-btn" id="app-me" aria-label="Me / settings">${icon('me')}</button></div>
+    <button class="icon-btn me-btn" id="app-me" aria-label="Settings">${icon('me')}</button></div>
     ${update.newerVersion() ? `<div class="card update-card"><div class="grow"><b>New version available</b>
       <p class="small muted">Get the latest features and fixes. Your data stays.</p></div>
       <button class="primary" id="app-update">${icon('sync')} Update</button></div>` : ''}
@@ -134,6 +134,7 @@ async function start() {
     });
   });
   setRevealHandler(renderTab);
+  syncSegState();
   store.syncNow().catch(() => {});
   checkForUpdate();
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkForUpdate(); });
@@ -147,6 +148,23 @@ async function start() {
     });
     navigator.serviceWorker.register('sw.js').then((r) => r.update()).catch(() => {});
   }
+}
+
+// Segmented controls mark the chosen button with .on; mirror that as aria-pressed for screen readers,
+// wherever a seg is drawn (tabs, pages, sheets), so each module doesn't have to.
+function syncSegState() {
+  const apply = () => document.querySelectorAll('.seg button').forEach((b) => {
+    const on = b.classList.contains('on');
+    if (b.getAttribute('aria-pressed') !== String(on)) b.setAttribute('aria-pressed', String(on));
+    if (!b.hasAttribute('type')) b.type = 'button';
+  });
+  let queued = false;
+  new MutationObserver(() => {
+    if (queued) return;
+    queued = true;
+    requestAnimationFrame(() => { queued = false; apply(); });
+  }).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class'] });
+  apply();
 }
 
 function login() {
@@ -184,5 +202,5 @@ function login() {
 window.addEventListener('error', (e) => console.error('Unhandled', e.error || e.message));
 start().catch((e) => {
   console.error(e);
-  $('#loading').innerHTML = `<div class="card"><p class="error">Could not start: ${esc(e.message)}</p><button class="primary" onclick="location.reload()">Try again</button></div>`;
+  $('#loading').innerHTML = `<div class="card"><p class="error">The app could not start. ${esc(friendlyError(e, 'Reloading usually fixes this.'))}</p><button class="primary" onclick="location.reload()">Try again</button></div>`;
 });

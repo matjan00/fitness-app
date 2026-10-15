@@ -1,7 +1,7 @@
 // UI for the goal-based training plan: goal card, next-session card, behind banner, setup flow and
 // schedule screen. Plan state lives in store config 'run-plan' (see docs/run-plan.js for the shape).
 
-import { $, $$, esc, icon, toast, niceDate } from './util.js';
+import { $, $$, esc, icon, toast, niceDate, friendlyError } from './util.js';
 import * as store from './store.js';
 import { push, page, sheet, confirmSheet, chooseSheet } from './nav.js';
 import * as C from './run-coach.js';
@@ -132,7 +132,7 @@ export async function sendToWatch(sessionId) {
       }
     }
   } catch (e) {
-    watchUi.set(sessionId, { phase: 'error', text: e.message || 'Could not send it to the watch.' });
+    watchUi.set(sessionId, { phase: 'error', text: friendlyError(e, 'Could not send it to the watch. Try again.') });
   }
   refreshWatch(sessionId);
 }
@@ -424,6 +424,6 @@ export function homeNextSessionHtml(plan, now) {
   const behind = P.computeBehind(plan, now);
   const next = P.nextSession(plan);
   if (!next) return '';
-  return `<div class="rn-home-today"><span class="rn-today-k">${behind ? `Behind ${behind.sessionsOverdue} session${behind.sessionsOverdue > 1 ? 's' : ''}` : 'Next up'}</span>
-    <b>${esc(next.title)}</b><p class="small muted">${esc(next.main)}</p></div>`;
+  return `<div class="rn-home-today"><b>Next: ${esc(next.title)}</b><p class="small muted">${esc(next.main)}</p>
+    ${behind ? `<p class="small warn">${behind.sessionsOverdue} session${behind.sessionsOverdue > 1 ? 's' : ''} behind the plan</p>` : ''}</div>`;
 }

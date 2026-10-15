@@ -1,7 +1,7 @@
 /* Gym tracker styles. Everything is prefixed .gx- */
 
 /* ---------- tab ---------- */
-.gx-start { width: 100%; padding: 15px 18px; font-size: 16px; border-radius: 16px; }
+.gx-start { width: 100%; min-height: 52px; padding: 15px 18px; font-size: 16px; border-radius: 12px; }
 .gx-start.gx-resume { background: var(--up); color: var(--on-color); }
 .gx-start [data-gx-elapsed], .gx-hstart [data-gx-elapsed] { font-variant-numeric: tabular-nums; }
 .gx-seg { margin: 14px 0 6px; }
@@ -130,7 +130,8 @@
 body:has(#banner:not([hidden])) #view { padding-bottom: calc(var(--tabbar-h) + 96px + env(safe-area-inset-bottom)); }
 .gx-bdot { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--up); box-shadow: 0 0 0 0 var(--up); animation: gx-pulse 1.6s infinite; }
 @keyframes gx-pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--up) 60%, transparent); } 70% { box-shadow: 0 0 0 8px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
-.gx-bgo { flex: none; padding: 8px 14px; border-radius: 11px; background: var(--hero-text); color: #141a24; font-weight: 700; font-size: 14px; }
+.gx-bgo { flex: none; padding: 9px 14px; border-radius: 10px; background: var(--accent); color: var(--accent-text); font-weight: 700; font-size: 14px; white-space: nowrap; }
+.gx-btxt { flex: 1; min-width: 0; }
 
 /* ---------- finish summary ---------- */
 .gx-sumhero { position: relative; overflow: hidden; text-align: center; padding: 26px 16px 18px; }
@@ -145,9 +146,9 @@ body:has(#banner:not([hidden])) #view { padding-bottom: calc(var(--tabbar-h) + 9
   position: absolute; top: -14px; left: var(--x); width: 7px; height: 12px; border-radius: 2px; opacity: 0;
   background: #fff; transform: rotate(var(--r)); animation: gx-fall 1.9s var(--d) ease-in forwards;
 }
-.gx-confetti i[style*="--c:1"] { background: #b7b0ff; }
-.gx-confetti i[style*="--c:2"] { background: #8fd0f7; }
-.gx-confetti i[style*="--c:3"] { background: #8ce2bd; }
+.gx-confetti i[style*="--c:1"] { background: #7aa7ff; }
+.gx-confetti i[style*="--c:2"] { background: #34d27b; }
+.gx-confetti i[style*="--c:3"] { background: #fbbf24; }
 @keyframes gx-fall { 0% { opacity: 1; transform: translateY(0) rotate(var(--r)); } 100% { opacity: 0; transform: translateY(260px) rotate(calc(var(--r) + 300deg)); } }
 .gx-prlist { padding: 4px 14px; }
 .gx-pr { display: flex; align-items: flex-start; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
@@ -249,7 +250,7 @@ body:has(#banner:not([hidden])) #view { padding-bottom: calc(var(--tabbar-h) + 9
 .gx-mname { font-weight: 600; }
 .gx-mtrack { position: relative; height: 12px; border-radius: 6px; background: var(--card-2); overflow: hidden; }
 .gx-mband { position: absolute; top: 0; bottom: 0; background: var(--up-soft); border-left: 1px dashed var(--up); border-right: 1px dashed var(--up); }
-.gx-mfill { position: relative; height: 100%; border-radius: 6px; background: var(--text-3); transition: width .4s; }
+.gx-mfill { position: relative; height: 100%; border-radius: 6px; background: var(--text-3); }
 .gx-mfill.lo { background: var(--gym); }
 .gx-mfill.ok { background: var(--up); }
 .gx-mfill.hi { background: var(--gold); }

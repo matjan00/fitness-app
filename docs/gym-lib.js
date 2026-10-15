@@ -335,7 +335,7 @@ function recordsCharts(box, id, mode) {
       type: 'line',
       data: {
         labels: pts.map((r) => new Date(r.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })),
-        datasets: [{ data: pts.map((r) => r[k]), borderColor: color, backgroundColor: fade(color), fill: true, tension: 0.3, pointRadius: pts.length > 20 ? 0 : 3, pointHitRadius: 8, pointBackgroundColor: color }],
+        datasets: [{ data: pts.map((r) => r[k]), borderColor: color, backgroundColor: fade(color), fill: true, tension: 0.3, cubicInterpolationMode: 'monotone', pointRadius: pts.length > 20 ? 0 : 3, pointHitRadius: 8, pointBackgroundColor: color }],
       },
       options: {
         scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 6 } }, y: { ticks: { maxTicksLimit: 5, callback: (v) => (k === 'secs' ? `${Math.floor(v / 60)}:${String(v % 60).padStart(2, '0')}` : v) } } },

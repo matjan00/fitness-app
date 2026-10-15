@@ -3,7 +3,7 @@
 
 import { addDays, weekOf } from './stats-calc.js';
 import { CUT_DEFAULTS, PLAN, emaTrend, trendOn, targetWeight, weekNumber, daysBetween } from './cut-calc.js';
-import { weekTraining, dayFacts, minimumDaysInWeek, SESSION_LABEL } from './cut-day.js';
+import { weekTraining, dayFacts, minimumDaysInWeek, sessionDone, SESSION_LABEL } from './cut-day.js';
 import { e1rmOf, workingSets } from './cut-engine.js';
 import { MAIN_LIFTS } from './cut-calc.js';
 
@@ -44,7 +44,12 @@ export function redFlags(day, src, cfg = {}, start = null) {
   // Training: 3 gym + 2 runs a week on any days. Flag this week once the goal no longer fits in the days left
   // (today still counts as a day left), else last week if it ended short. Weeks that began before the plan don't count.
   const wsrc = { workouts: src.workouts || [], runs: src.runs || [], dailies: src.dailies || [] };
-  const now = weekTraining(day, { ...wsrc, through: addDays(day, -1) });
+  // Same basis as the Today card: sessions done today count, and today is still a free day until one is done.
+  const sofar = weekTraining(day, { ...wsrc, through: day });
+  const freeToday = !sessionDone('lift', day, wsrc) && !sessionDone('easy', day, wsrc)
+    && !wsrc.dailies.some((x) => x && x.day === day && x.travel === true);
+  const daysLeft = sofar.daysLeft + (freeToday ? 1 : 0);
+  const now = { ...sofar, daysLeft, onTrack: sofar.liftLeft + sofar.runLeft <= daysLeft };
   const last = weekTraining(addDays(weekOf(day), -7), { ...wsrc, through: addDays(weekOf(day), -1) });
   const short = (w) => `gym ${w.lift}/${w.goal.lift}, runs ${w.run}/${w.goal.run}`;
   if (weekOf(day) >= c.startDate && !now.onTrack) {

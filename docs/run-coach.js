@@ -459,10 +459,10 @@ export function runFeedback(run, ctx = {}) {
       const ef = (arr) => (arr.reduce((s, x) => s + +x.d, 0) / arr.reduce((s, x) => s + +x.s, 0)) / mean(arr.map((x) => +x.hr));
       const e1 = ef(hs.slice(0, half)), e2 = ef(hs.slice(hs.length - half));
       const drift = ((e1 - e2) / e1) * 100;
-      if (drift > 6) out.push({ tone: 'info', text: `Heart rate drifted ${Math.round(drift)} % relative to pace. Heat, dehydration or low endurance cause this — more easy mileage will bring it down.` });
-      else if (drift < 3.5 && cls.type === 'long') out.push({ tone: 'good', text: `Heart rate stayed steady relative to pace (${Math.max(0, drift).toFixed(1)} % drift) — solid aerobic endurance.` });
+      if (drift > 6) out.push({ tone: 'info', text: `Heart rate drifted ${Math.round(drift)}% relative to pace. Heat, dehydration or low endurance cause this — more easy mileage will bring it down.` });
+      else if (drift < 3.5 && cls.type === 'long') out.push({ tone: 'good', text: `Heart rate stayed steady relative to pace (${Math.max(0, drift).toFixed(1)}% drift) — solid aerobic endurance.` });
     } else if (num(run.avg_hr) && ctx.maxHr && run.avg_hr > 0.85 * ctx.maxHr && cls.type !== 'long') {
-      out.push({ tone: 'tip', text: `Average heart rate was ${Math.round(run.avg_hr)} bpm (${Math.round((run.avg_hr / ctx.maxHr) * 100)} % of max) — high for an easy run. Try slowing down until breathing feels conversational.` });
+      out.push({ tone: 'tip', text: `Average heart rate was ${Math.round(run.avg_hr)} bpm (${Math.round((run.avg_hr / ctx.maxHr) * 100)}% of max) — high for an easy run. Try slowing down until breathing feels conversational.` });
     }
   }
 
@@ -539,9 +539,9 @@ export function weeklyReview(ctx) {
   const easyShare = easyS + hardS > 0 ? easyS / (easyS + hardS) : null;
   if (easyShare != null && runs4 >= 4) {
     const pct = Math.round(easyShare * 100);
-    if (easyShare < 0.7) messages.push({ tone: 'tip', text: `Only ${pct} % of your running time was easy in the last 4 weeks. Most fast runners keep about 80 % easy — slow down the in-between runs.` });
+    if (easyShare < 0.7) messages.push({ tone: 'tip', text: `Only ${pct}% of your running time was easy in the last 4 weeks. Most fast runners keep about 80% easy — slow down the in-between runs.` });
     else if (hardS < 60 && runs4 >= 6) messages.push({ tone: 'tip', text: 'All easy lately. Adding one faster session a week (intervals or tempo) is the quickest way to improve your 5k and 10k.' });
-    else if (easyShare >= 0.72 && easyShare <= 0.92) messages.push({ tone: 'good', text: `${pct} % easy / ${100 - pct} % hard over 4 weeks — a great balance for getting faster.` });
+    else if (easyShare >= 0.72 && easyShare <= 0.92) messages.push({ tone: 'good', text: `${pct}% easy / ${100 - pct}% hard over 4 weeks — a great balance for getting faster.` });
   }
 
   // Long run share of last completed week.

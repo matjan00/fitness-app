@@ -14,10 +14,10 @@ test('ago', () => {
 });
 
 test('syncLine states', () => {
-  assert.equal(syncLine({ status: 'local', pending: 0 }, NOW), null);
-  assert.equal(syncLine({ status: 'signed-out' }, NOW), null);
+  assert.equal(syncLine({ status: 'local', pending: 0 }, NOW).text, 'Saved on this phone only');
+  assert.equal(syncLine({ status: 'signed-out' }, NOW).kind, 'warn');
   assert.equal(syncLine(null, NOW), null);
-  assert.equal(syncLine({ status: 'idle', at: null, pending: 0 }, NOW), null);
+  assert.equal(syncLine({ status: 'idle', at: null, pending: 0 }, NOW).text, 'Not synced yet');
   assert.equal(syncLine({ status: 'idle', at: at(2), pending: 0 }, NOW).text, 'Synced 2 min ago ✓');
   assert.equal(syncLine({ status: 'syncing', at: at(2), pending: 1 }, NOW).text, 'Syncing…');
   assert.equal(syncLine({ status: 'offline', pending: 3 }, NOW).text, 'Offline — 3 changes waiting');

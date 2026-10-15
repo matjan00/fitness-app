@@ -14,7 +14,7 @@ export function ago(iso, now = Date.now()) {
 
 const changes = (n) => `${n} change${n === 1 ? '' : 's'} waiting`;
 
-// state: store.syncState() → { text, kind: 'ok'|'busy'|'warn'|'error', retry } or null when the line should be hidden.
+// state: store.syncState() → { text, kind: ''|'ok'|'busy'|'warn'|'error', retry }, or null without a state.
 export function syncLine(state, now = Date.now()) {
   if (!state) return null;
   const pending = Number(state.pending) || 0;
@@ -25,9 +25,12 @@ export function syncLine(state, now = Date.now()) {
     case 'idle': {
       if (pending) return { text: `${changes(pending)}`, kind: 'warn', retry: false };
       const a = state.at ? ago(state.at, now) : '';
-      return a ? { text: `Synced ${a} ✓`, kind: 'ok', retry: false } : null;
+      return a ? { text: `Synced ${a} ✓`, kind: 'ok', retry: false } : { text: 'Not synced yet', kind: '', retry: false };
     }
-    default: return null; // 'local' (no account) and 'signed-out'
+    // Always say where the data lives, even when nothing is happening.
+    case 'local': return { text: 'Saved on this phone only', kind: '', retry: false };
+    case 'signed-out': return { text: 'Signed out — saved on this phone', kind: 'warn', retry: false };
+    default: return null;
   }
 }
 

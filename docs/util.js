@@ -103,6 +103,18 @@ export function toast(msg, ms = 2600, action = null) {
   toast.timer = setTimeout(() => t.classList.remove('show'), ms);
 }
 
+// "1 set", "2 sets". `many` for irregular plurals.
+export const plural = (n, word, many = `${word}s`) => `${n} ${Number(n) === 1 ? word : many}`;
+
+// An error as a sentence a person can act on: our own messages pass through; network failures and
+// technical messages (TypeError, JSON, HTTP codes) become `fallback` or a "you're offline" line.
+export function friendlyError(e, fallback = 'Something went wrong. Try again.') {
+  const m = String(e?.message || '');
+  if (!navigator.onLine || /failed to fetch|networkerror|load failed|network request/i.test(m)) return 'No connection. Try again when you are online.';
+  if (!m || e instanceof TypeError || e instanceof SyntaxError || /JSON|undefined|\bnull\b|status \d+|HTTP \d+/i.test(m)) return fallback;
+  return m;
+}
+
 // A part of the screen failed to draw: say what, reassure, offer a reload; keep the technical detail folded.
 export function errorCard(what, e) {
   return `<div class="card err-card"><p><b>${esc(what)} couldn't load.</b></p>

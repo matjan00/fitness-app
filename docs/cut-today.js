@@ -21,7 +21,6 @@ export function sources() {
     workouts: store.all('workout'), runs: store.all('run'), checkins: store.all('checkin'), routineCut,
   };
 }
-export const currentFlags = (c = cutSettings()) => redFlags(today(), sources(), c, startWeight(c));
 export async function saveDaily(day, patch) {
   const cur = store.all('daily').find((d) => d.day === day);
   await store.put('daily', { ...(cur || {}), ...patch, day });
@@ -198,7 +197,7 @@ function trainingHtml(st, day, src) {
   return `<div class="row between" style="margin:2px 0 6px"><h3 class="ct-sub">Today's training</h3>
       ${sel ? '' : `<span class="tiny muted">Suggested: ${esc(label)}</span>`}</div>
     <div class="seg ct-train" role="group" aria-label="Today's training">${TRAIN_CHOICES.map(([v, t]) => `<button type="button" data-v="${v}" class="${v === sel ? 'on' : ''}" aria-pressed="${v === sel}">${t}</button>`).join('')}</div>
-    <p class="tiny ${need > days ? 'down' : 'muted'} ct-weekline">${esc(line)}</p>`;
+    <p class="tiny ${need > days ? 'warn' : 'muted'} ct-weekline">${esc(line)}</p>`;
 }
 
 function sessionBlock(sess, done, wk) {
@@ -206,6 +205,11 @@ function sessionBlock(sess, done, wk) {
   if (sess.kind === 'lift') {
     const r = sess.routine;
     const deload = plan?.deload;
+    // A different workout than the rotation's next one still counts for the week; say which one it was.
+    if (done && sess.did && sess.did.letter !== sess.letter) {
+      return `<div class="ct-sess"><div class="row between"><b>${esc(sess.did.name)}</b><span class="pill up">${icon('check')} Done</span></div>
+        <p class="small muted">Counts toward this week's gym sessions. Next in the rotation: ${esc(r.name)}.</p></div>`;
+    }
     return `<div class="ct-sess"><div class="row between"><b>${esc(r.name)}${deload ? ' · deload' : ''}</b>${done ? `<span class="pill up">${icon('check')} Done</span>` : ''}</div>
       <p class="small muted">${r.exercises.length} exercises · ${esc(r.exercises.filter((x) => x.kind === 'main').map((x) => x.name).join(', '))}${deload ? ' · 2 sets each' : ''}</p>
       ${done ? '' : `<button class="primary block" id="ct-start" style="margin-top:10px">${icon('play')} Start ${esc(r.name)}</button>`}</div>`;
@@ -223,6 +227,18 @@ function sessionBlock(sess, done, wk) {
   }
   const note = { steps: 'No session — hit your steps.', travel: 'Weigh in this morning. Calories and steps are optional, roughly is fine.' }[sess.kind] || 'No session today. Hit your steps; on check-in day, take measurements and photos.';
   return `<div class="ct-sess"><b>${SESSION_LABEL[sess.kind]}</b><p class="small muted">${note}</p></div>`;
+}
+
+// The day at a glance, right under the title: calories and protein still to eat, and the weight trend.
+function headStats(f, tg, trend) {
+  const kcalLeft = tg.kcal ? tg.kcal - (f.kcal || 0) : null;
+  const pLeft = tg.p ? Math.max(0, tg.p - (f.p || 0)) : null;
+  const kg = trend ?? f.weight;
+  return `<div class="stats ct-headstats">
+    <div class="stat"><b class="${kcalLeft != null && kcalLeft < 0 ? 'warn' : ''}">${kcalLeft == null ? '–' : n0(Math.abs(kcalLeft))}</b><span>${kcalLeft != null && kcalLeft < 0 ? 'kcal over' : 'kcal left'}</span></div>
+    <div class="stat"><b>${pLeft == null ? '–' : `${n0(pLeft)}<small> g</small>`}</b><span>protein left</span></div>
+    <div class="stat"><b>${kg == null ? '–' : `${n1(kg)}<small> kg</small>`}</b><span>${trend != null ? 'trend weight' : 'weight'}</span></div>
+  </div>`;
 }
 
 function render(el) {
@@ -260,14 +276,15 @@ function render(el) {
   const row = (key, label, value, extra = '') => {
     const chk = ok(key);
     return `<button class="list-item ct-item" data-k="${key}"><span class="ct-tick ${chk?.ok ? 'ok' : chk?.warn ? 'warn' : ''}">${icon(chk?.ok ? 'check' : 'plus')}</span>
-      <div class="grow"><b>${label}</b><div class="sub">${esc(extra || chk?.label || '')}</div></div><span class="ct-val">${value}</span></button>`;
+      <div class="grow"><b>${label}</b><div class="sub">${esc(extra || (key === 'weight' && !chk?.ok ? 'Morning, before food' : chk?.label) || '')}</div></div><span class="ct-val">${value}</span></button>`;
   };
   const food = f.kcal == null && f.p == null ? v(null) : `${f.kcal == null ? '–' : n0(f.kcal)} kcal · P ${f.p == null ? '–' : n0(f.p)}`;
 
   el.innerHTML = `<div class="card ct-today">
-    <div class="card-head"><div><h2>${head}</h2><p class="tiny muted">${wk > 0 && left != null ? `${left} days to goal · ` : ''}goal ${n1(c.goalWeight)} kg</p></div>
+    <div class="card-head"><div><h2>${head}</h2><p class="tiny muted">${wk > 0 && left != null ? `${left} day${left === 1 ? '' : 's'} to goal · ` : ''}goal ${n1(c.goalWeight)} kg</p></div>
       <button class="link" id="ct-plan">Plan</button></div>
-    ${flags.length ? `<details class="ct-flags"><summary>${icon('flag')} ${flags.length === 1 ? esc(flags[0].text) : `${flags.length} red flags`}</summary>
+    ${headStats(f, tg, trend)}
+    ${flags.length ? `<details class="ct-flags"><summary>${icon('flag')} ${flags.length === 1 ? esc(flags[0].text) : `${flags.length} things to fix`}</summary>
       ${flags.length > 1 ? flags.map((x) => `<p>${esc(x.text)}</p>`).join('') : ''}</details>` : ''}
     ${reviewBtn()}
     ${wk > 0 && !f.travel ? trainingHtml(st, day, src) : ''}
@@ -384,11 +401,3 @@ function scheduleReminders() {
 }
 export { scheduleReminders };
 
-// Red flags strip above the tab bar on the other tabs (Home shows them in the Today card).
-export function banner(el) {
-  if (document.getElementById('view')?.dataset.tab === 'home' || !isSetUp()) return false;
-  const flags = currentFlags();
-  if (!flags.length) return false;
-  el.innerHTML = `<button class="ct-banner" onclick="showTab('home')">${icon('flag')} ${flags.length === 1 ? esc(flags[0].text) : `${flags.length} red flags — see Home`}</button>`;
-  return true;
-}

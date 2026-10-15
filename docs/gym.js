@@ -5,7 +5,7 @@
 //   gym-lib.js       exercise library/picker, exercise detail, custom exercises
 //   gym-workout.js   active workout screen, rest timer, finish summary, editing past workouts
 //   gym-routines.js  routine editor + starter programs
-import { $, esc, icon, toast, local, mins, bigKg, niceDate, niceTime, relDay, clock, dayOf, today } from './util.js';
+import { $, esc, icon, toast, local, mins, bigKg, niceDate, niceTime, relDay, clock, dayOf, today, plural } from './util.js';
 import * as store from './store.js';
 import { isSetUp as cutPlanOn } from './cut.js';
 import { push, page, chooseSheet, confirmSheet } from './nav.js';
@@ -81,9 +81,11 @@ function renderRoutines(el) {
   }
   const keys = [...groups.keys()].sort((a, b) => (a === '' ? 1 : b === '' ? -1 : a.localeCompare(b)));
   const next = activeWorkout() ? null : nextRoutine(rs, workouts());
+  // The "Up next" routine is shown once, at the top, not again in its group.
+  const shown = (k) => groups.get(k).filter((r) => r !== next);
   el.innerHTML = `${next ? `<h3 class="section-title">Up next</h3>${routineCard(next, true)}` : ''}
-    ${keys.map((k) => `<h3 class="section-title gx-prog">${icon(k ? 'folder' : 'list')} <span class="grow ellipsis">${esc(k || (keys.length > 1 ? 'Other routines' : 'My routines'))}</span><span class="gx-count">${groups.get(k).length}</span></h3>
-      <div class="stack">${groups.get(k).map((r) => routineCard(r)).join('')}</div>`).join('')}
+    ${keys.filter((k) => shown(k).length).map((k) => `<h3 class="section-title gx-prog">${icon(k ? 'folder' : 'list')} <span class="grow ellipsis">${esc(k || (keys.length > 1 ? 'Other routines' : 'My routines'))}</span><span class="gx-count">${shown(k).length}</span></h3>
+      <div class="stack">${shown(k).map((r) => routineCard(r)).join('')}</div>`).join('')}
     <div class="gx-rtools"><button class="ghost gx-newr">${icon('plus')} New routine</button>
       <button class="ghost gx-starters">${icon('folder')} Starter programs</button></div>`;
   $('.gx-newr', el).onclick = () => editRoutine();
@@ -151,7 +153,7 @@ function workoutCard(w) {
     <div class="row between"><div class="grow"><h2 class="ellipsis">${esc(w.name || 'Workout')}</h2>
       <p class="tiny muted">${esc(relDay(w.started_at))} · ${esc(niceTime(w.started_at))}</p></div>
       ${prs.length ? `<span class="pill gold">${icon('trophy')} ${prs.length} PR${prs.length > 1 ? 's' : ''}</span>` : ''}</div>
-    <div class="gx-wstats"><span>${icon('timer')} ${mins(workoutDuration(w))}</span><span>${icon('gym')} ${bigKg(workoutVolume(w))}</span><span>${icon('list')} ${setsIn(w)} sets</span></div>
+    <div class="gx-wstats"><span>${icon('timer')} ${mins(workoutDuration(w))}</span><span>${icon('gym')} ${bigKg(workoutVolume(w))}</span><span>${icon('list')} ${plural(setsIn(w), 'set')}</span></div>
     <div class="gx-wex">${shown.map((e) => {
       const b = bestSet(e);
       return `<div class="gx-wexr"><span class="grow ellipsis">${e.sets.length} × ${esc(exName(e.exercise_id, e.name))}</span><span class="muted">${esc(formatSet(b, e.mode, true))}</span></div>`;

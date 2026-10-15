@@ -485,10 +485,11 @@ export const homeCard = {
           ${bar('Protein', s.p, t?.p, 'fd-bp')}
         </div></div>
       ${last ? `<p class="small muted fd-home-w">${icon('scale')} Weight ${n1(last.avg)} kg (7-day avg)${wc != null ? ` · ${wc > 0 ? '+' : ''}${n1(wc)} kg/week` : ''}</p>` : ''}
-      ${!t ? '<p class="small muted" style="margin-top:10px">Set your daily targets: person icon on Home → Nutrition &amp; body.</p>' : left < 0 ? `<p class="small down" style="margin-top:10px">${n0(-left)} kcal over today's target</p>` : ''}
+      ${!t ? '<p class="small muted" style="margin-top:10px">No daily targets yet. <button class="link" id="fd-htargets">Set your targets</button></p>' : left < 0 ? `<p class="small down" style="margin-top:10px">${n0(-left)} kcal over today's target</p>` : ''}
       <button class="${gymLeadsHome() || cutPlanOn() ? 'ghost' : 'primary'} block" id="fd-hlog" style="margin-top:12px">${icon('plus')} Log food</button>
     </div>`;
     $('#fd-hopen', el).onclick = () => { local.set('fd-view', 'diary'); day = today(); window.showTab('food'); };
+    $('#fd-htargets', el)?.addEventListener('click', openTargets);
     $('#fd-hlog', el).onclick = () => {
       local.set('fd-view', 'diary');
       day = today();

@@ -250,7 +250,7 @@ test('weekly review: too much hard running triggers the 80/20 tip', () => {
   runs.push(mkRun({ daysAgo: 20, km: 5, pace: C.raceTime(45, 5000) / 5, workout_type: 1 }));
   const ctx = C.buildContext({ runs, now: NOW, settings: { max_hr: 190 } });
   assert.ok(ctx.review.easyShare < 0.7);
-  assert.ok(ctx.review.messages.some((m) => /80 % easy/.test(m.text)));
+  assert.ok(ctx.review.messages.some((m) => /80% easy/.test(m.text)));
 });
 
 // ---------- plan ----------

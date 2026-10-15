@@ -1,7 +1,7 @@
 // Shared Food UI pieces: formatting, macro ring/bars, food picker (table + Open Food Facts + custom foods),
 // amount sheet, custom food form. Used by food.js (diary) and food-recipes.js (recipe book).
 
-import { $, $$, esc, icon, toast, n0, n1, parseNum } from './util.js';
+import { $, $$, esc, icon, toast, n0, n1, parseNum, friendlyError } from './util.js';
 import * as store from './store.js';
 import { push, page, sheet } from './nav.js';
 import { loadFoods, buildIndex, search, unitOptions, foodLabel, matchKey } from './food-db.js';
@@ -120,7 +120,7 @@ export async function searchOFF(q) {
       return f;
     }).filter(Boolean);
   } catch (e) {
-    throw new Error(e.name === 'AbortError' ? 'Open Food Facts is not answering — try again later.' : e.message);
+    throw new Error(e.name === 'AbortError' ? 'Open Food Facts is not answering — try again later.' : friendlyError(e, 'Open Food Facts search failed. Try again.'));
   } finally { clearTimeout(t); }
 }
 

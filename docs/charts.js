@@ -14,6 +14,8 @@ export function chart(canvas, config) {
   Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
   Chart.defaults.font.size = 11;
   Chart.defaults.plugins.legend.display = false;
+  // Smoothed lines never overshoot the data (no dips below zero between points).
+  Chart.defaults.elements.line.cubicInterpolationMode = 'monotone';
   Chart.defaults.maintainAspectRatio = false;
   Chart.defaults.animation.duration = matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 300;
   // A canvas is invisible to screen readers: name it after its card ("Body weight chart").

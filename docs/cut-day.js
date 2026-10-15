@@ -80,7 +80,10 @@ export function sessionFor(day, { workouts = [], runs = [], routineCut, dailies 
     return { kind: before >= 1 ? 'quality' : 'easy', ...base };
   }
   const letter = nextLift(workouts, day, routineCut);
-  return { kind: 'lift', ...base, letter, routine: ROUTINES.find((r) => r.key === letter) };
+  // The workout actually finished that day, if any: it may be another routine than the rotation's next one.
+  const w = workouts.filter((x) => x && x.ended_at && x.started_at && localDay(x.started_at) === day).pop();
+  const did = w ? { name: w.name || 'Workout', letter: liftLetter(w, routineCut) } : null;
+  return { kind: 'lift', ...base, letter, routine: ROUTINES.find((r) => r.key === letter), did };
 }
 
 // Was the day's session done? Lift: a finished workout that day. Run: a run that day.
@@ -142,7 +145,7 @@ export function dayStatus(f, { kcalTarget = null, cfg = {}, session = { kind: 'r
     : { key: 'session', label: planned ? `${SESSION_LABEL[session.kind]} done` : 'No session planned', ok: !planned || done };
   const checks = [
     { key: 'weight', label: 'Weighed in', ok: f.weight != null },
-    { key: 'protein', label: `Protein ≥ ${c.proteinMin} g`, ok: f.p != null && f.p >= c.proteinMin },
+    { key: 'protein', label: `At least ${c.proteinMin} g protein`, ok: f.p != null && f.p >= c.proteinMin },
     { key: 'kcal', label: kcalTarget ? `Calories ${kcalTarget - c.kcalBand}–${kcalTarget + c.kcalBand}` : 'Calories logged', ok: f.kcal != null && (!kcalTarget || Math.abs(f.kcal - kcalTarget) <= c.kcalBand) },
     { key: 'steps', label: `Steps ≥ ${c.steps.toLocaleString('en-GB')}`, ok: f.steps != null && f.steps >= c.steps, warn: f.steps != null && f.steps >= c.stepsMin && f.steps < c.steps },
     { key: 'sleep', label: `Sleep ≥ ${c.sleep} h`, ok: f.sleep != null && f.sleep >= c.sleep },

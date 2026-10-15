@@ -193,9 +193,9 @@ export function openAllRuns(ctx) {
     }
     el.innerHTML = page({
       title: 'All runs',
-      sub: `${ctx.runs.length} runs`,
+      sub: `${ctx.runs.length} run${ctx.runs.length === 1 ? '' : 's'}`,
       body: [...groups.values()].map((g) => `
-        <div class="row between rn-month"><h3 class="section-title">${esc(g.label)}</h3><span class="small muted">${g.runs.length} runs · ${C.kmShort(Math.round(g.m / 100) / 10)} km</span></div>
+        <div class="row between rn-month"><h3 class="section-title">${esc(g.label)}</h3><span class="small muted">${g.runs.length} run${g.runs.length === 1 ? '' : 's'} · ${C.kmShort(Math.round(g.m / 100) / 10)} km</span></div>
         <div class="card rn-list">${g.runs.map((r) => runRow(r, ctx, { showDate: 'date' })).join('')}</div>`).join(''),
     });
     wireRows(el, ctx, (id) => ctx.runs.find((r) => r.id === id));

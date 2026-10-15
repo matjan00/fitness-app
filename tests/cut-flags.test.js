@@ -85,3 +85,12 @@ test('red flags: training is judged on the week, not on fixed days', () => {
   const f = redFlags('2026-10-20', two, cfg, 73).find((x) => x.key === 'missed');
   assert.match(f.text, /Last week.*gym 1\/3, runs 1\/2/);
 });
+
+test('red flags: a session done today counts, like on the Today card', () => {
+  const cfg = { startDate: '2026-10-12', checkinDay: 0 };
+  const weights = days('2026-10-12', 12).map((d) => ({ day: d, kg: 73 }));
+  // Thursday, gym done this morning: 1/3 gym, 4 to go in Fri–Sun (3 days) → behind, counted with today's session
+  const one = base({ weights, workouts: [W('2026-10-15', 'Upper A')] });
+  const f = redFlags('2026-10-15', one, cfg, 73).find((x) => x.key === 'missed');
+  assert.match(f.text, /gym 1\/3, runs 0\/2 with 3 days left/);
+});

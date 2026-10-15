@@ -4,15 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <title>Fit</title>
-  <meta name="theme-color" content="#f1f3f6" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#0b0e13" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f2f2f6" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon-180.png">
   <meta name="mobile-web-app-capable" content="yes">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400..800&display=swap">
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="gym.css">
   <link rel="stylesheet" href="food.css">
@@ -25,7 +22,6 @@
 </head>
 <body>
   <div id="loading" class="center-screen"><div class="spinner"></div></div>
-
   <div id="login" class="center-screen" hidden>
     <form id="login-form" class="card login-card">
       <img src="icon.svg" alt="" width="56" height="56">
@@ -38,7 +34,6 @@
       <button class="link" type="button" id="login-skip">Use without an account for now</button>
     </form>
   </div>
-
   <div id="app" hidden>
     <main id="view"></main>
     <div id="banner" hidden></div>
