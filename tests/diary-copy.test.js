@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { copiedEntries, movedEntry, dayChoices, copyMessage, copyTarget } from '../docs/diary-copy.js';
+import { copiedEntries, movedEntry, dayChoices, copyMessage, copyTarget, deleteMessage } from '../docs/diary-copy.js';
 
 const e = (id, meal, t, extra = {}) => ({ id, day: '2026-10-01', meal, t, label: id, source: { type: 'food', id: 'x' }, grams: 150, kcal: 200, p: 10, c: 20, f: 5, ...extra });
 const now = new Date('2026-10-02T10:00:00Z');
@@ -46,4 +46,10 @@ test('copyTarget allows the same day / meal, rejects bad input', () => {
   assert.equal(copyTarget('', 'lunch'), null);
   assert.equal(copyTarget(null, 'lunch'), null);
   assert.equal(copyTarget('2026-10-01', 'brunch'), null);
+});
+
+test('deleteMessage names the meal and counts items', () => {
+  assert.equal(deleteMessage(3, 'Lunch'), 'Deleted lunch · 3 items');
+  assert.equal(deleteMessage(1, 'Breakfast'), 'Deleted breakfast · 1 item');
+  assert.equal(deleteMessage(2), 'Deleted 2 items');
 });

@@ -49,11 +49,114 @@ function activate(screen) {
   screen.render();
   if (opts.sheet) {
     el.addEventListener('click', (e) => { if (e.target === el) screen.close(); });
+    swipeToClose(screen);
   }
   requestAnimationFrame(() => el.classList.add('open'));
   document.body.classList.add('has-screen');
   syncInert();
   focusScreen(screen);
+}
+
+// Swipe a bottom sheet down to close it. The drag starts from the grab handle / title strip, or from
+// anywhere in the sheet while its content is scrolled to the top (so long sheets still scroll first).
+// Past CLOSE_PX, or on a quick downward flick, it closes through screen.close() (onClose still runs);
+// otherwise it springs back. Fields and range sliders keep their own touches.
+const CLOSE_PX = 90;
+const FLICK = 0.6;           // px per ms
+const HEAD_PX = 48;          // top strip of an unscrolled sheet (grab + title): drag handle
+const SCRIM = 0.45;          // matches .sheet-wrap.open
+const KEEP_TOUCH = 'input, textarea, select, [contenteditable="true"], [data-no-swipe]';
+
+function swipeToClose(screen) {
+  const wrap = screen.el;
+  let d = null;   // current gesture
+
+  // Can content between the touch point and the sheet still scroll up? Then the finger scrolls instead.
+  const scrolled = (t, sh) => {
+    for (let n = t; n && n !== wrap; n = n.parentElement) {
+      if (n.scrollTop > 0 && n.scrollHeight > n.clientHeight) return true;
+      if (n === sh) break;
+    }
+    return false;
+  };
+
+  function start(x, y, target) {
+    const sh = target.closest?.('.sheet');
+    if (!sh || !wrap.contains(sh) || target.closest(KEEP_TOUCH)) return false;
+    // Once the sheet is scrolled its top strip holds content, so only the strip of an unscrolled sheet counts.
+    const busy = scrolled(target, sh);
+    const head = !!target.closest('.grab, .sheet-title') || (!busy && y - sh.getBoundingClientRect().top < HEAD_PX);
+    if (!head && busy) return false;
+    d = { sh, target, x, y, head, dy: 0, on: false, samples: [{ y, t: performance.now() }] };
+    return true;
+  }
+
+  // Returns true when the move belongs to the sheet drag (caller should block the browser's own scroll).
+  function move(x, y) {
+    if (!d) return false;
+    const dy = y - d.y, dx = x - d.x;
+    if (!d.on) {
+      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 8) { d = null; return false; } // sideways: not ours
+      if (dy < -4 && !d.head) { d = null; return false; }                                // scrolling up
+      if (dy <= 0) return false;
+      if (!d.head && scrolled(d.target, d.sh)) { d = null; return false; } // content scrolled since touchstart
+      if (dy < 6) return true;
+      d.on = true;
+      d.sh.style.transition = 'none';
+      wrap.style.transition = 'none';
+    }
+    d.dy = Math.max(0, dy);
+    d.sh.style.transform = `translateY(${d.dy}px)`;
+    const h = d.sh.offsetHeight || 1;
+    wrap.style.background = `rgba(8, 10, 14, ${(SCRIM * Math.max(0, 1 - d.dy / h)).toFixed(3)})`;
+    d.samples.push({ y, t: performance.now() });
+    if (d.samples.length > 5) d.samples.shift();
+    return true;
+  }
+
+  function end() {
+    if (!d) return;
+    const g = d; d = null;
+    if (!g.on) return;
+    const a = g.samples[0], b = g.samples[g.samples.length - 1];
+    const v = b.t > a.t ? (b.y - a.y) / (b.t - a.t) : 0;
+    g.sh.style.transition = '';
+    wrap.style.transition = '';
+    if (g.dy > CLOSE_PX || (v > FLICK && g.dy > 20)) {
+      g.sh.style.transform = 'translateY(100%)';
+      wrap.style.background = 'rgba(8, 10, 14, 0)'; // stays clear while the back step lands
+      screen.close();
+    } else {
+      g.sh.style.transform = '';
+      wrap.style.background = '';
+    }
+    // A drag that ends over a button must not also press it.
+    const eat = (e) => { e.stopPropagation(); e.preventDefault(); };
+    wrap.addEventListener('click', eat, { capture: true, once: true });
+    setTimeout(() => wrap.removeEventListener('click', eat, { capture: true }), 350);
+  }
+
+  wrap.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) { end(); return; }
+    const t = e.touches[0];
+    start(t.clientX, t.clientY, e.target);
+  }, { passive: true });
+  wrap.addEventListener('touchmove', (e) => {
+    const t = e.touches[0];
+    if (t && move(t.clientX, t.clientY) && e.cancelable) e.preventDefault();
+  }, { passive: false });
+  wrap.addEventListener('touchend', end);
+  wrap.addEventListener('touchcancel', end);
+
+  // Mouse (desktop / testing): drag by the handle strip only, so text selection still works.
+  wrap.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'mouse' || e.button !== 0) return;
+    if (!start(e.clientX, e.clientY, e.target) || !d.head) { d = null; return; }
+    const mv = (ev) => { if (move(ev.clientX, ev.clientY)) ev.preventDefault(); };
+    const up = () => { removeEventListener('pointermove', mv); removeEventListener('pointerup', up); end(); };
+    addEventListener('pointermove', mv);
+    addEventListener('pointerup', up);
+  });
 }
 
 // Only the top screen is reachable by keyboard and screen readers; everything under it is inert.

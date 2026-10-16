@@ -1,9 +1,9 @@
-// Food diary: copy a meal / a whole day to another day, move an entry to another meal. DOM + store; logic is in diary-copy.js.
+// Food diary: copy or delete a meal, copy a whole day to another day, move an entry to another meal. DOM + store; logic is in diary-copy.js.
 import { $, esc, toast, today, addDays, fromDay, niceDate, relDay } from './util.js';
 import * as store from './store.js';
 import { push, sheet, chooseSheet } from './nav.js';
 import { MEALS, mealLabel } from './food-ui.js';
-import { copiedEntries, movedEntry, dayChoices, copyMessage, copyTarget } from './diary-copy.js';
+import { copiedEntries, movedEntry, dayChoices, copyMessage, copyTarget, deleteMessage } from './diary-copy.js';
 
 const dayName = (d) => {
   const r = relDay(fromDay(d));
@@ -66,6 +66,30 @@ export async function copyMeal(from, mealKey, entries) {
   const target = await pickTarget(`Copy ${mealLabel(mealKey).toLowerCase()} to`, from, mealKey);
   if (!target) return;
   await copyTo(entries, target.day, target.meal);
+}
+
+// Meal header "⋯" menu: copy the meal, or delete every entry in it (with Undo on the toast).
+export async function mealMenu(day, mealKey, entries) {
+  if (!entries.length) return;
+  const name = mealLabel(mealKey);
+  const n = entries.length;
+  const v = await chooseSheet(name, [
+    { value: 'copy', label: 'Copy to another day or meal', icon: 'copy' },
+    { value: 'del', label: `Delete ${name.toLowerCase()} (${n} item${n === 1 ? '' : 's'})`, icon: 'trash', danger: true },
+  ]);
+  if (v === 'copy') await copyMeal(day, mealKey, entries);
+  else if (v === 'del') await deleteMeal(mealKey, entries);
+}
+
+// Removes each entry the same way a single "Remove from diary" does; Undo puts them back with the same ids.
+export async function deleteMeal(mealKey, entries) {
+  if (!entries.length) return;
+  const snapshot = entries.map((e) => ({ ...e }));
+  for (const e of snapshot) await store.remove(e.id);
+  toast(deleteMessage(snapshot.length, mealLabel(mealKey)), 6000, {
+    label: 'Undo',
+    run: async () => { await store.putMany('meal', snapshot); toast('Restored'); },
+  });
 }
 
 // Copy a whole day (every meal keeps its place).

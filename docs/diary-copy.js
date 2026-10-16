@@ -1,4 +1,4 @@
-// Pure helpers for copying / moving food-diary entries. No DOM, no store. Tests: tests/diary-copy.test.js.
+// Pure helpers for copying / moving / deleting food-diary entries. No DOM, no store. Tests: tests/diary-copy.test.js.
 // A diary entry is a store record of kind 'meal': { id, day, meal, t, label, source, grams|servings, kcal, p, c, f, ... }.
 
 export const MEAL_KEYS = ['breakfast', 'lunch', 'dinner', 'snack'];
@@ -42,4 +42,10 @@ export function copyTarget(day, meal) {
 export function copyMessage(count, { mealName = null, dayName = '' } = {}) {
   const items = `${count} item${count === 1 ? '' : 's'}`;
   return `Copied ${items}${mealName ? ` to ${mealName}` : ''}${dayName ? ` · ${dayName}` : ''}`;
+}
+
+// Toast text after deleting a whole meal, e.g. "Deleted lunch · 3 items".
+export function deleteMessage(count, mealName = '') {
+  const items = `${count} item${count === 1 ? '' : 's'}`;
+  return mealName ? `Deleted ${mealName.toLowerCase()} · ${items}` : `Deleted ${items}`;
 }

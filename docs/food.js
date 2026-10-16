@@ -10,7 +10,7 @@ import { renderBook, openManual, blankDraft, logRecipe, recipePer, openRecipe, e
 import { loadFoods } from './food-db.js';
 import { renderLearn, loadLessons } from './food-learn.js';
 import { renderLibrary } from './food-library-ui.js';
-import { copyMeal, copyDay, moveEntry } from './diary-copy-ui.js';
+import { mealMenu, copyDay, moveEntry } from './diary-copy-ui.js';
 import { openShopping } from './shopping-ui.js';
 import { gymLeadsHome } from './gym.js';
 import { isSetUp as cutPlanOn } from './cut.js';
@@ -77,7 +77,7 @@ function renderDiary(box) {
   $('#fd-settargets', box)?.addEventListener('click', () => openTargets());
   $$('[data-add]', box).forEach((b) => { b.onclick = () => addTo(b.dataset.add); });
   $('#fd-copyday', box)?.addEventListener('click', () => copyDay(day, entriesOf(day)));
-  $$('[data-copymeal]', box).forEach((b) => { b.onclick = () => copyMeal(day, b.dataset.copymeal, entriesOf(day, b.dataset.copymeal)); });
+  $$('[data-mealmenu]', box).forEach((b) => { b.onclick = () => mealMenu(day, b.dataset.mealmenu, entriesOf(day, b.dataset.mealmenu)); });
   $$('[data-move]', box).forEach((b) => { b.onclick = () => moveEntry(store.get(b.dataset.move)); });
   $$('[data-entry]', box).forEach((b) => { b.onclick = () => editEntry(store.get(b.dataset.entry)); });
   renderWeek($('#fd-week', box));
@@ -116,7 +116,7 @@ function mealCard(m, list) {
   return `<div class="card fd-meal">
     <div class="card-head" style="margin-bottom:${list.length ? 6 : 0}px"><div><h2>${esc(m.label)}</h2>
       <p class="tiny muted">${list.length ? `${n0(s.kcal)} kcal · P ${n0(s.p)} · C ${n0(s.c)} · F ${n0(s.f)}` : 'Nothing yet'}</p></div>
-      <div class="row">${list.length ? `<button class="icon-btn fd-mv" data-copymeal="${m.key}" aria-label="Copy ${esc(m.label)} to another day or meal">${icon('copy')}</button>` : ''}
+      <div class="row">${list.length ? `<button class="icon-btn fd-mv" data-mealmenu="${m.key}" aria-label="${esc(m.label)} options: copy or delete">${icon('more')}</button>` : ''}
       <button class="icon-btn fd-addbtn" data-add="${m.key}" aria-label="Add to ${esc(m.label)}">${icon('plus')}</button></div></div>
     ${list.length ? `<div class="list">${list.map((e) => `<div class="fd-row"><button class="list-item fd-entry" data-entry="${e.id}">
       <div class="grow"><div class="ellipsis">${esc(e.label)}</div><div class="sub">${esc(amountTxt(e))}</div></div>
