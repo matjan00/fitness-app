@@ -273,9 +273,12 @@ function render(el) {
   const [stLabel, stCls] = STATUS[st.status];
   const v = (x, unit = '') => (x == null ? '<span class="ct-add">Add</span>' : `${x}${unit}`);
   const ok = (key) => st.checks.find((x) => x.key === key);
-  const row = (key, label, value, extra = '') => {
+  // The icon says whether something is entered (+ = add it, ✓ = entered); the colour says whether it hits
+  // the target (green), is close or short (amber).
+  const row = (key, label, value, extra = '', has = false) => {
     const chk = ok(key);
-    return `<button class="list-item ct-item" data-k="${key}"><span class="ct-tick ${chk?.ok ? 'ok' : chk?.warn ? 'warn' : ''}">${icon(chk?.ok ? 'check' : 'plus')}</span>
+    const cls = !has ? '' : chk?.ok ? 'ok' : 'warn';
+    return `<button class="list-item ct-item" data-k="${key}"><span class="ct-tick ${cls}">${icon(has ? 'check' : 'plus')}</span>
       <div class="grow"><b>${label}</b><div class="sub">${esc(extra || (key === 'weight' && !chk?.ok ? 'Morning, before food' : chk?.label) || '')}</div></div><span class="ct-val">${value}</span></button>`;
   };
   const food = f.kcal == null && f.p == null ? v(null) : `${f.kcal == null ? '–' : n0(f.kcal)} kcal · P ${f.p == null ? '–' : n0(f.p)}`;
@@ -291,10 +294,10 @@ function render(el) {
     ${wk > 0 ? sessionBlock(st.session, st.done, wk) : ''}
     <div class="row between" style="margin:14px 0 4px"><h3 class="ct-sub">Today</h3><span class="pill ${stCls}">${stLabel}</span></div>
     <div class="list">
-      ${row('weight', 'Weight', v(f.weight == null ? null : n1(f.weight), ' kg'), trend != null ? `trend ${n1(trend)} kg${plan && !plan.buffer && start ? ` · target ${n1(targetWeight(start, c.goalWeight, c.rate, wk))} by ${new Date(`${addDays(c.startDate, wk * 7 - 1)}T12:00`).toLocaleDateString('en-GB', { weekday: 'short' })}` : ''}` : '')}
-      ${row('sleep', 'Sleep', v(f.sleep == null ? null : n1(f.sleep), ' h'))}
-      ${row('steps', 'Steps', v(f.steps == null ? null : n0(f.steps)), f.stepsPhone != null && f.stepsExtra ? `phone ${n0(f.stepsPhone)} + ${n0(f.stepsExtra)} by hand` : '')}
-      ${row(f.travel ? 'kcal' : 'protein', 'Food', food)}
+      ${row('weight', 'Weight', v(f.weight == null ? null : n1(f.weight), ' kg'), trend != null ? `trend ${n1(trend)} kg${plan && !plan.buffer && start ? ` · target ${n1(targetWeight(start, c.goalWeight, c.rate, wk))} by ${new Date(`${addDays(c.startDate, wk * 7 - 1)}T12:00`).toLocaleDateString('en-GB', { weekday: 'short' })}` : ''}` : '', f.weight != null)}
+      ${row('sleep', 'Sleep', v(f.sleep == null ? null : n1(f.sleep), ' h'), '', f.sleep != null)}
+      ${row('steps', 'Steps', v(f.steps == null ? null : n0(f.steps)), f.stepsPhone != null && f.stepsExtra ? `phone ${n0(f.stepsPhone)} + ${n0(f.stepsExtra)} by hand` : '', f.steps != null)}
+      ${row(f.travel ? 'kcal' : 'protein', 'Food', food, '', f.kcal != null || f.p != null)}
     </div>
     ${dayTypeHtml(f, st, minUsed)}
     <div class="row between ct-links"><button class="link small" id="ct-yday">Edit yesterday</button><button class="link small" id="ct-trip">Plan travel days</button></div>
