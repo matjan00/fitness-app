@@ -11,6 +11,7 @@
 //   get(id)              → one item or undefined
 //   put(kind, item)      → saves (creates or replaces); returns the item with an id
 //   remove(id)           → soft-deletes
+//   removeMany(ids)      → soft-deletes several in one write
 //   onChange(fn)         → fn(kinds:Set) after any local or synced change; returns unsubscribe
 //   syncNow(), syncState() and the auth helpers below.
 
@@ -122,6 +123,12 @@ export async function remove(id) {
   const r = mem.get(id);
   if (!r) return;
   await writeLocal([{ ...r, deleted: true, updated_at: new Date().toISOString() }]);
+}
+
+export async function removeMany(ids) {
+  const now = new Date().toISOString();
+  const recs = ids.map((id) => mem.get(id)).filter(Boolean).map((r) => ({ ...r, deleted: true, updated_at: now }));
+  if (recs.length) await writeLocal(recs);
 }
 
 // A single settings object per "key" (e.g. 'settings', 'food-targets'), stored as kind 'config'.

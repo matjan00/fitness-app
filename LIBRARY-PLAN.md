@@ -1,5 +1,10 @@
 # Recipe library - plan
 
+**RETIRED 2026-10-17.** The user did not like most bulk-imported recipes. New model: there is no imported library any more; recipes are added one at a time as own recipes (My recipes > Add, link field grabs title + photo). On next app start `cleanUpLibrary()` (docs/food-library-ui.js, logic in planLibraryCleanup in docs/food-library.js) turns every imported recipe the user favourited, cooked or edited ("Your version") into a plain own recipe (`imported_from` = old library id, favourites/ratings/diary entries re-pointed) and deletes all `library` records. The GitHub Action was removed; scripts/library/ is kept only because the converter is tested and could be reused for a single-link import. The Library tab now browses own recipes (filters, Fits my day).
+
+Everything below is the old design, kept for reference.
+
+
 State (built, pilot done): ALL third-party recipes are PRIVATE. They live in the user's Supabase table `records` (kind 'library'), written by a GitHub Action, and reach the app through the normal sync (docs/food-library.js: loadLibrary(store.all('library'))). Nothing third-party is committed (docs/data/library/index.json is an empty stub; tests use synthetic tests/fixtures/library-sample.json). Format: top of docs/food-library.js.
 
 ## How to run / scale

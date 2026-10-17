@@ -1,6 +1,6 @@
 // Food tab > Library: browse by cuisine -> course, filters, "Fits my day", recipe detail, favourites, "cooked it", add to diary.
 // Data + pure logic: food-library.js. Favourites and ratings live in one config object: store.getConfig('library').
-import { $, $$, esc, icon, toast, n0, local, today } from './util.js';
+import { $, $$, esc, icon, toast, n0, local, today, uid } from './util.js';
 import * as store from './store.js';
 import { push, page, sheet, confirmSheet } from './nav.js';
 import { sumEntries } from './food-calc.js';
@@ -13,6 +13,7 @@ import { checkRecipe } from './food-check.js';
 import { CATEGORIES, catLabel } from './food-cats.js';
 import {
   CUISINES, COURSES, cuisineOf, courseLabel, SOURCE_LABEL, loadLibrary, filterRecipes, fitsMyDay, displayIngredient, totalMin, toggleFav, markCooked,
+  planLibraryCleanup,
 } from './food-library.js';
 
 const CAT_MAIN = CATEGORIES.main.items;
@@ -55,7 +56,24 @@ export async function renderLibrary(box) {
   draw(box, lib);
 }
 
-const EMPTY = () => `<div class="card empty" style="margin-top:14px">${icon('info')}<h2>Recipe library is being prepared</h2><p class="small">Your private recipe collection is not here yet. It appears after the import has run and the app has synced - open the app with a connection and check back soon.</p></div>`;
+const EMPTY = () => `<div class="card empty" style="margin-top:14px">${icon('food')}<h2>No recipes yet</h2><p class="small">Add recipes one at a time in My recipes - they show up here with filters and "Fits my day".</p></div>`;
+
+// The bulk-imported library is retired (food-library.js planLibraryCleanup): favourited / cooked imports become own
+// recipes, the rest is deleted. Runs whenever synced library records are present (app.js).
+let cleaning = null;
+export function cleanUpLibrary() {
+  if (cleaning || !store.all('library').length) return cleaning;
+  cleaning = (async () => {
+    const foods = await foodsMap();
+    const plan = planLibraryCleanup(store.all('library'), store.all('recipe'), state(), store.all('meal'), (r) => libToOwn(r, foods), uid);
+    if (plan.put.length) await store.putMany('recipe', plan.put);
+    if (plan.entries.length) await store.putMany('meal', plan.entries);
+    await saveState(plan.state);
+    await store.removeMany(plan.remove);
+    if (plan.put.length) toast(`Kept ${plan.put.length} recipe${plan.put.length > 1 ? 's' : ''} you liked in My recipes`);
+  })().catch((e) => console.error(e)).finally(() => { cleaning = null; });
+  return cleaning;
+}
 
 function draw(box, lib) {
   const nav = getNav();
@@ -84,7 +102,7 @@ function draw(box, lib) {
     ${fits.length ? `<div class="card fd-fits" style="margin-top:12px"><div class="card-head" style="margin-bottom:8px"><div><h2>Fits my day</h2><p class="tiny muted">Works with what is left today</p></div></div>
       <div class="chips fd-fitrow">${fits.map((r) => `<button class="fd-fit" data-lid="${esc(r.id)}"><b class="fd-2l">${esc(r.title)}</b><span class="tiny muted">${n0(r.per_serving.kcal)} kcal · ${n0(r.per_serving.p)} g P</span></button>`).join('')}</div></div>` : ''}
     ${!active ? `<div class="fd-grid fd-cuisines">${cuisines.map((c) => `<button class="fd-rcard fd-cui" data-cui="${c.key}"><span class="fd-cui-e">${c.emoji}</span><b>${esc(c.label)}</b><span class="small muted">${counts[c.key]} recipe${counts[c.key] > 1 ? 's' : ''}</span></button>`).join('')}
-        <button class="fd-rcard fd-cui" data-all="1"><span class="fd-cui-e">🍽️</span><b>All recipes</b><span class="small muted">${all.length} incl. yours</span></button>
+        <button class="fd-rcard fd-cui" data-all="1"><span class="fd-cui-e">🍽️</span><b>All recipes</b><span class="small muted">${all.length} recipe${all.length > 1 ? 's' : ''}</span></button>
         <button class="fd-rcard fd-cui" data-fav="1"><span class="fd-cui-e">♥</span><b>Favourites</b><span class="small muted">${favs.size} saved</span></button></div>`
       : `<div class="row" style="margin-top:12px;gap:8px"><button class="link" id="lib-back">‹ All cuisines</button><b class="grow" style="text-align:right">${nav.cuisine ? esc(cuisineOf(nav.cuisine).label) : nav.fav ? 'Favourites' : 'Results'} · ${list.length}</b></div>
         <div class="chips" style="margin-top:6px"><button class="chip ${!nav.course ? 'on' : ''}" data-course="">All</button>${courseKeys.map((c) => `<button class="chip ${nav.course === c.key ? 'on' : ''}" data-course="${c.key}">${esc(c.label)}</button>`).join('')}</div>

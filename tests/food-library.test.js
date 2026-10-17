@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { validateRecipe, filterRecipes, fitsMyDay, displayIngredient, toggleFav, markCooked, totalMin } from '../docs/food-library.js';
+import { validateRecipe, filterRecipes, fitsMyDay, displayIngredient, toggleFav, markCooked, totalMin, planLibraryCleanup } from '../docs/food-library.js';
 import { loadIndex, convertIngredient, convertRecipe, fToC, splitSteps, estimateTimes, mealCourse } from '../scripts/library/convert.mjs';
 
 const ctx = loadIndex();
@@ -74,4 +74,21 @@ test('every library JSON file is valid and consistent', () => {
     }
   }
   assert.equal(total, Object.values(idx.cuisines).reduce((a, b) => a + b, 0));
+});
+
+test('retiring the library keeps favourited, cooked and edited recipes, deletes the rest', () => {
+  const lib = ['a', 'b', 'c', 'd'].map((id) => ({ id, title: id }));
+  const own = [{ id: 'mine', title: 'Mine' }, { id: 'copyC', title: 'C edited', from_library: 'c' }];
+  const state = { favs: ['a', 'gone'], cooked: { b: { rating: 5, n: 1 } } };
+  const entries = [{ id: 'e1', source: { type: 'library', id: 'a' } }, { id: 'e2', source: { type: 'library', id: 'd' } }];
+  let n = 0;
+  const plan = planLibraryCleanup(lib, own, state, entries, (r) => ({ title: r.title, from_library: r.id }), () => `new${++n}`);
+  assert.deepEqual(plan.put.map((r) => [r.id, r.imported_from, 'from_library' in r]), [['new1', 'a', false], ['new2', 'b', false], ['copyC', 'c', false]]);
+  assert.deepEqual(plan.remove, ['a', 'b', 'c', 'd']);
+  assert.deepEqual(plan.state.favs, ['own-new1', 'gone']);
+  assert.deepEqual(Object.keys(plan.state.cooked), ['own-new2']);
+  assert.deepEqual(plan.entries, [{ id: 'e1', source: { type: 'recipe', id: 'new1' } }]);
+  // Running again (records not yet gone after a partial sync) creates no duplicates.
+  const again = planLibraryCleanup(lib, [...own, ...plan.put], plan.state, [], () => assert.fail('no new copy'), () => 'x');
+  assert.equal(again.put.length, 0);
 });

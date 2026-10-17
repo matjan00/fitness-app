@@ -137,9 +137,48 @@ export function markCooked(state, id, rating, day) {
   return { ...state, cooked: { ...(state.cooked || {}), [id]: { rating, n: (prev.n || 0) + 1, last: day } } };
 }
 
+// ---------- retiring the bulk-imported library (2026-10) ----------
+// The imported library is gone: recipes are now added one at a time as own recipes. Imported recipes the user favourited
+// or cooked (and any "Your version" copy) become plain own recipes; every library record is then deleted.
+// lib: library recipes (store.all('library')); own: store.all('recipe'); state: config 'library' { favs, cooked };
+// entries: diary meals; toOwn(lib) -> own recipe without id (food-copy libToOwn); newId() -> fresh id.
+// Returns { put: [own recipes with id], entries: [diary entries re-pointed to the own recipe], state, remove: [library ids] }.
+// Safe to run again (e.g. on a partial sync): a recipe already moved is found by `imported_from`.
+export function planLibraryCleanup(lib, own, state = {}, entries = [], toOwn, newId) {
+  const favs = new Set(state.favs || []);
+  const cooked = { ...(state.cooked || {}) };
+  const byLib = new Map();
+  for (const r of own) { const k = r.imported_from || r.from_library; if (k) byLib.set(k, r); }
+  const put = [];
+  const idMap = new Map(); // library id -> own recipe id
+  for (const r of lib) {
+    const copy = byLib.get(r.id);
+    const keep = copy || favs.has(r.id) || cooked[r.id];
+    if (!keep) continue;
+    if (copy) {
+      const { from_library: _fl, ...rest } = copy;
+      if (copy.from_library) put.push({ ...rest, imported_from: r.id });
+      idMap.set(r.id, copy.id);
+    } else {
+      const { from_library: _fl, ...rest } = toOwn(r);
+      const rec = { ...rest, id: newId(), imported_from: r.id };
+      put.push(rec);
+      idMap.set(r.id, rec.id);
+    }
+  }
+  // Favourites / ratings follow the recipe (own recipes are listed with id 'own-<id>').
+  const ownKey = (libId) => `own-${idMap.get(libId)}`;
+  const nextFavs = [...favs].map((id) => (idMap.has(id) ? ownKey(id) : id));
+  const nextCooked = {};
+  for (const [id, v] of Object.entries(cooked)) nextCooked[idMap.has(id) ? ownKey(id) : id] = v;
+  const moved = entries.filter((e) => e.source?.type === 'library' && idMap.has(e.source.id))
+    .map((e) => ({ ...e, source: { ...e.source, type: 'recipe', id: idMap.get(e.source.id) } }));
+  return { put, entries: moved, state: { favs: [...new Set(nextFavs)], cooked: nextCooked }, remove: lib.map((r) => r.id) };
+}
+
 // ---------- loading ----------
-// Third-party recipes are PRIVATE: they live in the user's Supabase table as records of kind 'library' (imported by
-// scripts/library/import.mjs from a GitHub Action) and reach the app through the normal sync (store.all('library')).
+// Third-party recipes used to be bulk-imported as private records of kind 'library' (scripts/library/import.mjs). That
+// import is retired and planLibraryCleanup() empties the kind; the loaders stay so leftover records still show until then.
 // Optional static files under data/library/ (index.json + one file per source) are still merged in when present.
 const usable = (r) => r && typeof r.title === 'string' && r.title && Array.isArray(r.ingredients) && r.ingredients.length && Array.isArray(r.steps) && r.per_serving && r.source;
 export function mergeLibrary(staticRecipes = [], records = []) {
