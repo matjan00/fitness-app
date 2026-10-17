@@ -20,14 +20,12 @@ const isTravel = (d, dailies) => dailies.some((x) => x && x.day === d && x.trave
 const choiceOn = (d, dailies) => dailies.find((x) => x && x.day === d)?.train || null;
 
 // The week's training so far (days up to and including `through`) and whether the goal can still be met:
-// one session a day on the days left after `through`. Travel days aren't held against you: they don't count
-// as days left, and each one shrinks the week's goal in proportion (3 travel days → 2 gym + 1 run).
+// one session a day on the days left after `through`. The goal is always the full 3 gym + 2 runs; travel days
+// just don't count as days left to fit them in.
 // Returns { lift, run, goal, liftLeft, runLeft, daysLeft, onTrack, complete }.
-export function weekTraining(day, { workouts = [], runs = [], dailies = [], through = day, goal: full = WEEK_GOAL } = {}) {
+export function weekTraining(day, { workouts = [], runs = [], dailies = [], through = day, goal = WEEK_GOAL } = {}) {
   const from = weekOf(day);
   const to = addDays(from, 6);
-  const away = range(from, to).filter((d) => isTravel(d, dailies)).length;
-  const goal = { lift: Math.round((full.lift * (7 - away)) / 7), run: Math.round((full.run * (7 - away)) / 7) };
   const sofar = through < from ? [] : range(from, through < to ? through : to);
   const lift = sofar.filter((d) => sessionDone('lift', d, { workouts })).length;
   const run = sofar.filter((d) => sessionDone('easy', d, { runs })).length;

@@ -68,8 +68,9 @@ test('travel days are not held against you', () => {
   const dailies = ['2026-10-12', '2026-10-13', '2026-10-14'].map((d) => ({ day: d, travel: true }));
   const weights = ['2026-10-12', '2026-10-13', '2026-10-14'].map((d) => ({ day: d, kg: 73 }));
   const f = redFlags('2026-10-15', { weights, dailies, meals: [], workouts: [], runs: [], checkins: [] }, cfg, 73).map((x) => x.key);
-  assert.ok(!f.includes('missed'));
   assert.ok(!f.includes('protein'));
+  // the goal stays 3 + 2, so 5 sessions in the 4 days left (Thu–Sun) is behind
+  assert.ok(f.includes('missed'));
 });
 
 test('red flags: training is judged on the week, not on fixed days', () => {

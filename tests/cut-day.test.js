@@ -50,9 +50,9 @@ test('weekly goal: 3 gym + 2 runs on any days, judged by whether it still fits',
   assert.equal(weekTraining('2026-10-16', full).complete, true);
   // two sessions on one day count once each kind
   assert.equal(weekTraining('2026-10-12', { workouts: [W('2026-10-12', 'Upper A'), W('2026-10-12', 'Arms')] }).lift, 1);
-  // travel days shrink the goal: 3 away → 2 gym + 1 run, and they aren't days left
+  // travel days keep the full 3 + 2 goal, but they aren't days left
   const away = weekTraining('2026-10-14', { dailies: ['2026-10-16', '2026-10-17', '2026-10-18'].map((day) => ({ day, travel: true })) });
-  assert.deepEqual([away.goal.lift, away.goal.run, away.daysLeft, away.onTrack], [2, 1, 1, false]);
+  assert.deepEqual([away.goal.lift, away.goal.run, away.daysLeft, away.onTrack], [3, 2, 1, false]);
   // suggestions: no gym two days in a row while a run is due; nothing once the week is done
   assert.equal(suggestTraining('2026-10-13', { workouts: [W('2026-10-12', 'Upper A')] }), 'run');
   assert.equal(suggestTraining('2026-10-14', src), 'lift');

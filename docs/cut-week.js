@@ -39,9 +39,7 @@ export function weekSummary(checkinDay, { statusOf, weights = [], workouts = [],
   const inWeek = days.map((d) => d.day);
   const lifted = inWeek.filter((d) => sessionDone('lift', d, { workouts })).length;
   const ran = inWeek.filter((d) => sessionDone('easy', d, { runs })).length;
-  // Travel days shrink the goal in proportion, as on the Today card.
-  const share = (7 - days.filter((d) => d.facts?.travel).length) / 7;
-  const goal = { lift: Math.round(WEEK_GOAL.lift * share), run: Math.round(WEEK_GOAL.run * share) };
+  const goal = { ...WEEK_GOAL };
   const planned = goal.lift + goal.run;
   const done = Math.min(lifted, goal.lift) + Math.min(ran, goal.run);
   const sessions = workouts.filter((w) => w?.cut?.session && w.started_at.slice(0, 10) >= from && w.started_at.slice(0, 10) <= to);
