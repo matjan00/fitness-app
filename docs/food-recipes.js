@@ -624,7 +624,8 @@ export function openRecipe(id) {
         <button class="primary block" id="fd-log" style="margin-top:14px">${icon('plus')} Log to diary</button>
         <button class="ghost block" id="fd-cooked" style="margin-top:8px">${cooked ? `Cooked ${cooked.n}× · ${stars(cooked.rating)} · rate again` : 'I cooked it'}</button></div>
       <div class="card fd-scale">
-        <div class="row between"><b>Scale</b><span class="tiny muted" id="fd-sc-note"></span></div>
+        <div class="row between"><b>Scale the portion</b><span class="tiny muted" id="fd-sc-note"></span></div>
+        <p class="tiny muted" style="margin-top:2px">Multiplies every ingredient, so one serving gets bigger or smaller. For a double batch, change the servings in Edit instead.</p>
         <div class="chips" id="fd-sc-chips" style="margin-top:8px">${QUICK_FACTORS.map((q) => `<button class="chip" data-q="${q}">×${q}</button>`).join('')}
           <label class="fd-gwrap"><input id="fd-sc-x" inputmode="decimal" aria-label="Multiplier" placeholder="×" value="${scale !== 1 ? scale : ''}"></label></div>
         <p class="tiny muted" style="margin:10px 0 6px">Fit to calories: how many kcal should <b>1 serving</b> be?${left ? ` (${n0(left)} kcal left today)` : ''}</p>

@@ -8,7 +8,14 @@
 
 export function cleanCode(text) {
   const d = String(text ?? '').replace(/\D/g, '');
-  return [8, 12, 13, 14].includes(d.length) ? d : null;
+  return [8, 12, 13, 14].includes(d.length) && /[1-9]/.test(d) && checkDigitOk(d) ? d : null;
+}
+
+// GS1 check digit (EAN-8/UPC-A/EAN-13/EAN-14): weights 3,1,3,1... from the right, skipping the check digit itself.
+function checkDigitOk(d) {
+  let sum = 0;
+  for (let i = d.length - 2, w = 3; i >= 0; i--, w = 4 - w) sum += Number(d[i]) * w;
+  return (10 - (sum % 10)) % 10 === Number(d[d.length - 1]);
 }
 
 // EAN-13 "0" + UPC-A are the same product; compare without leading zeros.

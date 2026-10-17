@@ -29,6 +29,7 @@ const mealNow = () => { const h = new Date().getHours(); return h < 11 ? 'breakf
 
 // ---------- tab ----------
 function render(el) {
+  if (!productsWarm) { productsWarm = true; setTimeout(() => getProductIndex().catch(() => {}), 800); }
   // After a long pause (e.g. next morning) jump back to today.
   if (Date.now() - dayChosenAt > 3 * 3600 * 1000) { day = today(); dayChosenAt = Date.now(); }
   const lessons = Boolean(settings().showLessons);
@@ -52,7 +53,11 @@ function dayTitle(d) {
 
 function renderDiary(box) {
   const t = dayTargets(day);
-  const sum = sumEntries(entriesOf(day));
+  const dayEntries = entriesOf(day);
+  const ofMeal = (k) => dayEntries.filter((e) => e.meal === k);
+  const sum = sumEntries(dayEntries);
+  const leftK = t ? t.kcal - sum.kcal : 0;
+  const leftP = t?.p ? t.p - sum.p : 0;
   box.innerHTML = `
     <div class="fd-daynav">
       <button class="icon-btn" data-d="-1" aria-label="Previous day">${icon('back')}</button>
@@ -67,10 +72,12 @@ function renderDiary(box) {
           ${t?.liftDay ? `<p class="tiny muted">Lifting day: +${n0(t.liftDay)} kcal</p>` : ''}
           ${bar('Protein', sum.p, t?.p, 'fd-bp')}${bar('Carbs', sum.c, t?.c, 'fd-bc')}${bar('Fat', sum.f, t?.f, 'fd-bf')}
         </div></div>
+      ${t ? `<div class="row between fd-left" style="margin-top:10px"><span class="small"><b>${leftK >= 0 ? `${n0(leftK)} kcal` : `${n0(-leftK)} kcal over`}</b>${t.p ? ` · <b class="fd-p">${leftP > 0 ? `${n0(leftP)} g protein to go` : 'protein target hit'}</b>` : ''}</span>
+        <button class="link small" id="fd-edittargets">Targets</button></div>` : ''}
       ${!t ? `<button class="soft block" id="fd-settargets" style="margin-top:12px">${icon('fire')} Set your daily targets</button>` : ''}
     </div>
-    ${MEALS.map((m) => mealCard(m, entriesOf(day, m.key))).join('')}
-    ${entriesOf(day).length ? `<div class="center" style="margin-top:10px"><button class="link small" id="fd-copyday">${icon('copy')} Copy this whole day to another day</button></div>` : ''}
+    ${MEALS.map((m) => mealCard(m, ofMeal(m.key))).join('')}
+    ${dayEntries.length ? `<div class="center" style="margin-top:10px"><button class="link small" id="fd-copyday">${icon('copy')} Copy this whole day to another day</button></div>` : ''}
     <h3 class="section-title">This week</h3>
     <div class="card" id="fd-week"></div>`;
 
@@ -78,9 +85,10 @@ function renderDiary(box) {
   $('#fd-today', box)?.addEventListener('click', () => { day = today(); renderDiary(box); });
   $('#fd-daypick', box).onclick = () => pickDate(box);
   $('#fd-settargets', box)?.addEventListener('click', () => openTargets());
+  $('#fd-edittargets', box)?.addEventListener('click', () => openTargets());
   $$('[data-add]', box).forEach((b) => { b.onclick = () => addTo(b.dataset.add); });
-  $('#fd-copyday', box)?.addEventListener('click', () => copyDay(day, entriesOf(day)));
-  $$('[data-mealmenu]', box).forEach((b) => { b.onclick = () => mealMenu(day, b.dataset.mealmenu, entriesOf(day, b.dataset.mealmenu)); });
+  $('#fd-copyday', box)?.addEventListener('click', () => copyDay(day, dayEntries));
+  $$('[data-mealmenu]', box).forEach((b) => { b.onclick = () => mealMenu(day, b.dataset.mealmenu, ofMeal(b.dataset.mealmenu)); });
   $$('[data-move]', box).forEach((b) => { b.onclick = () => moveEntry(store.get(b.dataset.move)); });
   $$('[data-entry]', box).forEach((b) => { b.onclick = () => editEntry(store.get(b.dataset.entry)); });
   renderWeek($('#fd-week', box));
@@ -545,5 +553,6 @@ export function init() {
   // Warm up the food table and lesson content in the background so the first search/open is instant.
   setTimeout(() => loadFoods().catch(() => {}), 1500);
   setTimeout(() => loadLessons().catch(() => {}), 1800);
-  setTimeout(() => getProductIndex().catch(() => {}), 2500);
 }
+// The 11.5k shop products (~0.9 MB) load only once the Food tab has been opened, not on every app start.
+let productsWarm = false;

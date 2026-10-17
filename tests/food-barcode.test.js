@@ -31,3 +31,9 @@ test('online product becomes a food; no kcal → null', () => {
   assert.equal(offProductToFood({ code: '1', product_name: 'Water', nutriments: {} }), null);
   assert.equal(offProductToFood(null), null);
 });
+
+test('cleanCode rejects all-zero codes and wrong check digits', () => {
+  assert.equal(cleanCode('0000000000000'), null);
+  assert.equal(cleanCode('5900512300109'), null);
+  assert.equal(cleanCode('5900512300108'), '5900512300108');
+});

@@ -41,6 +41,20 @@ export function lessonsForTechniques(techniqueKeys = []) {
   return lessonsCache.filter((l) => (l.techniques || []).some((t) => techniqueKeys.includes(t)));
 }
 
+// Lessons about one kind of food only fit recipes with that main ingredient (a chicken lesson is not practised by
+// an omelette); the others are about a technique and fit any recipe cooked that way.
+const LESSON_MAINS = {
+  'chicken-breast': ['chicken', 'turkey'], 'lean-beef-pork': ['beef', 'pork'], 'fish-doneness': ['fish', 'seafood'],
+  'eggs-5-ways': ['eggs'], 'legumes-tofu': ['legumes', 'vege'], 'dairy-protein': ['twarog'], 'roasting-veg': ['veggies', 'potatoes'],
+};
+// Lessons a recipe practises, most specific first: { techniques: [...], mains: [...] } from the recipe's categories.
+export function lessonsForRecipe({ techniques = [], mains = [] } = {}, lessons = lessonsCache || []) {
+  const tech = (l) => !l.techniques?.length || l.techniques.some((t) => techniques.includes(t));
+  const specific = lessons.filter((l) => LESSON_MAINS[l.id]?.some((m) => mains.includes(m)) && tech(l));
+  const general = lessons.filter((l) => !LESSON_MAINS[l.id] && l.techniques?.length && tech(l));
+  return [...specific, ...general];
+}
+
 // ---------- Food-tab section: the learning path grouped by module ----------
 export function renderLearn(box) {
   box.innerHTML = '<div class="card center" style="padding:34px 0"><span class="spinner"></span></div>';
@@ -51,9 +65,10 @@ export function renderLearn(box) {
 
 function statusOf(l) {
   const p = lessonProgress(l.id);
-  if (p.practice?.length) return { key: 'practised', label: `Practised ${p.practice.length}×` };
-  if (p.learned) return { key: 'learned', label: 'Learned' };
-  return { key: 'new', label: 'New' };
+  // The badge follows "learned" (which the counters count); practice is extra information.
+  const n = p.practice?.length || 0;
+  if (p.learned) return { key: n ? 'practised' : 'learned', label: n ? `Learned · practised ${n}×` : 'Learned' };
+  return { key: 'new', label: n ? `New · practised ${n}×` : 'New' };
 }
 
 function drawPath(box, lessons) {
@@ -84,12 +99,16 @@ function lessonCard(l) {
 }
 
 // ---------- lesson screen ----------
-export function openLesson(id, refreshBox) {
+export function openLesson(firstId, refreshBox) {
+  let id = firstId;
   push((el, s) => {
     const l = lessonById(id);
     if (!l) { el.innerHTML = page({ title: 'Lesson', body: '<div class="empty">Lesson not found.</div>' }); return; }
     const prog = lessonProgress(id);
-    const recipes = recipesFor(l.techniques);
+    const recipes = recipesFor(l);
+    const all = lessonsCache || [];
+    const i = all.findIndex((x) => x.id === id);
+    const prev = all[i - 1], next = all[i + 1];
     const videoUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(l.videoQuery)}`;
     el.innerHTML = page({ title: l.title, sub: `${l.module} · ${l.minutes} min`, body: `
       <p class="fd-learn-summary">${esc(l.summary)}</p>
@@ -126,7 +145,11 @@ export function openLesson(id, refreshBox) {
       </div>
       <button class="${prog.learned ? 'soft' : 'primary'} block" id="fd-llearn" style="margin-top:10px">${icon('check')} ${prog.learned ? 'Learned ✓ (tap to unmark)' : 'Mark as learned'}</button>
       <button class="ghost block" id="fd-lpractice" style="margin-top:10px">${icon('bolt')} I practised this</button>
+      <div class="row between" style="margin-top:16px;gap:8px">
+        ${prev ? `<button class="link small" data-go="${prev.id}">‹ ${esc(prev.title)}</button>` : '<span></span>'}
+        ${next ? `<button class="link small" data-go="${next.id}" style="text-align:right">${esc(next.title)} ›</button>` : ''}</div>
     ` });
+    $$('[data-go]', el).forEach((b) => { b.onclick = () => { id = b.dataset.go; s.render(); el.querySelector('.scroll')?.scrollTo(0, 0); }; });
     $('#fd-lvid', el).onclick = () => window.open(videoUrl, '_blank', 'noopener');
     $('#fd-llearn', el).onclick = async () => { await saveLessonProgress(id, { learned: !prog.learned }); s.render(); refreshBox && drawIfConnected(refreshBox); };
     $('#fd-lpractice', el).onclick = () => practiceSheet(id, () => { s.render(); refreshBox && drawIfConnected(refreshBox); });
@@ -136,16 +159,15 @@ export function openLesson(id, refreshBox) {
 
 function drawIfConnected(box) { if (box?.isConnected) renderLearn(box); }
 
-function recipesFor(techniqueKeys = []) {
-  if (!techniqueKeys.length) return [];
-  return store.all('recipe').filter((r) => (r.cats?.technique || []).some((t) => techniqueKeys.includes(t)));
+function recipesFor(lesson) {
+  return store.all('recipe').filter((r) => lessonsForRecipe({ techniques: r.cats?.technique || [], mains: r.cats?.main || [] }, [lesson]).length);
 }
 
 function practiceSheet(id, onDone) {
   let rating = 4;
   push((el, s) => {
     el.innerHTML = sheet({ title: 'I practised this', body: `
-      <div class="fd-learn-stars" id="fd-stars">${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-star="${n}" class="${n <= rating ? 'on' : ''}">${icon('heart')}</button>`).join('')}</div>
+      <div class="fd-learn-stars" id="fd-stars">${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-star="${n}" class="${n <= rating ? 'on' : ''}" aria-label="${n} stars">★</button>`).join('')}</div>
       <textarea id="fd-pnote" rows="3" placeholder="Optional note — what worked, what to try next time"></textarea>
       <div class="sheet-actions"><button class="ghost" data-a="no">Cancel</button><button class="primary" data-a="ok">Save</button></div>` });
     const paint = () => $$('#fd-stars button', el).forEach((b) => b.classList.toggle('on', +b.dataset.star <= rating));
@@ -166,10 +188,10 @@ function practiceSheet(id, onDone) {
 // Category chips for a recipe's detail screen: "Practises: <lesson title>" for lessons whose technique
 // tags overlap the recipe's. Returns HTML, or '' if lessons aren't loaded yet or none match.
 export function practisesChipsHtml(recipe) {
-  if (!lessonsCache) return '';
+  if (!lessonsCache || !store.getConfig('food', {}).showLessons) return '';
   const keys = recipe.cats?.technique || [];
   if (!keys.length) return '';
-  const matches = lessonsForTechniques(keys);
+  const matches = lessonsForRecipe({ techniques: keys, mains: recipe.cats?.main || [] }).slice(0, 2);
   if (!matches.length) return '';
   return `<div class="fd-chipwrap" style="margin-top:8px">${matches.map((l) => `<button class="pill fd-learn-pill" data-lesson-link="${l.id}">Practises: ${esc(l.title)}</button>`).join('')}</div>`;
 }

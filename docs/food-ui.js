@@ -135,9 +135,11 @@ export async function searchOFF(q) {
 // ---------- food picker ----------
 function foodRow(f, i, extra = '') {
   const src = f.src === 'off' ? '' : f.src === 'custom' ? '<span class="pill accent">Mine</span>' : '';
-  return `<button class="list-item fd-food" data-i="${i}"><div class="grow"><div class="ellipsis"><b>${esc(f.src === 'db' ? f.en : f.name)}</b></div>
+  // Saved copies (recent foods) carry "Name · Brand" as their name: show the brand only once, on the second line.
+  const name = f.src === 'db' ? f.en : f.brand && String(f.name || '').endsWith(` · ${f.brand}`) ? f.name.slice(0, -(f.brand.length + 3)) : f.name;
+  return `<button class="list-item fd-food" data-i="${i}"><div class="grow"><div class="ellipsis"><b>${esc(name)}</b></div>
     <div class="sub ellipsis">${f.src === 'db' ? esc(f.pl) : esc(f.brand || '')} ${src}</div></div>
-    <div class="fd-food-k"><b>${n0(f.k)}</b><span>kcal/100 g</span></div>${extra}</button>`;
+    <div class="fd-food-k"><b>${n0(f.k)}</b><span>kcal · <span class="fd-p">${n1(f.p || 0)} g P</span> /100 g</span></div>${extra}</button>`;
 }
 
 // Opens a search screen; resolves with the chosen food or null.
