@@ -53,3 +53,22 @@ test('deleteMessage names the meal and counts items', () => {
   assert.equal(deleteMessage(1, 'Breakfast'), 'Deleted breakfast · 1 item');
   assert.equal(deleteMessage(2), 'Deleted 2 items');
 });
+
+test('a meal becomes a one-serving recipe draft', async () => {
+  const { mealRecipeDraft } = await import('../docs/diary-copy.js');
+  const { recipeTotals } = await import('../docs/food-calc.js');
+  const oats = { src: 'db', id: 'oats', name: 'Oats', k: 380, p: 13, c: 60, f: 7 };
+  const eggFood = { src: 'db', id: 'egg', name: 'Egg', k: 140, p: 12, c: 1, f: 10 };
+  const own = { id: 'r1', servings: 2, ingredients: [{ name: 'Rice', grams: 200, qty: 200, unit: 'g', food: { k: 130, p: 3, c: 28, f: 0 } }, { head: true, name: 'Sauce' }] };
+  const entries = [
+    { t: '3', label: 'Bowl', source: { type: 'recipe', id: 'r1' }, servings: 1, kcal: 130 },
+    { t: '1', label: 'Oats', source: { type: 'food' }, food: oats, grams: 50, kcal: 190, p: 6.5, c: 30, f: 3.5 },
+    { t: '2', label: 'Egg', source: { type: 'food' }, food: eggFood, grams: 120, qty: 2, unit: 'piece', kcal: 168 },
+    { t: '4', label: 'Bar', source: { type: 'quick' }, kcal: 200, p: 20, c: 15, f: 5 },
+  ];
+  const d = mealRecipeDraft(entries, { lookup: (id) => (id === 'r1' ? own : undefined) });
+  assert.equal(d.servings, 1);
+  assert.deepEqual(d.ingredients.map((g) => [g.name, g.grams]), [['Oats', 50], ['Egg', 120], ['Rice', 100], ['Bar', 100]]);
+  assert.equal(d.ingredients[1].raw, '2 piece Egg');
+  assert.equal(Math.round(recipeTotals(d.ingredients).kcal), 190 + 168 + 130 + 200);
+});

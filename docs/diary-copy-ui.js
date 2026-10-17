@@ -1,9 +1,10 @@
-// Food diary: copy or delete a meal, copy a whole day to another day, move an entry to another meal. DOM + store; logic is in diary-copy.js.
+// Food diary: copy or delete a meal, save a meal as a recipe, copy a whole day to another day, move an entry to another meal. DOM + store; logic is in diary-copy.js.
 import { $, esc, toast, today, addDays, fromDay, niceDate, relDay } from './util.js';
 import * as store from './store.js';
 import { push, sheet, chooseSheet } from './nav.js';
 import { MEALS, mealLabel } from './food-ui.js';
-import { copiedEntries, movedEntry, dayChoices, copyMessage, copyTarget, deleteMessage } from './diary-copy.js';
+import { copiedEntries, movedEntry, dayChoices, copyMessage, copyTarget, deleteMessage, mealRecipeDraft } from './diary-copy.js';
+import { editRecipe } from './food-recipes.js';
 
 const dayName = (d) => {
   const r = relDay(fromDay(d));
@@ -68,17 +69,26 @@ export async function copyMeal(from, mealKey, entries) {
   await copyTo(entries, target.day, target.meal);
 }
 
-// Meal header "⋯" menu: copy the meal, or delete every entry in it (with Undo on the toast).
+// Meal header "⋯" menu: copy the meal, save it as a recipe, or delete every entry in it (with Undo on the toast).
 export async function mealMenu(day, mealKey, entries) {
   if (!entries.length) return;
   const name = mealLabel(mealKey);
   const n = entries.length;
   const v = await chooseSheet(name, [
     { value: 'copy', label: 'Copy to another day or meal', icon: 'copy' },
+    { value: 'recipe', label: 'Save as a recipe', icon: 'note' },
     { value: 'del', label: `Delete ${name.toLowerCase()} (${n} item${n === 1 ? '' : 's'})`, icon: 'trash', danger: true },
   ]);
   if (v === 'copy') await copyMeal(day, mealKey, entries);
+  else if (v === 'recipe') saveMealAsRecipe(mealKey, entries);
   else if (v === 'del') await deleteMeal(mealKey, entries);
+}
+
+// Opens the new-recipe form filled with the meal's ingredients; the user names it and saves it to My recipes.
+export function saveMealAsRecipe(mealKey, entries) {
+  const draft = mealRecipeDraft(entries, { lookup: (id) => store.get(id) });
+  if (!draft.ingredients.length) { toast('Nothing in this meal to save'); return; }
+  editRecipe(draft);
 }
 
 // Removes each entry the same way a single "Remove from diary" does; Undo puts them back with the same ids.
