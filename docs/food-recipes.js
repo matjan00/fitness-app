@@ -57,9 +57,32 @@ function linesToIngredients(lines) {
   }).filter((i) => i.name || i.head);
 }
 
-// Only the title + cover photo are auto-filled from a link now (see editRecipe's link field) — ingredients and
-// steps are always typed or pasted in by hand. `shortTitle`/`extractProseIngredients` stay in food-parse.js and
-// are still used by the "paste text" helper below via splitRecipeText.
+// A link fills the title + cover photo (see editRecipe's link field). Recipe websites with schema.org data
+// (BBC Good Food, Skinnytaste, most blogs) also fill ingredients, steps, servings, times and the site's nutrition,
+// but only into fields that are still empty; the user reviews the matches before saving. TikTok / YouTube captions
+// are not parsed automatically (unreliable) — the "paste text" helper below handles those via splitRecipeText.
+// Returns true when something was filled in.
+export async function fillFromSite(r, ld) {
+  if (!ld) return false;
+  let filled = false;
+  if (!r.ingredients.length && ld.ingredients?.length) {
+    r.ingredients = await matchAll(linesToIngredients(ld.ingredients));
+    filled = true;
+  }
+  if (!r.steps.length && ld.steps?.length) { r.steps = [...ld.steps]; filled = true; }
+  if (filled) {
+    if (ld.servings) r.servings = ld.servings;
+    if (!r.prepMin && !r.cookMin) {
+      r.prepMin = ld.prepMin || (ld.totalMin && !ld.cookMin ? ld.totalMin : null);
+      r.cookMin = ld.cookMin || null;
+    }
+    if (ld.nutrition?.kcal) r.siteNutrition = { ...ld.nutrition };
+    resuggest(r);
+    const n = r.ingredients.filter((i) => ingredientStatus(i) === 'nofood' || ingredientStatus(i) === 'nograms').length;
+    r.notice = `Filled in from the website. Check the ingredient matches${n ? ` (${n} not counted yet)` : ''} and compare with the site's numbers before saving.`;
+  }
+  return filled;
+}
 
 // Match every ingredient to a food and compute grams (remembered choices first).
 export async function matchAll(ings) {
@@ -178,7 +201,7 @@ export function editRecipe(draft, opts = {}) {
       <div class="form">
         <label>Recipe link (optional)<input id="fd-link" type="url" inputmode="url" value="${esc(r.source?.url || '')}" placeholder="https://tiktok.com/… or a recipe site" autocomplete="off"></label>
       </div>
-      ${r._linkBusy ? '<p class="tiny muted"><span class="spinner fd-spin"></span> Fetching title & photo…</p>' : ''}
+      ${r._linkBusy ? '<p class="tiny muted"><span class="spinner fd-spin"></span> Fetching the recipe…</p>' : ''}
       ${r._linkErr && !r._linkBusy ? '<p class="tiny muted">Couldn’t get the photo — add your own.</p>' : ''}
       <div class="fd-edit-hero" style="margin-top:10px">${img(r.image, 'fd-hero-img')}
         ${r.image ? '<button class="icon-btn fd-img-x" id="fd-noimg" aria-label="Remove photo">' + icon('close') + '</button>' : ''}</div>
@@ -231,6 +254,7 @@ export function editRecipe(draft, opts = {}) {
         const t2 = shortTitle(rawTitle) || rawTitle || (j.author ? `Recipe by ${j.author}` : '');
         if (t2 && !r.title.trim()) r.title = t2;
         r.source = { type: j.source || 'link', url: j.url || url, author: j.author || null };
+        await fillFromSite(r, j.jsonld);
         const imgUrl = j.image || j.jsonld?.image || null;
         if (imgUrl) {
           const data = await compressRemote(imgUrl);
