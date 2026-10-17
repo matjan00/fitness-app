@@ -6,6 +6,7 @@ import * as store from './store.js';
 import { push, page, sheet } from './nav.js';
 import { loadFoods, buildIndex, search, unitOptions, foodLabel, matchKey } from './food-db.js';
 import { macrosFor } from './food-calc.js';
+import { loadProducts, buildProductIndex, searchProducts } from './food-products.js';
 import { liftDayExtra } from './cut-day.js';
 
 export const MEALS = [
@@ -78,6 +79,11 @@ export async function getIndex() {
   if (idxCache.key !== key) idxCache = { key, index: buildIndex([...custom, ...db]) };
   return idxCache.index;
 }
+let prodIdx = null;
+export async function getProductIndex() {
+  if (!prodIdx) prodIdx = loadProducts().then(buildProductIndex).catch((e) => { prodIdx = null; throw e; });
+  return prodIdx;
+}
 // A compact copy of a food stored with ingredients and diary entries (so they survive table changes / OFF items).
 export function snap(food) {
   if (!food) return null;
@@ -126,7 +132,7 @@ export async function searchOFF(q) {
 
 // ---------- food picker ----------
 function foodRow(f, i, extra = '') {
-  const src = f.src === 'off' ? '<span class="pill">OFF</span>' : f.src === 'custom' ? '<span class="pill accent">Mine</span>' : '';
+  const src = f.src === 'off' ? '' : f.src === 'custom' ? '<span class="pill accent">Mine</span>' : '';
   return `<button class="list-item fd-food" data-i="${i}"><div class="grow"><div class="ellipsis"><b>${esc(f.src === 'db' ? f.en : f.name)}</b></div>
     <div class="sub ellipsis">${f.src === 'db' ? esc(f.pl) : esc(f.brand || '')} ${src}</div></div>
     <div class="fd-food-k"><b>${n0(f.k)}</b><span>kcal/100 g</span></div>${extra}</button>`;
@@ -141,12 +147,15 @@ export function pickFood({ title = 'Choose food', query = '', hint = '', shortcu
     let q = query;
     let off = null; // null | 'loading' | [] | Error
     let list = [];
+    let prods = [];
+    let prodShown = 20;
     push((el, s) => {
       el.innerHTML = page({ title, body: `
         <div class="search">${icon('search')}<input id="fd-q" type="search" placeholder="Search food (Polish or English)" value="${esc(q)}" autocomplete="off" aria-label="Search food"></div>
         ${shortcuts.length ? `<div class="chips fd-shortcuts">${shortcuts.map((o) => `<button class="chip" data-sc="${esc(o.value)}">${o.icon ? icon(o.icon) : ''}${esc(o.label)}</button>`).join('')}</div>` : ''}
         ${hint ? `<p class="tiny muted" style="margin:8px 4px 0">${esc(hint)}</p>` : ''}
         <div id="fd-res" class="card" style="margin-top:12px;padding-top:4px;padding-bottom:4px"></div>
+        <div id="fd-prod" style="margin-top:12px"></div>
         <div id="fd-off" style="margin-top:12px"></div>
         <button class="ghost block" id="fd-custom" style="margin-top:12px">${icon('plus')} Create my own food</button>` });
       const input = $('#fd-q', el);
@@ -160,17 +169,32 @@ export function pickFood({ title = 'Choose food', query = '', hint = '', shortcu
           list = store.all('meal').filter((m) => m.source?.type === 'food' && m.food).sort((a, b) => (b.day + (b.t || '')).localeCompare(a.day + (a.t || '')))
             .map((m) => m.food).filter((f) => !seen.has(f.id) && seen.add(f.id)).slice(0, 12);
           res.innerHTML = list.length ? `<p class="tiny muted" style="margin:8px 2px 0">Recent</p>${list.map((f, i) => foodRow(f, i)).join('')}`
-            : '<p class="small muted" style="padding:12px 2px">Type to search ~450 common foods, or search Open Food Facts for branded products.</p>';
+            : '<p class="small muted" style="padding:12px 2px">Type to search ~450 basic foods and thousands of products from Polish shops (Open Food Facts).</p>';
         } else {
           list = search(index, q, 25).map((r) => r.food);
-          res.innerHTML = list.length ? list.map((f, i) => foodRow(f, i)).join('') : '<p class="small muted" style="padding:12px 2px">Nothing in the built-in table. Try Open Food Facts below.</p>';
+          res.innerHTML = list.length ? list.map((f, i) => foodRow(f, i)).join('') : '<p class="small muted" style="padding:12px 2px">No basic food matches. Shop products are below.</p>';
         }
+        drawProducts();
         drawOff();
+      };
+      const drawProducts = async () => {
+        const box = $('#fd-prod', el);
+        const term = q.trim();
+        if (!term) { prods = []; box.innerHTML = ''; return; }
+        const pidx = await getProductIndex().catch(() => null);
+        if (q.trim() !== term) return;
+        if (!pidx) { prods = []; box.innerHTML = `<p class="tiny muted" style="margin:0 4px">The shop product list couldn't load. Search online below.</p>`; return; }
+        prods = searchProducts(pidx, term, prodShown).map((r) => r.food);
+        box.innerHTML = prods.length ? `<p class="section-title" style="margin-top:6px">Shop products</p><div class="card" style="padding-top:4px;padding-bottom:4px">${prods.map((f, i) => foodRow(f, 2000 + i)).join('')}</div>
+          ${prods.length >= prodShown ? '<button class="ghost block" id="fd-more" style="margin-top:8px">Show more products</button>' : ''}
+          <p class="tiny muted" style="margin:6px 4px 0">Product data: Open Food Facts (ODbL). Check the label if a number looks off.</p>` : '';
+        const more = $('#fd-more', box);
+        if (more) more.onclick = () => { prodShown += 40; drawProducts(); };
       };
       const drawOff = () => {
         const box = $('#fd-off', el);
         if (!q.trim()) { box.innerHTML = ''; return; }
-        if (off === null) box.innerHTML = `<button class="soft block" id="fd-offbtn">${icon('search')} Search Open Food Facts for “${esc(q.trim())}”</button>`;
+        if (off === null) box.innerHTML = `<button class="soft block" id="fd-offbtn">${icon('search')} Search online (Open Food Facts) for “${esc(q.trim())}”</button>`;
         else if (off === 'loading') box.innerHTML = '<div class="card center"><div class="spinner" style="margin:6px auto"></div><p class="small muted">Searching Open Food Facts…</p></div>';
         else if (off instanceof Error) box.innerHTML = `<div class="card"><p class="small error">${esc(off.message)}</p></div>`;
         else box.innerHTML = `<p class="section-title" style="margin-top:6px">Open Food Facts</p><div class="card" style="padding-top:4px;padding-bottom:4px">${off.length ? off.map((f, i) => foodRow(f, 1000 + i)).join('') : '<p class="small muted" style="padding:12px 2px">No products found.</p>'}</div>`;
@@ -183,14 +207,14 @@ export function pickFood({ title = 'Choose food', query = '', hint = '', shortcu
         };
       };
       let timer;
-      input.oninput = () => { q = input.value; off = null; clearTimeout(timer); timer = setTimeout(draw, 120); };
+      input.oninput = () => { q = input.value; off = null; prodShown = 20; clearTimeout(timer); timer = setTimeout(draw, 120); };
       el.onclick = (e) => {
         const sc = e.target.closest('[data-sc]');
         if (sc) { result = { shortcut: sc.dataset.sc }; s.close(); return; }
         const b = e.target.closest('.fd-food');
         if (!b) return;
         const i = Number(b.dataset.i);
-        result = i >= 1000 ? off[i - 1000] : list[i];
+        result = i >= 2000 ? prods[i - 2000] : i >= 1000 ? off[i - 1000] : list[i];
         s.close();
       };
       $('#fd-custom', el).onclick = async () => {

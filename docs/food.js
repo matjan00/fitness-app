@@ -5,7 +5,7 @@ import * as store from './store.js';
 import { push, page, sheet, chooseSheet } from './nav.js';
 import { chart, fade, cssVar } from './charts.js';
 import { sumEntries, suggestTargets, ACTIVITY, weightTrend, weeklyChange, latestWeight, macrosFor } from './food-calc.js';
-import { MEALS, mealLabel, settings, targets, dayTargets, saveSettings, ring, bar, pickFood, amountSheet, snap, customFoodForm, img } from './food-ui.js';
+import { MEALS, mealLabel, settings, targets, dayTargets, saveSettings, ring, bar, pickFood, amountSheet, snap, customFoodForm, img, getProductIndex } from './food-ui.js';
 import { renderBook, openManual, blankDraft, logRecipe, recipePer, openRecipe, editRecipe } from './food-recipes.js';
 import { loadFoods } from './food-db.js';
 import { renderLearn, loadLessons } from './food-learn.js';
@@ -516,4 +516,5 @@ export function init() {
   // Warm up the food table and lesson content in the background so the first search/open is instant.
   setTimeout(() => loadFoods().catch(() => {}), 1500);
   setTimeout(() => loadLessons().catch(() => {}), 1800);
+  setTimeout(() => getProductIndex().catch(() => {}), 2500);
 }
