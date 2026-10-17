@@ -45,10 +45,10 @@ test('same normalised name aggregates when no food matched', () => {
 
 test('items without weight stay on the list as partial', () => {
   const l = buildList({ recipes: [{ rec: lib, servings: 4 }] });
-  const p = l.items.find((i) => i.name === 'parsley');
+  const p = l.items.find((i) => i.name === 'Parsley');
   assert.equal(p.partial, true);
   assert.equal(p.grams, 0);
-  assert.match(listText(l.items), /\[ \] parsley$/m);
+  assert.match(listText(l.items), /\[ \] Parsley$/m);
 });
 
 test('diary recipe entry expands by servings eaten', () => {
@@ -100,4 +100,19 @@ test('ticks survive a rebuild; day range', () => {
   assert.equal(item({ items: keepTicks(l.items, old) }, 'db:rice').done, true);
   assert.equal(item({ items: keepTicks(l.items, old) }, 'db:chicken-breast').done, false);
   assert.deepEqual(dayRange('2026-10-30', 3, (d, n) => `${d}+${n}`), ['2026-10-30+0', '2026-10-30+1', '2026-10-30+2']);
+});
+
+test('one row per ingredient even when matched in one recipe and typed in another; shop units', async () => {
+  const { buildList: build, amountText, keepTicks: keep } = await import('../docs/shopping.js');
+  const onion = { src: 'db', id: 'onion', en: 'Onion', u: { piece: 110 } };
+  const milk = { src: 'db', id: 'milk', en: 'Milk 2%', liquid: true };
+  const a = { servings: 1, ingredients: [{ name: 'cebula', food: onion, grams: 220 }, { name: 'mleko', food: milk, grams: 250 }] };
+  const b = { servings: 1, ingredients: [{ name: 'Onion', grams: null }] };
+  const l = build({ recipes: [{ rec: a, servings: 1 }, { rec: b, servings: 1 }] });
+  const rows = l.items.filter((i) => /onion/i.test(i.name));
+  assert.equal(rows.length, 1);
+  assert.equal(amountText(rows[0]), '2 (≈ 220 g) +');
+  assert.equal(amountText(l.items.find((i) => i.name === 'Milk 2%')), '250 ml');
+  const ticked = l.items.map((i) => ({ ...i, done: i.name === 'Milk 2%' }));
+  assert.equal(keep(l.items, ticked).find((i) => i.name === 'Milk 2%').done, true);
 });

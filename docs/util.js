@@ -63,7 +63,8 @@ export const relDay = (d) => {
   const diff = Math.round((fromDay(today()) - fromDay(dayOf(d))) / 86400000);
   if (diff === 0) return 'Today';
   if (diff === 1) return 'Yesterday';
-  if (diff < 7) return new Date(d).toLocaleDateString('en-GB', { weekday: 'long' });
+  if (diff === -1) return 'Tomorrow';
+  if (diff > 1 && diff < 7) return new Date(d).toLocaleDateString('en-GB', { weekday: 'long' });
   return niceDate(d, { year: new Date(d).getFullYear() !== new Date().getFullYear() });
 };
 

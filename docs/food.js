@@ -11,6 +11,7 @@ import { loadFoods } from './food-db.js';
 import { renderLearn, loadLessons } from './food-learn.js';
 import { renderLibrary } from './food-library-ui.js';
 import { mealMenu, copyDay, moveEntry } from './diary-copy-ui.js';
+import { undoAdded, undoChanged, removeEntries } from './diary-undo.js';
 import { openShopping } from './shopping-ui.js';
 import { gymLeadsHome } from './gym.js';
 import { isSetUp as cutPlanOn } from './cut.js';
@@ -45,7 +46,8 @@ function render(el) {
 
 function dayTitle(d) {
   const r = relDay(fromDay(d));
-  return r === 'Today' || r === 'Yesterday' ? `${r}, ${niceDate(fromDay(d))}` : niceDate(fromDay(d), { weekday: true });
+  const year = fromDay(d).getFullYear() !== new Date().getFullYear();
+  return r === 'Today' || r === 'Yesterday' || r === 'Tomorrow' ? `${r}, ${niceDate(fromDay(d))}` : niceDate(fromDay(d), { weekday: true, year });
 }
 
 function renderDiary(box) {
@@ -94,7 +96,9 @@ function renderDiary(box) {
   };
 }
 
+// Planning ahead is allowed up to a week (same limit as the date picker).
 function shiftDay(n, box) {
+  if (n > 0 && day >= addDays(today(), 7)) { toast('You can plan up to a week ahead'); return; }
   day = addDays(day, n);
   dayChosenAt = Date.now();
   renderDiary(box);
@@ -191,11 +195,7 @@ async function addPicked(meal, d, f) {
   const a = await amountSheet(f, { grams: last?.grams || 100, unit: last?.unit || (byPiece ? 'piece' : 'g'), qty: last?.qty ?? (byPiece ? 1 : undefined) });
   if (!a) return;
   const saved = await saveFoodEntry({ day: d, meal, food: f, ...a });
-  toast(`Added to ${mealLabel(meal)}`, 6000, { label: 'Undo', run: () => undoAdd([saved]) });
-}
-async function undoAdd(items) {
-  for (const x of items) await store.remove(x.id);
-  toast('Removed');
+  undoAdded(`Added to ${mealLabel(meal)}`, [saved]);
 }
 async function saveFoodEntry({ id, t, day: d, meal, food, grams, qty, unit }) {
   const m = macrosFor(food, grams);
@@ -215,6 +215,7 @@ function quickAdd(meal, entry = null) {
       <div class="form-row"><label>Carbs (g)<input name="c" inputmode="decimal" value="${entry ? Math.round(entry.c * 10) / 10 : ''}"></label>
       <label>Fat (g)<input name="f" inputmode="decimal" value="${entry ? Math.round(entry.f * 10) / 10 : ''}"></label></div>
       <p class="tiny muted" id="fd-qahint"></p>
+      <p class="small fd-warntext" id="fd-qaerr" hidden></p>
       <div class="sheet-actions">${entry ? '<button type="button" class="ghost danger-text" data-a="del">Remove</button>' : '<button type="button" class="ghost" data-a="no">Cancel</button>'}<button type="button" class="primary" data-a="ok">${entry ? 'Save' : 'Add'}</button></div></form>` });
     const fm = $('#fd-qa', el);
     const hint = () => {
@@ -223,18 +224,24 @@ function quickAdd(meal, entry = null) {
       $('#fd-qahint', el).textContent = est ? `Protein, carbs and fat add up to ~${n0(est)} kcal.` : 'Only calories are required.';
     };
     fm.oninput = hint; hint();
+    let saving = false;
     $('[data-a=ok]', el).onclick = async () => {
+      if (saving) return;
       let kcal = parseNum(fm.kcal.value);
       const p = parseNum(fm.p.value) || 0, c = parseNum(fm.c.value) || 0, f = parseNum(fm.f.value) || 0;
       if (kcal == null && (p || c || f)) kcal = p * 4 + c * 4 + f * 9;
-      if (kcal == null || kcal < 0) { fm.kcal.focus(); return; }
-      await store.put('meal', { ...(entry ? { id: entry.id, t: entry.t } : { t: new Date().toISOString() }), day: d, meal: entry?.meal || meal,
+      const err = !(kcal > 0) ? 'Enter the calories (or protein, carbs and fat).' : [p, c, f].some((x) => x < 0) ? 'Protein, carbs and fat cannot be negative.' : kcal > 5000 ? 'That is over 5000 kcal - check the number.' : '';
+      const errEl = $('#fd-qaerr', el);
+      errEl.hidden = !err; errEl.textContent = err;
+      if (err) { fm.kcal.focus(); return; }
+      saving = true;
+      const saved = await store.put('meal', { ...(entry ? { id: entry.id, t: entry.t } : { t: new Date().toISOString() }), day: d, meal: entry?.meal || meal,
         label: fm.label.value.trim() || 'Quick add', source: { type: 'quick' }, kcal, p, c, f });
-      toast(entry ? 'Saved' : `Added to ${mealLabel(meal)}`);
+      if (entry) undoChanged('Saved', [entry]); else undoAdded(`Added to ${mealLabel(meal)}`, [saved]);
       s.close();
     };
     $('[data-a=no]', el)?.addEventListener('click', () => s.close());
-    $('[data-a=del]', el)?.addEventListener('click', async () => { await store.remove(entry.id); toast('Removed'); s.close(); });
+    $('[data-a=del]', el)?.addEventListener('click', async () => { s.close(); await removeEntries([entry]); });
     setTimeout(() => (entry ? fm.kcal : fm.label).focus(), 250);
   }, { sheet: true });
 }
@@ -246,7 +253,7 @@ async function editEntry(e) {
   if (type === 'library') {
     const v = await chooseSheet(e.label, [{ value: 'edit', label: 'Change amount or meal', icon: 'edit' }, { value: 'del', label: 'Remove from diary', icon: 'trash', danger: true }]);
     if (v === 'edit') return logRecipe({ id: e.source.id, title: e.label, lib: true, servings: 1, totals: { ...e.per } }, { entry: e });
-    if (v === 'del') { await store.remove(e.id); toast('Removed'); }
+    if (v === 'del') await removeEntries([e]);
     return;
   }
   if (type === 'recipe') {
@@ -257,15 +264,15 @@ async function editEntry(e) {
     // Use the per-serving numbers stored on the entry, so an entry logged from a scaled recipe keeps its scale.
     if (v === 'edit') return logRecipe(e.per ? { id: rec.id, title: e.label, servings: 1, totals: { ...e.per } } : rec, { entry: e });
     if (v === 'open') return openRecipe(rec.id);
-    if (v === 'del') { await store.remove(e.id); toast('Removed'); }
+    if (v === 'del') await removeEntries([e]);
     return;
   }
   const food = e.food || { src: 'custom', name: e.label, k: 0, p: 0, c: 0, f: 0 };
   const a = await amountSheet(food, { title: e.label, grams: e.grams, qty: e.qty, unit: e.unit, ok: 'Save', danger: 'Remove' });
   if (!a) return;
-  if (a.remove) { await store.remove(e.id); toast('Removed'); return; }
+  if (a.remove) { await removeEntries([e]); return; }
   await saveFoodEntry({ id: e.id, t: e.t, day: e.day, meal: e.meal, food, ...a });
-  toast('Saved');
+  undoChanged('Saved', [e]);
 }
 
 // ---------- week ----------

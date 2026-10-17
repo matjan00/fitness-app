@@ -4,7 +4,7 @@ import { $, $$, esc, icon, toast, local, today, addDays, fromDay, niceDate, pars
 import * as store from './store.js';
 import { push, page, confirmSheet } from './nav.js';
 import { loadLibrary } from './food-library.js';
-import { buildList, grouped, listText, dayRange, gramsText } from './shopping.js';
+import { buildList, grouped, listText, dayRange, amountText, keepTicks, listOrder } from './shopping.js';
 
 const KEY = 'shop-list';
 const saved = () => { const l = local.get(KEY, null); return l && Array.isArray(l.items) ? l : null; };
@@ -13,7 +13,8 @@ const dayName = (d) => (d === today() ? 'Today' : niceDate(fromDay(d), { weekday
 // ---------- builder ----------
 export function openShopping() {
   const sel = {};                          // recipe id → servings
-  const days = new Set(dayRange(today(), 7, addDays));
+  // Planning ahead: tomorrow and the six days after (what is already eaten today is not bought again).
+  const days = new Set(dayRange(addDays(today(), 1), 7, addDays));
   push((el, s) => {
     const recipes = store.all('recipe').sort((a, b) => (a.title || '').localeCompare(b.title || ''));
     const last = saved();
@@ -40,7 +41,7 @@ export function openShopping() {
     $('#sh-last', el)?.addEventListener('click', () => openList());
     $$('[data-day]', el).forEach((b) => { b.onclick = () => { const d = b.dataset.day; days.has(d) ? days.delete(d) : days.add(d); s.render(); }; });
     $('#sh-adddate', el).onclick = () => { const v = $('#sh-date', el).value; if (v) { days.add(v); s.render(); } };
-    $('#sh-next', el).onclick = () => { days.clear(); dayRange(today(), 7, addDays).forEach((d) => days.add(d)); s.render(); };
+    $('#sh-next', el).onclick = () => { days.clear(); dayRange(addDays(today(), 1), 7, addDays).forEach((d) => days.add(d)); s.render(); };
     $('#sh-prev', el).onclick = () => { days.clear(); dayRange(addDays(today(), -6), 7, addDays).forEach((d) => days.add(d)); s.render(); };
     $('#sh-none', el).onclick = () => { days.clear(); s.render(); };
     $$('[data-rec]', el).forEach((b) => { b.onclick = () => {
@@ -58,7 +59,7 @@ export function openShopping() {
       const own = new Map(store.all('recipe').map((r) => [r.id, r]));
       const { items, skipped } = buildList({ recipes: chosen, entries, lookup: (src) => (src.type === 'library' ? lib.get(src.id) : own.get(src.id)) || null });
       if (!items.length) { toast('Nothing to buy: no ingredients with a weight found'); return; }
-      local.set(KEY, { created: new Date().toISOString(), items, skipped });
+      local.set(KEY, { created: new Date().toISOString(), items: keepTicks(items, saved()?.items || []), skipped });
       openList();
     };
   });
@@ -81,11 +82,11 @@ function openList() {
     el.innerHTML = page({ title: 'Shopping list', sub: `${left} left of ${l.items.length}`,
       right: `<button class="icon-btn" id="sh-share" aria-label="Share or copy as text">${icon('upload')}</button><button class="icon-btn" id="sh-clear" aria-label="Delete list">${icon('trash')}</button>`,
       body: `${grouped(l.items).map((g) => `<h3 class="section-title">${esc(g.label)}</h3><div class="card" style="padding-top:4px;padding-bottom:4px">
-        ${g.items.map((it) => `<button class="fd-shop-row ${it.done ? 'done' : ''}" data-k="${esc(it.key)}" aria-pressed="${it.done}"><span class="fd-shop-box">${it.done ? icon('check') : ''}</span>
+        ${listOrder(g.items).map((it) => `<button class="fd-shop-row ${it.done ? 'done' : ''}" data-k="${esc(it.key)}" aria-pressed="${it.done}"><span class="fd-shop-box">${it.done ? icon('check') : ''}</span>
           <span class="grow">${esc(it.name)}</span><span class="muted small">${esc(amount(it))}</span></button>`).join('')}</div>`).join('')}
         ${l.skipped?.length ? `<h3 class="section-title">Not included</h3><div class="card"><p class="tiny muted">These diary entries have no ingredients to buy.</p>
           ${l.skipped.map((x) => `<p class="small" style="margin-top:6px">${esc(x.label)} <span class="muted">· ${esc(x.reason)}</span></p>`).join('')}</div>` : ''}
-        <p class="tiny muted center" style="margin-top:14px">“+” after an amount means some recipes gave no weight for that item.</p>`,
+        ${l.items.some((i) => i.partial) ? '<p class="tiny muted center" style="margin-top:14px">“+” after an amount means some recipes gave no weight for that item.</p>' : ''}`,
       footer: `<div class="row" style="gap:8px"><button class="ghost grow" id="sh-uncheck">Untick all</button><button class="primary grow" id="sh-copy">Copy as text</button></div>` });
 
     $$('[data-k]', el).forEach((b) => { b.onclick = () => {
@@ -93,12 +94,12 @@ function openList() {
       if (it) { it.done = !it.done; local.set(KEY, l); s.render(); }
     }; });
     $('#sh-uncheck', el).onclick = () => { l.items.forEach((i) => { i.done = false; }); local.set(KEY, l); s.render(); };
-    $('#sh-copy', el).onclick = () => copyText(listText(l.items, { all: true }));
+    $('#sh-copy', el).onclick = () => copyText(listText(l.items));
     $('#sh-share', el).onclick = () => shareText(listText(l.items));
     $('#sh-clear', el).onclick = async () => { if (await confirmSheet('Delete this shopping list?', { ok: 'Delete', danger: true })) { local.del(KEY); s.close(); } };
   });
 }
-const amount = (it) => (it.grams > 0 ? `${gramsText(it.grams)}${it.partial ? ' +' : ''}` : '');
+const amount = amountText;
 
 async function copyText(text) {
   try { await navigator.clipboard.writeText(text); toast('List copied'); } catch { toast('Could not copy'); }

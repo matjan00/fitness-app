@@ -17,8 +17,16 @@ create table if not exists records (
 create index if not exists records_user_synced on records (user_id, synced_at);
 create index if not exists records_user_kind on records (user_id, kind);
 
+-- An older edit never overwrites a newer one (see sync-guard.sql): the server keeps the later updated_at and bumps
+-- synced_at, so the device that sent the old version downloads the newer one.
 create or replace function records_touch() returns trigger language plpgsql as $$
 begin
+  if tg_op = 'UPDATE' and new.updated_at < old.updated_at then
+    new.kind := old.kind;
+    new.data := old.data;
+    new.updated_at := old.updated_at;
+    new.deleted := old.deleted;
+  end if;
   new.synced_at := clock_timestamp();
   return new;
 end $$;

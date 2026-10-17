@@ -16,6 +16,7 @@ import { checkCardHtml, ingListHtml, bindEditing, foodsCached, metaChipsHtml, bi
 import { ownView } from './food-estimate.js';
 import { checkRecipe } from './food-check.js';
 import { withTotals } from './food-copy.js';
+import { undoAdded, undoChanged, removeEntries } from './diary-undo.js';
 import { isFav, toggleFavRecipe, cookedOf, cookedSheet, forgetRecipe, stars } from './food-favs.js';
 
 const CAT_DIMS = ['meal', 'technique', 'main'];
@@ -725,17 +726,17 @@ export function logRecipe(rec, { day = today(), meal = null, entry = null } = {}
         if (!(f > 0) || el.dataset.saving) return;
         el.dataset.saving = '1';
         const a = parseNum($('#fd-amt', el).value);
-        await store.put('meal', {
+        const saved = await store.put('meal', {
           ...(entry ? { id: entry.id, t: entry.t } : { t: new Date().toISOString() }), day: entry?.day || day, meal: m, label: rec.title,
           source: { type: rec.lib ? 'library' : 'recipe', id: rec.id }, ...((rec.scale || entry?.scale) ? { scale: rec.scale || entry.scale } : {}), servings: mode === 'servings' ? a : null, grams: mode === 'grams' ? a : null,
           per: { kcal: ps.kcal, p: ps.p, c: ps.c, f: ps.f, grams: ps.grams },
           kcal: ps.kcal * f, p: ps.p * f, c: ps.c * f, f: ps.f * f,
         });
-        toast(entry ? 'Saved' : `Added to ${mealLabel(m)}`);
+        if (entry) undoChanged('Saved', [entry]); else undoAdded(`Added to ${mealLabel(m)}`, [saved]);
         s.close();
       };
       $('[data-a=no]', el)?.addEventListener('click', () => s.close());
-      $('[data-a=del]', el)?.addEventListener('click', async () => { await store.remove(entry.id); toast('Removed'); s.close(); });
+      $('[data-a=del]', el)?.addEventListener('click', async () => { s.close(); await removeEntries([entry]); });
       upd();
     }, { sheet: true, onClose: () => resolve() });
   });
