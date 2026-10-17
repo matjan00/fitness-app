@@ -137,16 +137,26 @@ export function daysToGoal(startDate, day) {
 }
 
 // ---------- trend weight ----------
-// Exponential moving average (α = 0.1) over the weigh-ins in day order; the first weigh-in seeds it.
-// Returns [{ day, kg, trend }] oldest first.
+// Exponential moving average (α = 0.1 per DAY) over the weigh-ins; the first weigh-in seeds it.
+// Several weigh-ins on one day count once (their mean). After a gap of g days the trend moves as if it had been
+// updated every day: weight 1 − (1 − α)^g, so a week without weighing does not leave it stuck in the past.
+// Returns [{ day, kg, trend }] oldest first, one row per day weighed.
 export function emaTrend(entries = [], alpha = 0.1) {
-  const list = entries.filter((e) => e && /^\d{4}-\d{2}-\d{2}$/.test(e.day) && Number(e.kg) > 0)
-    .sort((a, b) => a.day.localeCompare(b.day));
+  const byDay = new Map();
+  for (const e of entries) {
+    if (!e || !/^\d{4}-\d{2}-\d{2}$/.test(e.day) || !(Number(e.kg) > 0)) continue;
+    const d = byDay.get(e.day) || { sum: 0, n: 0 };
+    d.sum += Number(e.kg); d.n++;
+    byDay.set(e.day, d);
+  }
   let t = null;
-  return list.map((e) => {
-    const kg = Number(e.kg);
-    t = t == null ? kg : t + alpha * (kg - t);
-    return { day: e.day, kg, trend: Math.round(t * 100) / 100 };
+  let prev = null;
+  return [...byDay.keys()].sort().map((day) => {
+    const kg = Math.round((byDay.get(day).sum / byDay.get(day).n) * 100) / 100;
+    const gap = prev ? Math.max(1, daysBetween(prev, day)) : 1;
+    t = t == null ? kg : t + (1 - (1 - alpha) ** gap) * (kg - t);
+    prev = day;
+    return { day, kg, trend: Math.round(t * 100) / 100 };
   });
 }
 

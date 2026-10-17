@@ -9,6 +9,7 @@ export function chart(canvas, config) {
   if (!canvas || !window.Chart) return null;
   charts.get(canvas)?.destroy();
   for (const [c, ch] of charts) if (!c.isConnected) { ch.destroy(); charts.delete(c); }
+  Chart.defaults.locale = 'en-GB'; // "84.6", "18,000" - the same number format as the rest of the app
   Chart.defaults.color = cssVar('--text-2');
   Chart.defaults.borderColor = cssVar('--line');
   Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
@@ -38,3 +39,12 @@ export const fade = (color) => ({ chart: c }) => {
   return g;
 };
 export { cssVar };
+
+// Distinct colours for several lines in one chart (lifts, trend vs plan). Read from the theme, so dark mode works.
+export const SERIES = ['--accent', '--protein', '--up', '--fat', '--text-2'];
+export const seriesColor = (i) => cssVar(SERIES[i % SERIES.length]);
+
+// Charts read their colours when drawn: redraw the tab when the phone switches between light and dark.
+const themeFns = new Set();
+export const onThemeChange = (fn) => { themeFns.add(fn); return () => themeFns.delete(fn); };
+matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => themeFns.forEach((fn) => { try { fn(); } catch (e) { console.error(e); } }));

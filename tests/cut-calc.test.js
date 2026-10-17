@@ -96,3 +96,11 @@ test('targetsChanged compares kcal, macros and steps', () => {
   assert.equal(targetsChanged({ steps: 10000 }, { steps: 12000 }), true);
   assert.equal(targetsChanged(null, { kcal: 1 }), true);
 });
+
+test('trend follows the calendar: gaps and same-day weigh-ins', () => {
+  const gap = emaTrend([{ day: '2026-09-01', kg: 90 }, { day: '2026-10-11', kg: 85 }]);
+  assert.ok(gap[1].trend < 85.2, `after 40 days the trend has caught up (got ${gap[1].trend})`);
+  const same = emaTrend([{ day: '2026-10-10', kg: 80 }, { day: '2026-10-10', kg: 84 }, { day: '2026-10-11', kg: 82 }]);
+  assert.equal(same.length, 2);
+  assert.equal(same[0].kg, 82);
+});

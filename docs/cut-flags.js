@@ -13,18 +13,23 @@ const localDay = (iso) => { const d = new Date(iso); return `${d.getFullYear()}-
 const range = (from, to) => { const out = []; for (let d = from; d <= to; d = addDays(d, 1)) out.push(d); return out; };
 
 // ---------- adaptive maintenance ----------
-// TDEE = average kcal − (Δ trend kg × 7,700 / days) over a rolling 21-day window ending at `day`.
-// Needs at least 14 days with calories logged and a trend at both ends; otherwise null.
+// TDEE = average kcal − (weight change per day × 7,700) over a rolling 21-day window ending at `day`.
+// The weight change is the slope of a straight line through the window's weigh-ins (least squares, one value per
+// day): unlike the smoothed trend it does not lag at the start of a cut or after a gap. Needs at least 14 days with
+// calories logged and 8 weigh-in days spread over 10+ days; otherwise null.
+// `change` = kg over the whole window at that slope (so tdee = avgKcal − change × 7,700 / window).
 export function adaptiveTdee(day, { weights = [], kcalOf = () => null, window = 21, minDays = 14 } = {}) {
   const from = addDays(day, -(window - 1));
   const kc = range(from, day).map(kcalOf).filter((k) => k != null && k > 0);
   if (kc.length < minDays) return null;
-  const tr = emaTrend(weights);
-  const a = trendOn(tr, from) ?? tr.find((r) => r.day >= from && r.day <= day)?.trend;
-  const b = trendOn(tr, day);
-  if (a == null || b == null) return null;
+  const pts = emaTrend(weights).filter((r) => r.day >= from && r.day <= day).map((r) => [daysBetween(from, r.day), r.kg]);
+  if (pts.length < 8 || pts[pts.length - 1][0] - pts[0][0] < 10) return null;
+  const mx = pts.reduce((s, p) => s + p[0], 0) / pts.length;
+  const my = pts.reduce((s, p) => s + p[1], 0) / pts.length;
+  const slope = pts.reduce((s, p) => s + (p[0] - mx) * (p[1] - my), 0) / pts.reduce((s, p) => s + (p[0] - mx) ** 2, 0);
   const avg = kc.reduce((s, k) => s + k, 0) / kc.length;
-  return { tdee: Math.round(avg - ((b - a) * 7700) / window), avgKcal: Math.round(avg), days: kc.length, change: Math.round((b - a) * 100) / 100 };
+  const change = Math.round(slope * window * 100) / 100;
+  return { tdee: Math.round(avg - slope * 7700), avgKcal: Math.round(avg), days: kc.length, change, perWeek: Math.round(slope * 7 * 100) / 100 };
 }
 
 // ---------- logging ----------

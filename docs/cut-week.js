@@ -145,14 +145,16 @@ export function weightChart(weights = [], cfg = {}, start = null, day) {
 // Best-set e1RM per session for each main lift (weight × reps sets only; Pull-Up and Lat Pulldown together):
 // { [label]: [{ day, e1rm }] }.
 export const LIFT_LABELS = { Leverage_Chest_Press: 'Chest press', Standing_Military_Press: 'Overhead press', 'Lying_T-Bar_Row': 'T-bar row', Pullups: 'Pull-up / pulldown', 'Wide-Grip_Lat_Pulldown': 'Pull-up / pulldown', Incline_Dumbbell_Press: 'Incline DB press' };
+const pad2 = (n) => String(n).padStart(2, '0');
+const localDay = (iso) => { const d = new Date(iso); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; };
 export function liftSeries(workouts = [], since = '') {
   const out = {};
-  for (const w of [...workouts].filter((x) => x?.ended_at && x.started_at.slice(0, 10) >= since).sort((a, b) => a.started_at.localeCompare(b.started_at))) {
+  for (const w of [...workouts].filter((x) => x?.ended_at && localDay(x.started_at) >= since).sort((a, b) => a.started_at.localeCompare(b.started_at))) {
     for (const e of w.exercises || []) {
       const label = LIFT_LABELS[e.exercise_id];
       if (!label || (e.mode && e.mode !== 'wr')) continue;
       const v = e1rmOf(workingSets(e.sets));
-      if (v > 0) (out[label] ||= []).push({ day: w.started_at.slice(0, 10), e1rm: Math.round(v * 10) / 10 });
+      if (v > 0) (out[label] ||= []).push({ day: localDay(w.started_at), e1rm: Math.round(v * 10) / 10 });
     }
   }
   return out;

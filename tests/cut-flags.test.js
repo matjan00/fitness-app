@@ -95,3 +95,13 @@ test('red flags: a session done today counts, like on the Today card', () => {
   const f = redFlags('2026-10-15', one, cfg, 73).find((x) => x.key === 'missed');
   assert.match(f.text, /gym 1\/3, runs 0\/2 with 3 days left/);
 });
+
+test('maintenance is right early in a cut (slope of the weigh-ins, not the lagging trend)', () => {
+  // 2000 kcal a day, losing 0.1 kg a day for 21 days → maintenance ≈ 2000 + 770 = 2770
+  const d = days('2026-10-01', 21);
+  const r = adaptiveTdee('2026-10-21', { weights: d.map((x, i) => ({ day: x, kg: 90 - i * 0.1 })), kcalOf: () => 2000 });
+  assert.equal(r.tdee, 2770);
+  assert.equal(r.perWeek, -0.7);
+  // only 5 weigh-ins: not enough to tell
+  assert.equal(adaptiveTdee('2026-10-21', { weights: d.slice(-5).map((x, i) => ({ day: x, kg: 90 - i * 0.1 })), kcalOf: () => 2000 }), null);
+});

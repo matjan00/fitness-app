@@ -1,12 +1,12 @@
 // Offline support. The app files are served "stale-while-revalidate": the saved copy opens instantly
 // (also with no signal at the gym) and a fresh copy is fetched in the background for next time.
 // Exercise pictures are cached the first time they are shown. Supabase calls are never cached.
-const VERSION = 'fit-v52';
+const VERSION = 'fit-v53';
 const CORE = ['./', 'index.html', 'style.css', 'gym.css', 'food.css', 'run.css', 'stats.css', 'cut.css', 'cut.js', 'cut-calc.js', 'cut-day.js', 'cut-today.js', 'cut-engine.js', 'cut-gym.js', 'cut-flags.js', 'cut-week.js', 'cut-review.js', 'cut-run.js', 'cut-progress.js', 'app.js', 'version.js', 'update.js', 'util.js', 'store.js', 'sync-cursor.js', 'sanitize.js', 'sync-line.js', 'nav.js',
   'charts.js', 'config.js', 'me.js', 'gym.js', 'gym-calc.js', 'gym-data.js', 'gym-lib.js', 'gym-workout.js', 'gym-routines.js',
   'food.js', 'food-parse.js', 'food-db.js', 'food-calc.js', 'food-scale.js', 'food-cats.js', 'food-ui.js', 'food-products.js', 'food-barcode.js', 'food-recipes.js', 'food-photo.js', 'food-learn.js', 'food-library.js', 'food-estimate.js', 'food-library-ui.js', 'food-favs.js', 'food-check.js', 'food-copy.js', 'diary-copy.js', 'diary-copy-ui.js', 'diary-undo.js', 'shopping.js', 'shopping-ui.js', 'food-edit-ui.js',
   'data/foods.json', 'data/lessons.json', 'data/library/index.json',
-  'stats.js', 'stats-calc.js', 'run.js', 'run-coach.js', 'run-detail.js', 'run-demo.js', 'run-plan.js', 'run-plan-ui.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png',
+  'stats.js', 'stats-insights.js', 'stats-calc.js', 'run.js', 'run-coach.js', 'run-detail.js', 'run-demo.js', 'run-plan.js', 'run-plan-ui.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png',
   'vendor/supabase.js', 'vendor/chart.umd.min.js', 'data/exercises.json'];
 
 self.addEventListener('install', (e) => {
