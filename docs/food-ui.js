@@ -7,6 +7,7 @@ import { push, page, sheet } from './nav.js';
 import { loadFoods, buildIndex, search, unitOptions, foodLabel, matchKey } from './food-db.js';
 import { macrosFor } from './food-calc.js';
 import { loadProducts, buildProductIndex, searchProducts } from './food-products.js';
+import { cleanCode, findLocal, fetchOFFProduct } from './food-barcode.js';
 import { liftDayExtra } from './cut-day.js';
 
 export const MEALS = [
@@ -151,7 +152,9 @@ export function pickFood({ title = 'Choose food', query = '', hint = '', shortcu
     let prodShown = 20;
     push((el, s) => {
       el.innerHTML = page({ title, body: `
-        <div class="search">${icon('search')}<input id="fd-q" type="search" placeholder="Search food (Polish or English)" value="${esc(q)}" autocomplete="off" aria-label="Search food"></div>
+        <div class="row fd-searchrow"><div class="search grow">${icon('search')}<input id="fd-q" type="search" placeholder="Search food (Polish or English)" value="${esc(q)}" autocomplete="off" aria-label="Search food"></div>
+        <button class="icon-btn soft" id="fd-scan" aria-label="Scan barcode">${icon('barcode')}</button></div>
+        <div id="fd-scanmsg"></div>
         ${shortcuts.length ? `<div class="chips fd-shortcuts">${shortcuts.map((o) => `<button class="chip" data-sc="${esc(o.value)}">${o.icon ? icon(o.icon) : ''}${esc(o.label)}</button>`).join('')}</div>` : ''}
         ${hint ? `<p class="tiny muted" style="margin:8px 4px 0">${esc(hint)}</p>` : ''}
         <div id="fd-res" class="card" style="margin-top:12px;padding-top:4px;padding-bottom:4px"></div>
@@ -217,6 +220,21 @@ export function pickFood({ title = 'Choose food', query = '', hint = '', shortcu
         result = i >= 2000 ? prods[i - 2000] : i >= 1000 ? off[i - 1000] : list[i];
         s.close();
       };
+      $('#fd-scan', el).onclick = async () => {
+        const code = await scanBarcode();
+        if (!code) return;
+        const msg = $('#fd-scanmsg', el);
+        msg.innerHTML = '<div class="card center" style="margin-top:12px"><div class="spinner" style="margin:6px auto"></div><p class="small muted">Looking up the barcode…</p></div>';
+        const r = await lookupBarcode(code);
+        if (r.food) { result = r.food; s.close(); return; }
+        msg.innerHTML = `<div class="card" style="margin-top:12px"><p class="small"><b>${r.error ? esc(r.error) : 'This product isn’t in the list yet.'}</b> Barcode ${esc(code)}.</p>
+          <p class="tiny muted" style="margin:4px 0 10px">Add it once from the label; the next scan will find it.</p>
+          <button class="primary block" id="fd-scanadd">${icon('plus')} Add it from the label</button></div>`;
+        $('#fd-scanadd', msg).onclick = async () => {
+          const f = await customFoodForm({ code });
+          if (f) { result = f; s.close(); }
+        };
+      };
       $('#fd-custom', el).onclick = async () => {
         const f = await customFoodForm({ name: q });
         if (f) { result = f; s.close(); }
@@ -268,6 +286,73 @@ export function amountSheet(food, { title, grams = 100, qty, unit, ok = 'Add', d
   });
 }
 
+// ---------- barcode ----------
+export async function lookupBarcode(code) {
+  const products = await loadProducts().catch(() => []);
+  const local = findLocal(code, customFoods(), products);
+  if (local) return { food: local };
+  try { return { food: await fetchOFFProduct(code) }; } catch (e) { return { food: null, error: e.message }; }
+}
+
+// Camera scanner (BarcodeDetector: Chrome on Android) with a "type the number" fallback.
+// Resolves the barcode digits or null.
+export function scanBarcode() {
+  return new Promise((resolve) => {
+    let result = null;
+    let stream = null;
+    let timer = null;
+    const stop = () => { clearTimeout(timer); stream?.getTracks().forEach((t) => t.stop()); stream = null; };
+    push((el, s) => {
+      el.innerHTML = page({ title: 'Scan barcode', body: `
+        <div class="fd-cam" id="fd-cam"><video id="fd-video" playsinline muted></video><div class="fd-cam-frame"></div></div>
+        <p class="small muted center" id="fd-camhint" style="margin:10px 4px">Point the camera at the barcode.</p>
+        <form class="form" id="fd-codeform" onsubmit="return false" style="margin-top:8px">
+          <label>Or type the number under the barcode<input id="fd-code" inputmode="numeric" autocomplete="off" placeholder="e.g. 5900512300108"></label>
+          <p class="error small" hidden></p>
+          <button class="soft block" id="fd-codego">Find</button>
+        </form>` });
+      const done = (code) => { result = code; stop(); s.close(); };
+      $('#fd-codego', el).onclick = () => {
+        const code = cleanCode($('#fd-code', el).value);
+        const err = $('.error', el);
+        if (!code) { err.textContent = 'A barcode has 8 or 13 digits.'; err.hidden = false; return; }
+        done(code);
+      };
+      const hint = $('#fd-camhint', el);
+      const noCam = (text) => { $('#fd-cam', el).hidden = true; hint.textContent = text; };
+      if (!('BarcodeDetector' in window) || !navigator.mediaDevices?.getUserMedia) {
+        noCam('This browser can’t read barcodes with the camera. Type the number instead.');
+        return;
+      }
+      (async () => {
+        try {
+          const formats = await window.BarcodeDetector.getSupportedFormats?.() || [];
+          const want = ['ean_13', 'ean_8', 'upc_a', 'upc_e'].filter((f) => !formats.length || formats.includes(f));
+          const detector = new window.BarcodeDetector({ formats: want });
+          stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+          if (!el.isConnected) { stop(); return; }
+          const video = $('#fd-video', el);
+          video.srcObject = stream;
+          await video.play();
+          const tick = async () => {
+            if (!stream) return;
+            try {
+              const found = await detector.detect(video);
+              const code = found.map((b) => cleanCode(b.rawValue)).find(Boolean);
+              if (code) { navigator.vibrate?.(60); done(code); return; }
+            } catch { /* frame not ready yet */ }
+            timer = setTimeout(tick, 200);
+          };
+          tick();
+        } catch (e) {
+          stop();
+          noCam(e.name === 'NotAllowedError' ? 'Camera access was blocked. Allow it in the browser settings, or type the number.' : 'The camera couldn’t start. Type the number instead.');
+        }
+      })();
+    }, { onClose: () => { stop(); resolve(result); } });
+  });
+}
+
 // ---------- custom food ----------
 export function customFoodForm(prefill = {}) {
   return new Promise((resolve) => {
@@ -279,6 +364,7 @@ export function customFoodForm(prefill = {}) {
         <form class="form" id="fd-form" onsubmit="return false">
           <label>Name<input name="name" value="${esc(f.name)}" placeholder="e.g. Twaróg półtłusty Piątnica" required></label>
           <label>Brand (optional)<input name="brand" value="${esc(f.brand || '')}"></label>
+          ${f.code ? `<p class="tiny muted" style="margin:-4px 2px 0">Barcode ${esc(f.code)}: scanning it finds this food.</p>` : ''}
           <p class="section-title" style="margin:6px 2px 0">Per 100 g (from the label)</p>
           <div class="form-row"><label>Calories (kcal)<input name="k" inputmode="decimal" value="${esc(f.k)}" required></label>
           <label>Protein (g)<input name="p" inputmode="decimal" value="${esc(f.p)}"></label></div>
@@ -296,6 +382,7 @@ export function customFoodForm(prefill = {}) {
         const item = { ...(f.id && f.src === 'custom' ? { id: f.id } : {}), name: fm.name.value.trim(), brand: fm.brand.value.trim() || null,
           k: v('k'), p: v('p') || 0, c: v('c') || 0, f: v('f') || 0 };
         if (v('piece') > 0) item.u = { piece: v('piece') };
+        if (f.code) item.code = f.code;
         const saved = await store.put('food', item);
         result = { ...saved, src: 'custom' };
         toast('Food saved');
