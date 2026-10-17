@@ -82,7 +82,8 @@ export const UNIT_WORDS = {
   head: ['glowka', 'glowki', 'glowke', 'glowa', 'head', 'heads'],
   sprig: ['galazka', 'galazki', 'galazek', 'sprig', 'sprigs'],
   leaf: ['lisc', 'liscie', 'listek', 'listki', 'listkow', 'lisci', 'leaf', 'leaves'],
-  stalk: ['lodyga', 'lodygi', 'lodyzka', 'lodyzki', 'stalk', 'stalks', 'stick', 'sticks'],
+  stalk: ['lodyga', 'lodygi', 'lodyzka', 'lodyzki', 'stalk', 'stalks'],
+  stick: ['stick', 'sticks'],
   cube: ['kostka', 'kostki', 'kostek', 'kostke', 'cube', 'cubes'],
   bar: ['tabliczka', 'tabliczki', 'tabliczek', 'bar', 'bars'],
   scoop: ['miarka', 'miarki', 'scoop', 'scoops'],
@@ -92,7 +93,7 @@ export const UNIT_WORDS = {
 export const UNIT_LABEL = {
   g: 'g', kg: 'kg', dag: 'dag', mg: 'mg', l: 'l', dl: 'dl', ml: 'ml', tbsp: 'tbsp', tsp: 'tsp', glass: 'glass', cup: 'cup', floz: 'fl oz',
   oz: 'oz', lb: 'lb', piece: 'pc', clove: 'clove', handful: 'handful', pinch: 'pinch', pack: 'pack', can: 'can', jar: 'jar',
-  slice: 'slice', bunch: 'bunch', head: 'head', sprig: 'sprig', leaf: 'leaf', stalk: 'stalk', cube: 'cube', bar: 'bar', scoop: 'scoop',
+  slice: 'slice', bunch: 'bunch', head: 'head', sprig: 'sprig', leaf: 'leaf', stalk: 'stalk', stick: 'stick', cube: 'cube', bar: 'bar', scoop: 'scoop',
   drop: 'drop', bottle: 'bottle',
 };
 const UNIT_LOOKUP = new Map();
@@ -141,14 +142,34 @@ export function parseIngredient(line) {
   if (/:$/.test(s) && s.length < 40 && !/\d/.test(s)) { out.head = true; out.name = s.replace(/:$/, ''); return out; }
   if (HEAD_WORDS.test(fold(s))) { out.head = true; out.name = s; return out; }
 
+  // A section label in front of the line: "Na sos: 2 łyżki miodu", "For the dressing: 1 tbsp oil"
+  {
+    const lab = s.match(/^([^\d:]{2,30}):\s*(?=\d|[½⅓⅔¼¾]|pół|half|one|a\s)(.+)$/i);
+    if (lab && (HEAD_WORDS.test(fold(lab[1].trim())) || /^(na|do|for)\s/i.test(lab[1].trim()))) s = lab[2];
+  }
+  // A second, converted amount: "200g/7oz flour", "1 cup/240ml milk", "100g/3½oz feta" → keep the first one.
+  s = s.replace(/^((?:\d+(?:[.,]\d+)?|[½⅓⅔¼¾])\s*[a-zA-Z]*)\s*\/\s*\d*[½⅓⅔¼¾]?(?:[.,]\d+)?\s*(?:fl\.?\s?oz|oz|ml|g|kg|lb|cups?)\b\.?/i, '$1');
+  // "one 14-ounce can tomatoes", "an 8-ounce block of cheese" → "1 can tomatoes (14 oz each)"
+  s = s.replace(/^(?:one|an?|1)\s+(\d+(?:[.,]\d+)?)[-\s]?(?:ounce|oz)\s+(cans?|tins?|jars?|packages?|packs?|blocks?|bags?)\b/i, '1 $2 ($1 oz each)');
+
   const notes = [];
-  // Parenthesised parts become notes; if they carry a weight ("ok. 200 g") remember it.
+  // Parenthesised parts become notes; if they carry a weight ("ok. 200 g") remember it. The weight is per piece when it
+  // says so ("about 200 g each", "po 170 g") or sits right after the count ("2 (14 oz) cans" = two 14 oz cans).
+  const countFirst = /^(\d+(?:[.,]\d+)?|[½⅓⅔¼¾])\s*\(/.test(s);
   s = s.replace(/\(([^()]*)\)/g, (_, inner) => {
-    const w = weightIn(inner);
-    if (w != null && out.grams == null) out.grams = w;
+    const each = countFirst || /\b(each|apiece|per piece|ka[żz]d\p{L}*|za sztuk\p{L}*)\b|^\s*po\s/iu.test(inner);
+    const w = weightIn(inner.replace(/^\s*po\s+/i, '').replace(/(\d)\s*-\s*(?=[a-z])/gi, '$1 '));
+    if (w != null && out.grams == null) { out.grams = w; if (each) out.each = true; }
     else if (inner.trim()) notes.push(inner.trim());
     return ' ';
   }).replace(/\s+/g, ' ').trim();
+  // "2 puszki tuńczyka po 170 g" → 170 g each
+  s = s.replace(/\s+po\s+(\d+(?:[.,]\d+)?\s*(?:g|kg|dag|ml|l))\.?$/i, (m, w) => {
+    const g = weightIn(w);
+    if (g == null || out.grams != null) return m;
+    out.grams = g; out.each = true;
+    return '';
+  });
 
   // A total weight at the end: "6 pomidorów - 850 g", "3 szklanki mąki -400 g", "papryki: 2 żółte… = 850 g"
   {
@@ -247,17 +268,22 @@ export function parseIngredient(line) {
   out.name = cleanName(s);
   out.note = notes.map((n) => n.trim()).filter(Boolean).join(', ');
   if (!out.name && out.note) { out.name = out.note; out.note = ''; }
+  // A per-piece weight times the count: "2 chicken breasts (about 200 g each)" → 400 g.
+  if (out.each) {
+    if (out.qty > 0) out.grams = Math.round(out.grams * out.qty * 10) / 10;
+    delete out.each;
+  }
   return out;
 }
 
 // "ok. 200 g" / "150g" / "about 1 lb" → grams, else null
 function weightIn(text) {
   const f = fold(text).replace(APPROX, '');
-  const m = f.match(new RegExp(`^(?:${APPROX_CORE}\\s*)?(${RANGE})\\s*(g|gr|gram|gramow|grams|kg|dag|dkg|ml|l|oz|lb)\\.?\\b`));
+  const m = f.match(new RegExp(`^(?:${APPROX_CORE}\\s*)?(${RANGE})\\s*(grams|gramow|gram|gr|g|kg|dag|dkg|ml|l|ounces|ounce|oz|pounds|pound|lbs|lb)\\.?\\b`));
   if (!m) return null;
   const q = parseQty(m[1]);
   if (q == null) return null;
-  const k = { g: 1, gr: 1, gram: 1, gramow: 1, grams: 1, kg: 1000, dag: 10, dkg: 10, ml: 1, l: 1000, oz: 28.35, lb: 453.6 }[m[2]];
+  const k = { g: 1, gr: 1, gram: 1, gramow: 1, grams: 1, kg: 1000, dag: 10, dkg: 10, ml: 1, l: 1000, oz: 28.35, ounce: 28.35, ounces: 28.35, lb: 453.6, lbs: 453.6, pound: 453.6, pounds: 453.6 }[m[2]];
   return Math.round(q * k * 10) / 10;
 }
 

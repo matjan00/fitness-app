@@ -52,8 +52,9 @@ test('filters, favourites, fits-my-day', () => {
   assert.deepEqual(filterRecipes(list, { minP: 20, maxKcal: 500 }).map((r) => r.id), ['a']);
   assert.deepEqual(filterRecipes(list, { fav: true }, new Set(['c'])).map((r) => r.id), ['c']);
   assert.equal(totalMin(list[1]), 100);
-  assert.deepEqual(fitsMyDay(list, { kcal: 500, p: 40 }).map((r) => r.id), ['a', 'c']);
-  assert.deepEqual(fitsMyDay(list, { kcal: 100, p: 40 }), []);
+  assert.deepEqual(fitsMyDay(list, { kcal: 500, p: 40 }, { hour: 19 }).list.map((r) => r.id), ['a', 'c']);
+  assert.deepEqual(fitsMyDay(list, { kcal: 100, p: 40 }, { hour: 19 }).list, []);
+  assert.equal(fitsMyDay(list, { kcal: -50, p: 0 }, { hour: 19 }).over, true);
   let st = toggleFav({}, 'a'); assert.deepEqual(st.favs, ['a']); st = toggleFav(st, 'a'); assert.deepEqual(st.favs, []);
   assert.equal(markCooked(markCooked({}, 'a', 3, '2026-01-01'), 'a', 5, '2026-01-02').cooked.a.n, 2);
 });
@@ -91,4 +92,26 @@ test('retiring the library keeps favourited, cooked and edited recipes, deletes 
   // Running again (records not yet gone after a partial sync) creates no duplicates.
   const again = planLibraryCleanup(lib, [...own, ...plan.put], plan.state, [], () => assert.fail('no new copy'), () => 'x');
   assert.equal(again.put.length, 0);
+});
+
+test('Fits my day sizes meals to what is left for the rest of the day', () => {
+  const mk = (id, kcal, p, meals = []) => ({ id, title: id, prep_min: 0, cook_min: 0, ingredients: [], meals, per_serving: { kcal, p, c: 0, f: 0 } });
+  const list = [mk('huge', 1900, 90), mk('lunch', 650, 50, ['lunch']), mk('omelette', 600, 40, ['breakfast']), mk('nocount', 0, 0)];
+  // 13:00 with 2000 kcal left: two meals to go, so ~1000 kcal now; the 1900 kcal dish is not first, uncounted is skipped.
+  const noon = fitsMyDay(list, { kcal: 2000, p: 140 }, { hour: 13 });
+  assert.equal(noon.meal, 'lunch');
+  assert.equal(noon.list[0].id, 'lunch');
+  assert.ok(!noon.list.some((r) => r.id === 'nocount'));
+  // In the evening a breakfast-only recipe ranks below one for any meal.
+  const eve = fitsMyDay([mk('omelette', 600, 40, ['breakfast']), mk('bowl', 600, 40)], { kcal: 700, p: 60 }, { hour: 19 });
+  assert.deepEqual(eve.list.map((r) => r.id), ['bowl', 'omelette']);
+});
+
+test('filters: any main ingredient, uncounted recipes never pass kcal/protein filters, search finds matched foods', () => {
+  const mk = (id, kcal, extra = {}) => ({ id, title: id, prep_min: 0, cook_min: 0, per_serving: { kcal, p: 30, c: 0, f: 0 }, ingredients: [], ...extra });
+  const list = [mk('bowl', 500, { mains: ['chicken', 'rice'] }), mk('zero', 0, { mains: ['rice'] }), mk('pierogi', 600, { ingredients: [{ name: 'filet', food: { name: 'Pierś z kurczaka', en: 'Chicken breast' } }] })];
+  assert.deepEqual(filterRecipes(list, { mains: ['rice'] }).map((r) => r.id), ['bowl', 'zero']);
+  assert.deepEqual(filterRecipes(list, { maxKcal: 600 }).map((r) => r.id), ['bowl', 'pierogi']);
+  assert.deepEqual(filterRecipes(list, { minP: 20 }).map((r) => r.id), ['bowl', 'pierogi']);
+  assert.deepEqual(filterRecipes(list, { q: 'piers' }).map((r) => r.id), ['pierogi']);
 });

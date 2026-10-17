@@ -76,7 +76,8 @@ export function customFoods() {
 export async function getIndex() {
   const db = await loadFoods();
   const custom = customFoods();
-  const key = `${db.length}:${custom.map((f) => f.id + (f.name || '')).join('|')}`;
+  // Includes the macros and units, so editing one of "My foods" is picked up straight away.
+  const key = `${db.length}:${custom.map((f) => [f.id, f.name, f.brand, f.k, f.p, f.c, f.f, JSON.stringify(f.u || {}), (f.a || []).join(',')].join('~')).join('|')}`;
   if (idxCache.key !== key) idxCache = { key, index: buildIndex([...custom, ...db]) };
   return idxCache.index;
 }
@@ -246,6 +247,8 @@ export function pickFood({ title = 'Choose food', query = '', hint = '', shortcu
 }
 
 // ---------- amount sheet ----------
+const MAX_ENTRY_G = 5000; // one diary entry over 5 kg is a typo
+const COUNTABLE = new Set(['piece', 'small', 'medium', 'large', 'slice', 'clove', 'can', 'pack', 'jar', 'bar', 'cube', 'scoop', 'bottle', 'leaf', 'stalk']);
 // Resolves { grams, qty, unit } or null. `extra` renders under the title (e.g. meal select).
 export function amountSheet(food, { title, grams = 100, qty, unit, ok = 'Add', danger = null } = {}) {
   return new Promise((resolve) => {
@@ -264,17 +267,27 @@ export function amountSheet(food, { title, grams = 100, qty, unit, ok = 'Add', d
       const upd = () => {
         const n = parseNum($('#fd-q', el).value);
         u = $('#fd-u', el).value;
-        const g = n == null ? null : n * (opts.find((o) => o.key === u)?.grams || 1);
+        const g = n == null || !(n > 0) ? null : n * (opts.find((o) => o.key === u)?.grams || 1);
+        const tooBig = g > MAX_ENTRY_G;
         const m = macrosFor(food, g || 0);
-        $('#fd-m', el).innerHTML = g == null ? '<p class="small muted">Enter an amount</p>' : `<div class="row between"><span class="muted small">${n1(g)} g</span><span>${macroLine(m)}</span></div>`;
-        $('[data-a=ok]', el).disabled = !(g > 0);
-        return { g, n };
+        $('#fd-m', el).innerHTML = g == null ? '<p class="small muted">Enter an amount above 0</p>'
+          : tooBig ? `<p class="small fd-warntext">${n1(g / 1000)} kg is more than anyone eats at once - check the amount and unit.</p>`
+            : `<div class="row between"><span class="muted small">${n1(g)} g</span><span>${macroLine(m)}</span></div>`;
+        $('[data-a=ok]', el).disabled = !(g > 0) || tooBig;
+        return { g: tooBig ? null : g, n };
       };
       $('#fd-q', el).oninput = upd;
+      // Switching the unit keeps the same weight: 250 ml → ~1 cup, 120 g → 2 eggs (countable units round to a half).
       $('#fd-u', el).onchange = () => {
         const nu = $('#fd-u', el).value;
-        if (nu !== 'g' && u === 'g') $('#fd-q', el).value = '1';
-        if (nu === 'g' && u !== 'g') $('#fd-q', el).value = String(Math.round((parseNum($('#fd-q', el).value) || 1) * (opts.find((o) => o.key === u)?.grams || 1)));
+        const gramsOf = (k) => opts.find((o) => o.key === k)?.grams || 1;
+        const n = parseNum($('#fd-q', el).value);
+        const g = n > 0 ? n * gramsOf(u) : null;
+        if (g != null) {
+          let v = g / gramsOf(nu);
+          v = COUNTABLE.has(nu) ? Math.max(0.5, Math.round(v * 2) / 2) : nu === 'g' || nu === 'ml' ? Math.round(v) : Math.round(v * 100) / 100;
+          $('#fd-q', el).value = String(v);
+        }
         upd();
       };
       $('[data-a=ok]', el).onclick = () => { const { g, n } = upd(); if (g > 0) { result = { grams: Math.round(g * 10) / 10, qty: n, unit: u }; s.close(); } };

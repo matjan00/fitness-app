@@ -137,8 +137,7 @@ async function start() {
   });
   setRevealHandler(renderTab);
   syncSegState();
-  cleanUpLibrary();
-  store.syncNow().catch(() => {});
+  store.syncNow().catch(() => {}).finally(cleanUpLibrary);
   checkForUpdate();
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkForUpdate(); });
 

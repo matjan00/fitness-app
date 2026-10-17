@@ -91,3 +91,9 @@ test('editing time / servings / main clears the estimate flag and works on a lib
   const eff = effectiveLib(r, x, per);
   assert.equal(eff.main_ingredient, 'fish'); assert.equal(eff.prep_min, 10); assert.equal(eff.copy, true);
 });
+
+test('sorting by calories puts recipes with uncounted calories last', async () => {
+  const { sortRecipes } = await import('../docs/food-estimate.js');
+  const r = (id, kcal) => ({ id, title: id, per_serving: { kcal, p: 10 } });
+  assert.deepEqual(sortRecipes([r('a', 0), r('b', 500), r('c', 300)], 'kcal').map((x) => x.id), ['c', 'b', 'a']);
+});

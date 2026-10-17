@@ -98,13 +98,20 @@ export function ownView(rec, recipePer, foodsById = {}) {
     course: MEAL_COURSE[rec.cats?.meal?.[0]] || 'main', servings: rec.servings || 1, prep_min: prep || 0, cook_min: cook || 0, difficulty: null,
     vegetarian: isVegetarianNames(ings.map((i) => `${i.name || ''} ${i.food?.id || ''}`)), main_ingredient: main || null, ingredients: ings,
     per_serving: recipePer(rec), source: { type: 'own', name: 'My recipes' }, est,
+    mains: rec.cats?.main?.length ? [...rec.cats.main] : main ? [main] : [], meals: [...(rec.cats?.meal || [])], techs: [...(rec.cats?.technique || [])],
+    missing: rec.totals?.missing || 0, created: rec.created || '',
   };
 }
 
 // ---------- sorting ----------
 export const SORTS = [['default', 'Default'], ['pp100', 'Protein per 100 kcal'], ['kcal', 'Calories (low first)'], ['time', 'Time (quick first)'], ['name', 'Name A-Z']];
-const pp100 = (r) => (r.per_serving.kcal > 0 ? r.per_serving.p / r.per_serving.kcal : 0);
+export const pp100 = (r) => (r.per_serving.kcal > 0 ? (r.per_serving.p / r.per_serving.kcal) * 100 : 0);
+// Recipes with uncounted calories (kcal 0) always sort after the counted ones. 'default' = newest first.
 export function sortRecipes(list, key) {
-  const c = { pp100: (a, b) => pp100(b) - pp100(a), kcal: (a, b) => a.per_serving.kcal - b.per_serving.kcal, time: (a, b) => totalOf(a) - totalOf(b), name: (a, b) => a.title.localeCompare(b.title) }[key];
+  const k = (r) => (r.per_serving.kcal > 0 ? r.per_serving.kcal : Infinity);
+  const c = {
+    pp100: (a, b) => pp100(b) - pp100(a), kcal: (a, b) => k(a) - k(b), time: (a, b) => totalOf(a) - totalOf(b), name: (a, b) => a.title.localeCompare(b.title),
+    default: (a, b) => String(b.created || '').localeCompare(String(a.created || '')),
+  }[key || 'default'];
   return c ? [...list].sort(c) : list;
 }

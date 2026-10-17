@@ -93,37 +93,66 @@ export function displayIngredient(ing, k) {
 
 // ---------- filtering ----------
 export const totalMin = (r) => (r.prep_min || 0) + (r.cook_min || 0);
-// f: { q, cuisine, course, maxTime, difficulty, mains: [ids] (any of), source, veg, maxKcal, minP, fav }; favs: Set of ids
+// f: { q, cuisine, course, meal, technique, maxTime, difficulty, mains: [ids] (any of), source, veg, maxKcal, minP, fav }; favs: Set of ids.
+// A recipe can have several main ingredients / meals / techniques (r.mains, r.meals, r.techs from ownView); the single
+// main_ingredient is the fallback. Recipes whose calories are not counted yet (kcal 0) never pass a kcal / protein filter.
+const has = (list, single, k) => (list?.length ? list.includes(k) : single === k);
 export function filterRecipes(list, f = {}, favs = new Set()) {
   const q = fold(f.q || '').trim();
   const mains = f.mains?.length ? f.mains : f.main ? [f.main] : [];
   return list.filter((r) => {
     if (f.cuisine && r.cuisine !== f.cuisine) return false;
     if (f.course && r.course !== f.course) return false;
+    if (f.meal && !r.meals?.includes(f.meal)) return false;
+    if (f.technique && !r.techs?.includes(f.technique)) return false;
     if (f.maxTime && totalMin(r) > f.maxTime) return false;
     if (f.difficulty && r.difficulty !== f.difficulty) return false;
-    if (mains.length && !mains.includes(r.main_ingredient)) return false;
+    if (mains.length && !mains.some((m) => has(r.mains, r.main_ingredient, m))) return false;
     if (f.source && r.source?.type !== f.source) return false;
     if (f.veg && !r.vegetarian) return false;
-    if (f.maxKcal && r.per_serving.kcal > f.maxKcal) return false;
-    if (f.minP && r.per_serving.p < f.minP) return false;
+    const kcal = r.per_serving?.kcal || 0;
+    if (f.maxKcal && !(kcal > 0 && kcal <= f.maxKcal)) return false;
+    if (f.minP && !(kcal > 0 && (r.per_serving?.p || 0) >= f.minP)) return false;
     if (f.fav && !favs.has(r.id)) return false;
-    if (q && !fold(`${r.title} ${r.title_local || ''} ${r.ingredients.map((i) => i.name || i.text).join(' ')}`).includes(q)) return false;
+    if (q) {
+      const ings = (r.ingredients || []).map((i) => `${i.name || i.text || ''} ${i.food?.name || ''} ${i.food?.en || ''} ${i.food?.pl || ''}`).join(' ');
+      if (!fold(`${r.title} ${r.title_local || ''} ${ings}`).includes(q)) return false;
+    }
     return true;
   });
 }
 
-// "Fits my day": recipes whose serving fits into what is left of today's kcal, favouring protein. remaining: { kcal, p }
-export function fitsMyDay(list, remaining, limit = 6) {
+// The meal that is next / now by the clock, and how many meals are still to come today (incl. this one).
+export function mealNow(hour) {
+  const h = Number(hour);
+  if (h < 11) return { meal: 'breakfast', left: 3 };
+  if (h < 16) return { meal: 'lunch', left: 2 };
+  if (h < 21) return { meal: 'dinner', left: 1 };
+  return { meal: 'snack', left: 1 };
+}
+
+// "Fits my day": recipes for the next meal, sized to what is left of today's kcal split over the meals still to come,
+// favouring protein. remaining: { kcal, p }; opts: { hour } (local clock). Recipes with uncounted calories are skipped.
+// Returns { list, over } - over = true when today's calories are already used up.
+export function fitsMyDay(list, remaining, { hour = new Date().getHours(), limit = 6 } = {}) {
   const remK = remaining?.kcal ?? 0;
-  if (!(remK >= 150)) return [];
+  if (!(remK >= 150)) return { list: [], over: remK < 0 };
+  const { meal, left } = mealNow(hour);
+  const budget = remK / left; // kcal this meal should be about
   const remP = Math.max(remaining.p || 0, 1);
-  return list
-    .filter((r) => r.per_serving.kcal <= remK * 1.05 && r.per_serving.kcal >= remK * 0.2)
-    .map((r) => ({ r, score: Math.min(r.per_serving.p / remP, 1) * 2 - Math.abs(1 - r.per_serving.kcal / remK) * 0.6 }))
+  const pBudget = remP / left;
+  const out = list
+    .filter((r) => r.per_serving?.kcal > 0 && r.per_serving.kcal <= remK * 1.05 && r.per_serving.kcal >= Math.min(budget * 0.4, 250))
+    .map((r) => {
+      const k = r.per_serving.kcal;
+      let score = Math.min(r.per_serving.p / pBudget, 1.2) * 1.5 - Math.abs(1 - k / budget) * 1.2;
+      if (r.meals?.length) score += r.meals.includes(meal) ? 0.4 : r.meals.every((m) => m === 'breakfast') ? -0.8 : 0;
+      return { r, score };
+    })
     .sort((a, b) => b.score - a.score)
     .slice(0, limit)
     .map((x) => x.r);
+  return { list: out, over: false, meal };
 }
 
 // ---------- user state: one config object { favs: [ids], cooked: { id: { rating, n, last } } } ----------
@@ -141,7 +170,7 @@ export function markCooked(state, id, rating, day) {
 // The imported library is gone: recipes are now added one at a time as own recipes. Imported recipes the user favourited
 // or cooked (and any "Your version" copy) become plain own recipes; every library record is then deleted.
 // lib: library recipes (store.all('library')); own: store.all('recipe'); state: config 'library' { favs, cooked };
-// entries: diary meals; toOwn(lib) -> own recipe without id (food-copy libToOwn); newId() -> fresh id.
+// entries: diary meals; toOwn(lib) -> own recipe without id (food-copy libToOwn); newId(lib) -> id for its own recipe.
 // Returns { put: [own recipes with id], entries: [diary entries re-pointed to the own recipe], state, remove: [library ids] }.
 // Safe to run again (e.g. on a partial sync): a recipe already moved is found by `imported_from`.
 export function planLibraryCleanup(lib, own, state = {}, entries = [], toOwn, newId) {
@@ -161,7 +190,7 @@ export function planLibraryCleanup(lib, own, state = {}, entries = [], toOwn, ne
       idMap.set(r.id, copy.id);
     } else {
       const { from_library: _fl, ...rest } = toOwn(r);
-      const rec = { ...rest, id: newId(), imported_from: r.id };
+      const rec = { ...rest, id: newId(r), imported_from: r.id };
       put.push(rec);
       idMap.set(r.id, rec.id);
     }

@@ -41,7 +41,8 @@ const STOP = new Set(['z', 'ze', 'w', 'we', 'na', 'do', 'i', 'oraz', 'lub', 'alb
 
 export function tokens(s) {
   const f = fold(s).replace(/(\d),(\d)/g, '$1.$2');
-  return f.split(/[^a-z0-9.]+/).map((t) => t.replace(/^\.+|\.+$/g, '')).filter((t) => t && !STOP.has(t));
+  // "ugotowany" and "gotowany" (cooked) are the same word for matching
+  return f.split(/[^a-z0-9.]+/).map((t) => t.replace(/^\.+|\.+$/g, '').replace(/^ugotowan/, 'gotowan')).filter((t) => t && !STOP.has(t));
 }
 // Lower-cased tokens that keep diacritics (to break ties like "mąki" → mąka, not "mak").
 function rawTokens(s) {
@@ -58,6 +59,9 @@ function wordSim(a, b, ra, rb) {
   while (p < n && a[p] === b[p]) p++;
   const short = n, long = Math.max(a.length, b.length);
   if (p < 3 || p < short - 2 || long - p > 3) return 0;
+  // Short words need a near-complete shared stem: "sera"~"ser", "mięsa"~"mięso", but not "sera"~"serca", "kaszy"~"kasia",
+  // "piers"~"pieprz".
+  if (short <= 5 && !((p >= 4 && p >= short - 1) || (p === short && long - p <= 2))) return 0;
   let s = 0.96 - 0.01 * ((a.length - p) + (b.length - p));
   // diacritics disagree inside the shared stem → weaker ("maki" vs "mak" when the text said "mąki")
   if (ra && rb && ra.slice(0, p) !== rb.slice(0, p)) s -= 0.06;
@@ -143,6 +147,17 @@ export function bestMatch(index, name) {
   return conf ? { food: top.food, score: top.score, conf } : null;
 }
 
+// Best match for a parsed ingredient line { name, unit, raw }: a can / tin ("2 puszki tuńczyka", "1 can tomatoes")
+// prefers the canned food over the fresh one when the database has both.
+const CANNED = /canned|z puszki|konserw/i;
+export function bestMatchFor(index, ing) {
+  const m = bestMatch(index, ing.name);
+  const canned = ing.unit === 'can' || /\b(puszk\p{L}*|canned|tinned|in a can)\b/iu.test(ing.raw || '');
+  if (!canned || (m && CANNED.test(`${m.food.en} ${(m.food.a || []).join(' ')}`))) return m;
+  const alt = search(index, `${ing.name} z puszki canned`, 5).find((x) => CANNED.test(`${x.food.en} ${(x.food.a || []).join(' ')}`) && (!m || x.score >= m.score - 0.25));
+  return alt ? { food: alt.food, score: alt.score, conf: confidence(alt.score) || m?.conf || 'medium' } : m;
+}
+
 export const matchKey = (name) => tokens(name).join(' ');
 
 // ---------- grams ----------
@@ -195,7 +210,7 @@ export function toGrams(ing, food) {
     case 'ml': return out(q * d);
     case 'dl': return out(q * 100 * d);
     case 'l': return out(q * 1000 * d);
-    case 'floz': return out(q * 29.57 * d);
+    case 'floz': return out(q * (u.floz ?? 29.57 * d));
     case 'oz': return out(q * 28.35);
     case 'lb': return out(q * 453.6);
     case 'cup': return out(q * (u.cup ?? CUP_ML * d), !u.cup, `${q} cup`);
@@ -210,6 +225,8 @@ export function toGrams(ing, food) {
     case 'sprig': return out(q * (u.sprig ?? 1), true);
     case 'leaf': return out(q * (u.leaf ?? 0.5), !u.leaf);
     case 'stalk': return out(q * (u.stalk ?? 40), !u.stalk);
+    // a US stick of butter / margarine is 113 g (½ cup); anything else (cinnamon, celery) is a guess
+    case 'stick': return /butter|margarine/.test(id || '') ? out(q * 113, false, `${q} × 113 g`) : out(q * (u.stalk ?? 40), true);
     case 'bunch': return out(q * (u.bunch ?? 40), true);
     case 'head': return out(u.head != null ? q * u.head : id === 'garlic' ? q * 45 : null, true);
     case 'scoop': return out(q * (u.scoop ?? 30), !u.scoop);
@@ -232,7 +249,8 @@ export function toGrams(ing, food) {
     case null:
     default: {
       const g = (ing.size && u[ing.size]) || u.piece || (ing.size === 'large' ? u.large : null);
-      if (g) return out(q * g, false, `${q} × ${r1(g)} g`);
+      // Big items vary a lot (a chicken breast is 150-300 g): their piece weight is shown as an estimate to check.
+      if (g) return out(q * g, g > 150 && !(ing.size && u[ing.size]), `${q} × ${r1(g)} g`);
       return out(null, true);
     }
   }
@@ -248,7 +266,7 @@ export function unitOptions(food) {
   for (const k of ['piece', 'small', 'large', 'slice', 'serving', 'tbsp', 'tsp', 'cup', 'clove', 'scoop', 'can', 'pack', 'cube', 'bar', 'stalk', 'leaf']) {
     if (u[k] && !(k !== 'piece' && k === 'medium')) opts.push({ key: k, label: label[k] || UNIT_LABEL[k] || k, grams: u[k] });
   }
-  if (food?.liquid || u.cup) opts.push({ key: 'ml', label: 'ml', grams: density(food) });
+  if (food?.liquid || (u.cup && !u.piece)) opts.push({ key: 'ml', label: 'ml', grams: density(food) });
   return opts;
 }
 

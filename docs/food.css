@@ -241,3 +241,8 @@
 .fd-cam { position: relative; border-radius: 16px; overflow: hidden; background: #000; aspect-ratio: 4 / 3; }
 .fd-cam video { width: 100%; height: 100%; object-fit: cover; display: block; }
 .fd-cam-frame { position: absolute; left: 12%; right: 12%; top: 32%; bottom: 32%; border: 2px solid rgba(255, 255, 255, 0.85); border-radius: 12px; box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.35); }
+
+/* Recipes view: cards without a photo skip the placeholder; uncounted-calorie text; favourite mark */
+.fd-rcard.noimg .fd-rcard-body { padding-top: 14px; min-height: 96px; align-content: start; }
+.fd-heartmark { color: var(--down); }
+.fd-warntext { color: var(--down-ink); }

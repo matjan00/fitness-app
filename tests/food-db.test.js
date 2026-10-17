@@ -120,3 +120,35 @@ test('unit options for logging', () => {
   assert.ok(o.includes('g') && o.includes('piece'));
   assert.deepEqual(unitOptions({ k: 100, p: 1, c: 1, f: 1 }).map((x) => x.key), ['g']);
 });
+
+test('per-piece weights, slash amounts, sticks and labelled lines', async () => {
+  const { bestMatchFor } = await import('../docs/food-db.js');
+  const idx2 = buildIndex(data.foods || data);
+  const grams = (line) => {
+    const p = parseIngredient(line);
+    const m = bestMatchFor(idx2, { ...p, raw: line });
+    return { g: toGrams(p, m.food).grams, id: m.food.id, guess: toGrams(p, m.food).guess };
+  };
+  assert.equal(grams('2 chicken breasts (about 200 g each)').g, 400);
+  assert.equal(grams('4 chicken breasts (6 oz each)').g, 680.4);
+  assert.equal(grams('2 puszki tuńczyka (po 170 g)').g, 340);
+  assert.equal(grams('2 puszki tuńczyka (po 170 g)').id, 'tuna-water');
+  assert.equal(grams('2 (14 oz) cans diced tomatoes').g, 793.8);
+  assert.equal(grams('1 can diced tomatoes').id, 'tomato-canned');
+  assert.equal(grams('2 piersi z kurczaka (ok. 500 g)').g, 500); // no "each": a total
+  assert.equal(grams('200g/7oz flour').g, 200);
+  assert.equal(grams('1 stick butter').g, 113);
+  assert.equal(parseIngredient('Na sos: 2 łyżki miodu').name, 'miodu');
+  assert.equal(grams('2 chicken breasts').guess, true); // a big piece weight is an estimate
+});
+
+test('short words no longer match unrelated foods', () => {
+  const idx2 = buildIndex(data.foods || data);
+  const id = (n) => bestMatch(idx2, n)?.food.id;
+  assert.notEqual(id('sera'), 'chicken-heart');
+  assert.notEqual(id('kaszy'), 'margarine');
+  assert.notEqual(id('mięsa mielonego'), 'mint');
+  assert.equal(id('pierś z kurczaka'), 'chicken-breast');
+  assert.equal(id('ryż gotowany'), 'rice-cooked');
+  assert.equal(id('serca drobiowe'), 'chicken-heart');
+});

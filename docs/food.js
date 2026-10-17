@@ -6,7 +6,7 @@ import { push, page, sheet, chooseSheet } from './nav.js';
 import { chart, fade, cssVar } from './charts.js';
 import { sumEntries, suggestTargets, ACTIVITY, weightTrend, weeklyChange, latestWeight, macrosFor } from './food-calc.js';
 import { MEALS, mealLabel, settings, targets, dayTargets, saveSettings, ring, bar, pickFood, amountSheet, snap, customFoodForm, img, getProductIndex } from './food-ui.js';
-import { renderBook, openManual, blankDraft, logRecipe, recipePer, openRecipe, editRecipe } from './food-recipes.js';
+import { openManual, blankDraft, logRecipe, recipePer, openRecipe, editRecipe } from './food-recipes.js';
 import { loadFoods } from './food-db.js';
 import { renderLearn, loadLessons } from './food-learn.js';
 import { renderLibrary } from './food-library-ui.js';
@@ -31,15 +31,16 @@ function render(el) {
   // After a long pause (e.g. next morning) jump back to today.
   if (Date.now() - dayChosenAt > 3 * 3600 * 1000) { day = today(); dayChosenAt = Date.now(); }
   const lessons = Boolean(settings().showLessons);
-  const v = view() === 'learn' && !lessons ? 'diary' : view();
-  const segs = [['diary', 'Diary'], ['library', 'Library'], ['recipes', 'My recipes'], ...(lessons ? [['learn', 'Learn']] : [])];
+  const v0 = view() === 'library' ? 'recipes' : view(); // Library and My recipes are one Recipes view now
+  const v = v0 === 'learn' && !lessons ? 'diary' : v0;
+  const segs = [['diary', 'Diary'], ['recipes', 'Recipes'], ...(lessons ? [['learn', 'Learn']] : [])];
   el.innerHTML = `<div class="page-head row between"><div class="row" style="gap:6px"><h1>Food</h1><button class="icon-btn" id="fd-shop" aria-label="Shopping list">${icon('list')}</button></div>
       <div class="seg fd-viewseg">${segs.map(([k, l]) => `<button data-v="${k}" class="${v === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
     <div id="fd-body"></div>`;
   $$('.fd-viewseg button', el).forEach((b) => { b.onclick = () => { local.set('fd-view', b.dataset.v); render(el); }; });
   $('#fd-shop', el).onclick = openShopping;
   const body = $('#fd-body', el);
-  if (v === 'recipes') renderBook(body); else if (v === 'library') renderLibrary(body); else if (v === 'learn') renderLearn(body); else renderDiary(body);
+  if (v === 'recipes') renderLibrary(body); else if (v === 'learn') renderLearn(body); else renderDiary(body);
 }
 
 function dayTitle(d) {
@@ -127,8 +128,15 @@ function mealCard(m, list) {
 function amountTxt(e) {
   if (e.source?.type === 'recipe' || e.source?.type === 'library') return e.servings ? `${n1(e.servings)} serving${e.servings === 1 ? '' : 's'}` : `${n0(e.grams)} g`;
   if (e.source?.type === 'quick') return `Quick add · P ${n0(e.p)} · C ${n0(e.c)} · F ${n0(e.f)}`;
-  if (e.unit && e.unit !== 'g' && e.qty) return `${n1(e.qty)} × ${e.unit} · ${n0(e.grams)} g`;
+  if (e.unit === 'ml' && e.qty) return `${n0(e.qty)} ml · ${n0(e.grams)} g`;
+  if (e.unit && e.unit !== 'g' && e.qty) return `${n1(e.qty)} ${unitWord(e.unit, e.qty)} · ${n0(e.grams)} g`;
   return `${n0(e.grams)} g`;
+}
+// "3 pieces", "1 slice", "2 tablespoons", "1.5 large pieces"
+const UNIT_WORDS = { piece: 'piece', small: 'small piece', medium: 'medium piece', large: 'large piece', tbsp: 'tablespoon', tsp: 'teaspoon', floz: 'fl oz' };
+function unitWord(unit, qty) {
+  const w = UNIT_WORDS[unit] || unit;
+  return qty === 1 || w.endsWith('oz') ? w : w.replace(/(\w+)$/, (x) => (/(ch|sh|s|x)$/.test(x) ? `${x}es` : `${x}s`));
 }
 
 // ---------- adding ----------
@@ -300,8 +308,15 @@ export function openTargets() {
   const prof = { sex: 'male', age: '', height: '', activity: 'moderate', goal: 'maintain', rate: 0.5, proteinPerKg: 1.8, ...(cfg.profile || {}) };
   prof.weight = lw ? lw.kg : (prof.weight ?? '');
   let tg = { ...(cfg.targets || {}) };
-  push((el, s) => {
-    const sug = suggestTargets({ ...prof, age: +prof.age, height: +prof.height, weight: parseNum(prof.weight) || 0 });
+  // Built once; typing in the profile only repaints the suggestion card, so the field you tap next is never replaced.
+  const suggestion = () => suggestTargets({ ...prof, age: +prof.age, height: +prof.height, weight: parseNum(prof.weight) || 0 });
+  const sugHtml = (sug) => (sug ? `
+        <div class="row between"><div><p class="tiny muted">Suggested for you</p><div class="fd-big">${n0(sug.kcal)} <span>kcal</span></div></div>
+          <div class="fd-pcf"><span class="fd-p">P ${sug.protein}</span><span class="fd-c">C ${sug.carbs}</span><span class="fd-f">F ${sug.fat}</span></div></div>
+        <p class="tiny muted" style="margin-top:8px">At rest you burn ≈ ${n0(sug.bmr)} kcal, with your activity ≈ ${n0(sug.tdee)} kcal${sug.delta ? `; ${sug.delta > 0 ? '+' : '−'}${n0(Math.abs(sug.delta))} kcal a day for your goal` : ''}.</p>
+        <button class="soft block" id="fd-use" style="margin-top:12px">Use these numbers</button>`
+    : '<p class="small muted">Fill in age, height and weight to get a suggestion.</p>');
+  push((el, scr) => {
     el.innerHTML = page({ title: 'Daily targets', right: '<button class="primary" id="fd-tsave">Save</button>', body: `
       <p class="small muted" style="margin:0 2px 14px">Your calorie need is estimated from your body (Mifflin-St Jeor formula) times how active you are. To lose weight you eat a bit less than that, to gain a bit more. Plenty of protein keeps your muscle, fat is about 27% of calories and the rest is carbs.</p>
       <div class="card form" id="fd-prof">
@@ -311,15 +326,10 @@ export function openTargets() {
           <label>Weight (kg)<input name="weight" inputmode="decimal" value="${esc(prof.weight)}"></label></div>
         <label>Activity<select name="activity">${ACTIVITY.map((a) => `<option value="${a.key}" ${a.key === prof.activity ? 'selected' : ''}>${esc(a.label)} — ${esc(a.hint)}</option>`).join('')}</select></label>
         <div class="seg" id="fd-goal">${['lose', 'maintain', 'gain'].map((g) => `<button data-v="${g}" class="${prof.goal === g ? 'on' : ''}">${g === 'lose' ? 'Lose weight' : g === 'gain' ? 'Gain' : 'Maintain'}</button>`).join('')}</div>
-        ${prof.goal !== 'maintain' ? `<label>Pace<select name="rate">${[0.25, 0.5, 0.75, 1].map((r) => `<option value="${r}" ${+prof.rate === r ? 'selected' : ''}>${r} kg per week${r === 0.5 ? ' (recommended)' : ''}</option>`).join('')}</select></label>` : ''}
+        <label id="fd-pace" ${prof.goal === 'maintain' ? 'hidden' : ''}>Pace<select name="rate">${[0.25, 0.5, 0.75, 1].map((r) => `<option value="${r}" ${+prof.rate === r ? 'selected' : ''}>${r} kg per week${r === 0.5 ? ' (recommended)' : ''}</option>`).join('')}</select></label>
         <label>Protein<select name="proteinPerKg">${[1.6, 1.8, 2, 2.2].map((r) => `<option value="${r}" ${+prof.proteinPerKg === r ? 'selected' : ''}>${r} g per kg of body weight</option>`).join('')}</select></label>
       </div>
-      <div class="card" style="margin-top:12px">${sug ? `
-        <div class="row between"><div><p class="tiny muted">Suggested for you</p><div class="fd-big">${n0(sug.kcal)} <span>kcal</span></div></div>
-          <div class="fd-pcf"><span class="fd-p">P ${sug.protein}</span><span class="fd-c">C ${sug.carbs}</span><span class="fd-f">F ${sug.fat}</span></div></div>
-        <p class="tiny muted" style="margin-top:8px">At rest you burn ≈ ${n0(sug.bmr)} kcal, with your activity ≈ ${n0(sug.tdee)} kcal${sug.delta ? `; ${sug.delta > 0 ? '+' : '−'}${n0(Math.abs(sug.delta))} kcal a day for your goal` : ''}.</p>
-        <button class="soft block" id="fd-use" style="margin-top:12px">Use these numbers</button>`
-        : '<p class="small muted">Fill in age, height and weight to get a suggestion.</p>'}</div>
+      <div class="card" style="margin-top:12px" id="fd-sug"></div>
       <h3 class="section-title">Your targets (you can change any number)</h3>
       <div class="card form" id="fd-tg">
         <div class="form-row"><label>Calories (kcal)<input name="kcal" inputmode="numeric" value="${esc(tg.kcal ?? '')}"></label>
@@ -331,18 +341,30 @@ export function openTargets() {
     const tgSum = () => {
       const v = (n) => parseNum($(`#fd-tg [name=${n}]`, el).value) || 0;
       const e = v('p') * 4 + v('c') * 4 + v('f') * 9;
-      $('#fd-tgsum', el).textContent = e ? `Protein, carbs and fat add up to ${n0(e)} kcal.` : '';
+      const k = v('kcal');
+      const off = k && e && Math.abs(e - k) > k * 0.05;
+      $('#fd-tgsum', el).textContent = e ? `Protein, carbs and fat add up to ${n0(e)} kcal${off ? ` - ${n0(Math.abs(e - k))} kcal ${e > k ? 'more' : 'less'} than your calorie target. Change carbs or fat to match.` : '.'}` : '';
     };
+    const setTg = (v) => { ['kcal', 'p', 'c', 'f'].forEach((k) => { $(`#fd-tg [name=${k}]`, el).value = v[k] ?? ''; }); readTg(); tgSum(); };
     const readTg = () => { ['kcal', 'p', 'c', 'f'].forEach((k) => { tg[k] = parseNum($(`#fd-tg [name=${k}]`, el).value); }); };
+    const paintSug = () => {
+      const sug = suggestion();
+      $('#fd-sug', el).innerHTML = sugHtml(sug);
+      $('#fd-use', el)?.addEventListener('click', () => setTg({ kcal: sug.kcal, p: sug.protein, c: sug.carbs, f: sug.fat }));
+    };
     $$('#fd-tg input', el).forEach((i) => { i.oninput = () => { readTg(); tgSum(); }; });
+    $$('#fd-prof input', el).forEach((i) => { i.oninput = () => { prof[i.name] = i.value; paintSug(); }; });
+    $$('#fd-prof select', el).forEach((i) => { i.onchange = () => { prof[i.name] = i.value; paintSug(); }; });
+    const segPick = (id, key) => $$(`#${id} button`, el).forEach((b) => { b.onclick = () => {
+      prof[key] = b.dataset.v;
+      $$(`#${id} button`, el).forEach((x) => x.classList.toggle('on', x === b));
+      $('#fd-pace', el).hidden = prof.goal === 'maintain';
+      paintSug();
+    }; });
+    segPick('fd-sex', 'sex');
+    segPick('fd-goal', 'goal');
+    paintSug();
     tgSum();
-    const rerender = () => { readTg(); s.render(); };
-    $$('#fd-prof input, #fd-prof select', el).forEach((i) => {
-      i.onchange = () => { prof[i.name] = i.value; rerender(); };
-    });
-    $$('#fd-sex button', el).forEach((b) => { b.onclick = () => { prof.sex = b.dataset.v; rerender(); }; });
-    $$('#fd-goal button', el).forEach((b) => { b.onclick = () => { prof.goal = b.dataset.v; rerender(); }; });
-    $('#fd-use', el)?.addEventListener('click', () => { tg = { kcal: sug.kcal, p: sug.protein, c: sug.carbs, f: sug.fat }; s.render(); });
     $('#fd-tsave', el).onclick = async () => {
       readTg();
       if (!(tg.kcal > 0)) { toast('Set at least a calorie target'); return; }
@@ -353,7 +375,7 @@ export function openTargets() {
       const w = parseNum(prof.weight);
       if (w > 20 && w < 400 && (!lw || Math.abs(lw.kg - w) > 0.01)) await logWeight(w);
       toast('Targets saved');
-      s.close();
+      scr.close();
     };
   });
 }

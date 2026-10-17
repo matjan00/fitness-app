@@ -5,7 +5,7 @@ import * as store from './store.js';
 import { push, page, sheet, confirmSheet, chooseSheet } from './nav.js';
 import { SUPABASE_URL, SUPABASE_KEY } from './config.js';
 import { parseIngredient, splitRecipeText, extractLinks, shortTitle, UNIT_LABEL } from './food-parse.js';
-import { bestMatch, toGrams, search as searchFoods } from './food-db.js';
+import { bestMatchFor, toGrams, search as searchFoods } from './food-db.js';
 import { recipeTotals, perServing, macrosFor, ingredientStatus, sumEntries } from './food-calc.js';
 import { scaleIngredients, factorForKcal, clampFactor, factorLabel, QUICK_FACTORS } from './food-scale.js';
 import { CATEGORIES, suggestCategories, catLabel } from './food-cats.js';
@@ -16,6 +16,7 @@ import { checkCardHtml, ingListHtml, bindEditing, foodsCached, metaChipsHtml, bi
 import { ownView } from './food-estimate.js';
 import { checkRecipe } from './food-check.js';
 import { withTotals } from './food-copy.js';
+import { isFav, toggleFavRecipe, cookedOf, cookedSheet, forgetRecipe, stars } from './food-favs.js';
 
 const CAT_DIMS = ['meal', 'technique', 'main'];
 
@@ -62,8 +63,13 @@ function linesToIngredients(lines) {
 // but only into fields that are still empty; the user reviews the matches before saving. TikTok / YouTube captions
 // are not parsed automatically (unreliable) — the "paste text" helper below handles those via splitRecipeText.
 // Returns true when something was filled in.
-export async function fillFromSite(r, ld) {
-  if (!ld) return false;
+export async function fillFromSite(r, ld, text = '') {
+  if (!ld) {
+    // No recipe data on the page (e.g. kwestiasmaku.com): try the page text, like the "paste text" helper.
+    const p = text ? splitRecipeText(text) : null;
+    if (!p || p.ingredients.length < 3) return false;
+    ld = { ingredients: p.ingredients, steps: p.steps, servings: p.servings || null };
+  }
   let filled = false;
   if (!r.ingredients.length && ld.ingredients?.length) {
     r.ingredients = await matchAll(linesToIngredients(ld.ingredients));
@@ -71,15 +77,14 @@ export async function fillFromSite(r, ld) {
   }
   if (!r.steps.length && ld.steps?.length) { r.steps = [...ld.steps]; filled = true; }
   if (filled) {
-    if (ld.servings) r.servings = ld.servings;
+    if (ld.servings && !r._servTyped) r.servings = ld.servings;
     if (!r.prepMin && !r.cookMin) {
       r.prepMin = ld.prepMin || (ld.totalMin && !ld.cookMin ? ld.totalMin : null);
       r.cookMin = ld.cookMin || null;
     }
     if (ld.nutrition?.kcal) r.siteNutrition = { ...ld.nutrition };
     resuggest(r);
-    const n = r.ingredients.filter((i) => ingredientStatus(i) === 'nofood' || ingredientStatus(i) === 'nograms').length;
-    r.notice = `Filled in from the website. Check the ingredient matches${n ? ` (${n} not counted yet)` : ''} and compare with the site's numbers before saving.`;
+    r.notice = 'Filled in from the website. Check the ingredient matches and amounts (orange rows) and compare with the site\'s numbers before saving.';
   }
   return filled;
 }
@@ -94,7 +99,7 @@ function matchOne(index, ing) {
   if (ing.head) { ing.food = null; ing.grams = 0; return; }
   const mem = remembered(ing.name);
   if (mem) { ing.food = mem; ing.conf = 'user'; } else {
-    const m = bestMatch(index, ing.name);
+    const m = bestMatchFor(index, ing);
     ing.food = m ? snap(m.food) : null;
     ing.conf = m ? m.conf : null;
   }
@@ -194,6 +199,11 @@ export function editRecipe(draft, opts = {}) {
   if (id) for (const dim of CAT_DIMS) if (!r.catsConfirmed[dim]) r.catsConfirmed[dim] = [...(r.cats[dim] || [])];
   let showText = false;
   let pendingFood = null; // a food picked from the ingredient-suggestion dropdown, for the next Add
+  let pendingName = ''; // the ingredient name typed when that food was picked (typing an amount in front keeps the pick)
+  let saving = false;
+  let saved = false;
+  const snapshot = () => JSON.stringify([r.title, r.servings, r.prepMin, r.cookMin, r.cookedGrams, r.ingredients.map((i) => [i.raw, i.grams, i.food?.id]), r.steps, r.notes, r.image ? 1 : 0]);
+  const initial = snapshot();
   push((el, s) => {
     const t = recipeTotals(r.ingredients);
     const ps = perServing(t, r.servings);
@@ -202,7 +212,8 @@ export function editRecipe(draft, opts = {}) {
         <label>Recipe link (optional)<input id="fd-link" type="url" inputmode="url" value="${esc(r.source?.url || '')}" placeholder="https://tiktok.com/… or a recipe site" autocomplete="off"></label>
       </div>
       ${r._linkBusy ? '<p class="tiny muted"><span class="spinner fd-spin"></span> Fetching the recipe…</p>' : ''}
-      ${r._linkErr && !r._linkBusy ? '<p class="tiny muted">Couldn’t get the photo — add your own.</p>' : ''}
+      ${r._linkErr && !r._linkBusy ? `<p class="small fd-warntext">${icon('info')} ${esc(typeof r._linkErr === 'string' ? r._linkErr : 'Couldn’t fetch that link.')}</p>` : ''}
+      ${r._imgErr && !r._linkBusy && !r.image ? '<p class="tiny muted">Couldn’t get the photo — add your own.</p>' : ''}
       <div class="fd-edit-hero" style="margin-top:10px">${img(r.image, 'fd-hero-img')}
         ${r.image ? '<button class="icon-btn fd-img-x" id="fd-noimg" aria-label="Remove photo">' + icon('close') + '</button>' : ''}</div>
       <div class="row" style="gap:8px;margin-top:8px">
@@ -215,6 +226,7 @@ export function editRecipe(draft, opts = {}) {
         <div class="fd-3"><label>Servings<input id="fd-serv" inputmode="numeric" value="${esc(r.servings)}"></label>
         <label>Prep (min)<input id="fd-prep" inputmode="numeric" value="${esc(r.prepMin ?? '')}"></label>
         <label>Cook (min)<input id="fd-cook" inputmode="numeric" value="${esc(r.cookMin ?? '')}"></label></div>
+        <label>Cooked weight of the whole pot (g, optional)<input id="fd-cookedg" inputmode="numeric" value="${esc(r.cookedGrams ?? '')}" placeholder="Weigh it after cooking"></label>
       </div>
       <div class="card fd-totals" id="fd-tot" style="margin-top:14px">${totalsHtml(t, ps, r)}</div>
 
@@ -222,6 +234,7 @@ export function editRecipe(draft, opts = {}) {
       <div class="card fd-ings">${r.ingredients.length ? r.ingredients.map((ing, i) => ingRow(ing, i)).join('') : '<p class="small muted">No ingredients yet.</p>'}
         <div class="fd-addline" style="position:relative"><input id="fd-newline" placeholder="Add: e.g. 200 g ryżu" autocomplete="off"><button class="icon-btn" id="fd-addbtn" aria-label="Add">${icon('plus')}</button>
           <div id="fd-sugg" class="card fd-suggest" style="display:none"></div></div>
+        <p class="tiny fd-p" id="fd-picked" style="margin:6px 4px 0" hidden></p>
       </div>
       <p class="tiny muted" style="margin:8px 4px 0">Tap a food to change the match — your choice is remembered for future recipes.</p>
       <button class="link small" id="fd-pastehelp" style="margin:6px 4px 0;text-align:left">Paste recipe text to fill in</button>
@@ -246,7 +259,7 @@ export function editRecipe(draft, opts = {}) {
     };
     async function tryFetchLink(url) {
       r._linkFetched = url;
-      r._linkBusy = true; r._linkErr = false;
+      r._linkBusy = true; r._linkErr = false; r._imgErr = false;
       s.render();
       try {
         const j = await fetchLink(url);
@@ -254,14 +267,16 @@ export function editRecipe(draft, opts = {}) {
         const t2 = shortTitle(rawTitle) || rawTitle || (j.author ? `Recipe by ${j.author}` : '');
         if (t2 && !r.title.trim()) r.title = t2;
         r.source = { type: j.source || 'link', url: j.url || url, author: j.author || null };
-        await fillFromSite(r, j.jsonld);
+        const ld = j.jsonld?.ingredients?.length ? j.jsonld : null;
+        const filled = await fillFromSite(r, ld, j.source === 'web' && !ld ? j.text : '');
+        if (!filled && j.source === 'web' && !r.ingredients.length) r.notice = 'No recipe found on that page - only the title and photo were filled in. Use "Paste recipe text to fill in" below for the rest.';
         const imgUrl = j.image || j.jsonld?.image || null;
-        if (imgUrl) {
+        if (imgUrl && !r.image) {
           const data = await compressRemote(imgUrl);
-          if (data) r.image = data; else r._linkErr = true;
+          if (data) r.image = data; else r._imgErr = true;
         }
-      } catch {
-        r._linkErr = true;
+      } catch (e) {
+        r._linkErr = e?.message || true;
       } finally {
         r._linkBusy = false;
         s.render();
@@ -299,7 +314,8 @@ export function editRecipe(draft, opts = {}) {
     // Re-suggest tags on blur — patches just the category chips in place so it never steals focus
     // mid-click the way a full re-render would (e.g. tapping straight from Title into the next field).
     $('#fd-title', el).onblur = () => { resuggest(r); refreshCats(); };
-    $('#fd-serv', el).oninput = (e) => { r.servings = Math.max(1, parseNum(e.target.value) || 1); refreshTotals(); };
+    $('#fd-serv', el).oninput = (e) => { r.servings = Math.max(1, parseNum(e.target.value) || 1); r._servTyped = true; refreshTotals(); };
+    $('#fd-cookedg', el).oninput = (e) => { const g = parseNum(e.target.value); r.cookedGrams = g > 0 ? g : null; refreshTotals(); };
     $('#fd-prep', el).oninput = (e) => { r.prepMin = parseNum(e.target.value); };
     $('#fd-cook', el).oninput = (e) => { r.cookMin = parseNum(e.target.value); };
     $('#fd-steps', el).oninput = (e) => { r.steps = e.target.value.split('\n').map((x) => x.trim()).filter(Boolean); };
@@ -311,6 +327,7 @@ export function editRecipe(draft, opts = {}) {
       if (!text || !text.trim()) return;
       const p = splitRecipeText(text);
       if (!r.title.trim() && p.title) r.title = p.title;
+      if (p.servings && !r._servTyped) r.servings = p.servings;
       const newIngs = linesToIngredients(p.ingredients);
       await matchAll(newIngs);
       r.ingredients.push(...newIngs);
@@ -341,14 +358,18 @@ export function editRecipe(draft, opts = {}) {
       suggBox.innerHTML = list.map((f, i) => `<button type="button" class="list-item" data-si="${i}"><div class="grow"><div class="ellipsis"><b>${esc(f.src === 'db' ? f.en : f.name)}</b></div><div class="sub ellipsis">${esc(f.src === 'db' ? (f.pl || '') : (f.brand || (f.src === 'custom' ? 'My food' : '')))}</div></div></button>`).join('');
       $$('[data-si]', suggBox).forEach((b) => { b.onclick = () => {
         pendingFood = list[+b.dataset.si];
+        pendingName = (parseIngredient(newlineInput.value).name || newlineInput.value).trim().toLowerCase();
         renderSugg([]);
+        const pk = $('#fd-picked', el);
+        if (pk) { pk.hidden = false; pk.textContent = `Will use: ${pendingFood.src === 'db' ? pendingFood.en : pendingFood.name}`; }
         $('#fd-newline', el)?.focus();
       }; });
     };
     let suggTimer;
     const newlineInput = $('#fd-newline', el);
     newlineInput.oninput = () => {
-      pendingFood = null;
+      const typedName = (parseIngredient(newlineInput.value).name || newlineInput.value).trim().toLowerCase();
+      if (pendingFood && !(typedName && (typedName.includes(pendingName) || pendingName.includes(typedName)))) { pendingFood = null; const pk = $('#fd-picked', el); if (pk) pk.hidden = true; }
       clearTimeout(suggTimer);
       const val = newlineInput.value;
       suggTimer = setTimeout(async () => {
@@ -370,6 +391,8 @@ export function editRecipe(draft, opts = {}) {
       const row = inp.closest('.fd-ing');
       row.querySelector('.fd-ing-k').textContent = ing.food && ing.grams != null ? `${n0(macrosFor(ing.food, ing.grams).kcal)} kcal` : '';
       row.classList.toggle('warn', ingredientStatus(ing) === 'nofood' || ingredientStatus(ing) === 'nograms');
+      const hint = row.querySelector('.row.between.tiny > span:first-child');
+      if (hint && ing.grams != null) { hint.textContent = ''; hint.className = 'muted'; }
       refreshTotals();
     }; });
     $$('[data-food]', el).forEach((b) => { b.onclick = async () => {
@@ -426,24 +449,29 @@ export function editRecipe(draft, opts = {}) {
     $('#fd-addbtn', el).onclick = addLine;
     $('#fd-newline', el).onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); addLine(); } };
     $('#fd-save', el).onclick = async () => {
+      if (saving) return;
       if (!r.title.trim()) { toast('Give the recipe a name'); $('#fd-title', el).focus(); return; }
+      saving = true;
       const t2 = recipeTotals(r.ingredients);
       const item = {
         ...(id ? { id } : {}), title: r.title.trim(), image: r.image || null, source: r.source || null, servings: r.servings || 1,
-        prepMin: r.prepMin || null, cookMin: r.cookMin || null,
+        prepMin: r.prepMin || null, cookMin: r.cookMin || null, cookedGrams: r.cookedGrams || null,
         ingredients: r.ingredients.map(({ raw, qty, unit, name, note, size, toTaste, head, hint, food, conf, grams, guess, checkOk }) =>
           ({ raw, qty, unit, name, note, size, toTaste, head, hint, food, conf, grams, guess, checkOk })),
         steps: r.steps, notes: r.notes || '', cats: r.cats, text: (r.text || '').slice(0, 5000), siteNutrition: r.siteNutrition || null,
         totals: { kcal: t2.kcal, p: t2.p, c: t2.c, f: t2.f, grams: t2.grams, missing: t2.missing },
         created: draft.created || new Date().toISOString(),
         ...(r.from_library ? { from_library: r.from_library } : {}),
+        ...(r.imported_from ? { imported_from: r.imported_from } : {}),
         ...(r.main_ingredient !== undefined ? { main_ingredient: r.main_ingredient } : {}),
         ...(r.est ? { est: { ...r.est, ...((r.prepMin || null) !== (draft.prepMin || null) || (r.cookMin || null) !== (draft.cookMin || null) ? { time: false } : {}), ...(r.servings !== draft.servings ? { servings: false } : {}) } } : {}),
       };
-      const saved = await store.put('recipe', item);
-      toast(id ? 'Recipe saved' : 'Recipe added to your book');
+      const rec = await store.put('recipe', item);
+      saved = true;
+      local.set('recipe-draft', null);
+      toast(id ? 'Recipe saved' : 'Recipe added to Recipes');
       s.close();
-      if (!id) setTimeout(() => openRecipe(saved.id), 260);
+      if (!id) setTimeout(() => openRecipe(rec.id), 260);
     };
     $('#fd-delete', el)?.addEventListener('click', async () => {
       if (await confirmSheet('Delete this recipe?', { ok: 'Delete', danger: true })) {
@@ -457,14 +485,23 @@ export function editRecipe(draft, opts = {}) {
       autoFetchLink = false;
       setTimeout(() => tryFetchLink(r.source.url), 0);
     }
-  });
+  }, { onClose: () => {
+    // Closed without saving (back button, Escape, swipe): keep the draft and offer to bring it back.
+    if (saved || snapshot() === initial || !(r.title.trim() || r.ingredients.length || r.steps.length)) return;
+    const { _linkBusy, _linkErr, _imgErr, notice, ...keep } = r;
+    local.set('recipe-draft', { draft: keep, id });
+    toast('Recipe not saved', 8000, { label: 'Restore', run: () => editRecipe(keep, { id }) });
+  } });
 }
 
+// A draft closed without saving (see editRecipe): { draft, id } or null.
+export const unsavedDraft = () => local.get('recipe-draft', null);
+
 function totalsHtml(t, ps, r) {
-  const site = r.siteNutrition?.kcal ? `<p class="tiny muted" style="margin-top:6px">The website says ${n0(r.siteNutrition.kcal)} kcal${r.siteNutrition.protein ? `, ${n0(r.siteNutrition.protein)} g protein` : ''} per serving.</p>` : '';
+  const site = siteLine({ ...r, totals: t });
   return `<div class="row between"><div><p class="tiny muted">Per serving</p><div class="fd-big">${n0(ps.kcal)} <span>kcal</span></div></div>
     <div class="fd-pcf"><span class="fd-p">P ${n0(ps.p)}</span><span class="fd-c">C ${n0(ps.c)}</span><span class="fd-f">F ${n0(ps.f)}</span></div></div>
-    <p class="tiny muted" style="margin-top:6px">Whole recipe: ${n0(t.kcal)} kcal · ${n0(t.grams)} g · ${n0(ps.grams)} g per serving</p>
+    <p class="tiny muted" style="margin-top:6px">Whole recipe: ${n0(t.kcal)} kcal · ${n0(r.cookedGrams || t.grams)} g${r.cookedGrams ? ' cooked' : ''} · ${n0(r.cookedGrams ? r.cookedGrams / Math.max(1, r.servings || 1) : ps.grams)} g per serving</p>
     ${t.missing ? `<p class="fd-warn small">${icon('info')} ${t.missing} ingredient${t.missing > 1 ? 's are' : ' is'} not counted — match ${t.missing > 1 ? 'them' : 'it'} or set grams.</p>` : ''}${site}`;
 }
 
@@ -507,7 +544,29 @@ function promptLine(value) {
 }
 
 // ---------- detail ----------
-export const recipePer = (rec) => perServing(rec.totals || recipeTotals(rec.ingredients || []), rec.servings);
+// Per serving. With a cooked weight of the whole pot, a serving weighs cookedGrams / servings (so logging by grams of
+// cooked food is right); otherwise it is the sum of the raw ingredient weights.
+export const recipePer = (rec) => {
+  const ps = perServing(rec.totals || recipeTotals(rec.ingredients || []), rec.servings);
+  return rec.cookedGrams > 0 ? { ...ps, grams: rec.cookedGrams / Math.max(1, Number(rec.servings) || 1) } : ps;
+};
+
+// The website's per-serving numbers next to ours: { kcal, p, diff } (diff = our kcal / site kcal - 1), or null.
+export function siteCompare(rec) {
+  const sn = rec.siteNutrition;
+  if (!(sn?.kcal > 0)) return null;
+  const ours = recipePer(rec);
+  return { kcal: sn.kcal, p: sn.protein ?? null, diff: ours.kcal > 0 ? ours.kcal / sn.kcal - 1 : null };
+}
+function siteLine(rec) {
+  const c = siteCompare(rec);
+  if (!c) return '';
+  const off = c.diff != null && Math.abs(c.diff) > 0.15;
+  const what = `The website says ${n0(c.kcal)} kcal${c.p != null ? `, ${n0(c.p)} g protein` : ''} per serving`;
+  return off
+    ? `<p class="fd-warn small" style="margin-top:6px">${icon('info')} ${what} - ours is ${n0(Math.abs(c.diff) * 100)}% ${c.diff > 0 ? 'higher' : 'lower'}. Check the amounts (piece weights, raw vs cooked).</p>`
+    : `<p class="tiny muted" style="margin-top:6px">${what}.</p>`;
+}
 
 // Delete an own recipe (or a "Your version" copy = back to the library original), after a confirm sheet.
 export async function deleteRecipeFlow(id, done) {
@@ -515,7 +574,7 @@ export async function deleteRecipeFlow(id, done) {
   if (!rec) return;
   const copy = !!rec.from_library;
   if (await confirmSheet(copy ? `Delete your version of "${rec.title}" and go back to the original?` : `Delete "${rec.title}"? This cannot be undone.`, { ok: copy ? 'Delete my version' : 'Delete recipe', danger: true })) {
-    await store.remove(id); toast(copy ? 'Back to the original' : 'Recipe deleted'); done?.();
+    await store.remove(id); await forgetRecipe(id); toast(copy ? 'Back to the original' : 'Recipe deleted'); done?.();
   }
 }
 
@@ -547,7 +606,9 @@ export function openRecipe(id) {
     const view = ownView(rec, recipePer, foods || {});
     const src = rec.source?.url ? (() => { try { return new URL(rec.source.url).hostname.replace(/^www\./, ''); } catch { return 'source'; } })() : null;
     const cats = Object.entries(rec.cats || {}).flatMap(([dim, keys]) => (keys || []).map((k) => catLabel(dim, k)));
-    el.innerHTML = page({ title: rec.title, right: `<button class="icon-btn" id="fd-edit" aria-label="Edit">${icon('edit')}</button><button class="icon-btn" id="fd-del" aria-label="Delete recipe">${icon('trash')}</button>`, body: `
+    const fav = isFav(id);
+    const cooked = cookedOf(id);
+    el.innerHTML = page({ title: rec.title, right: `<button class="icon-btn ${fav ? 'on' : ''}" id="fd-fav" aria-label="Favourite" aria-pressed="${fav}">${icon('heart')}</button><button class="icon-btn" id="fd-edit" aria-label="Edit">${icon('edit')}</button><button class="icon-btn" id="fd-del" aria-label="Delete recipe">${icon('trash')}</button>`, body: `
       ${img(rec.image, 'fd-hero-img')}
       <h2 class="fd-rtitle">${esc(rec.title)}</h2>
       ${rec.from_library ? `<div class="row between" style="margin:4px 0 8px"><span class="fd-badge mine">Your version of a library recipe</span><button class="link small" id="fd-reset">Reset to original</button></div>` : ''}
@@ -558,7 +619,9 @@ export function openRecipe(id) {
       <div class="card fd-totals" style="margin-top:14px"><div class="row between"><div><p class="tiny muted" id="fd-ps-l">Per serving${ps.grams ? ` (${n0(ps.grams)} g)` : ''}${scale !== 1 ? ` · ${factorLabel(scale)}` : ''}</p><div class="fd-big"><b id="fd-ps-k">${n0(ps.kcal)}</b> <span>kcal</span></div></div>
         <div class="fd-pcf" id="fd-ps-m"><span class="fd-p">P ${n0(ps.p)} g</span><span class="fd-c">C ${n0(ps.c)} g</span><span class="fd-f">F ${n0(ps.f)} g</span></div></div>
         ${t.missing ? `<p class="fd-warn small">${icon('info')} ${t.missing} ingredient${t.missing > 1 ? 's' : ''} not counted — tap edit to fix.</p>` : ''}
-        <button class="primary block" id="fd-log" style="margin-top:14px">${icon('plus')} Log to diary</button></div>
+        ${scale === 1 ? siteLine(rec) : ''}
+        <button class="primary block" id="fd-log" style="margin-top:14px">${icon('plus')} Log to diary</button>
+        <button class="ghost block" id="fd-cooked" style="margin-top:8px">${cooked ? `Cooked ${cooked.n}× · ${stars(cooked.rating)} · rate again` : 'I cooked it'}</button></div>
       <div class="card fd-scale">
         <div class="row between"><b>Scale</b><span class="tiny muted" id="fd-sc-note"></span></div>
         <div class="chips" id="fd-sc-chips" style="margin-top:8px">${QUICK_FACTORS.map((q) => `<button class="chip" data-q="${q}">×${q}</button>`).join('')}
@@ -575,6 +638,8 @@ export function openRecipe(id) {
       ${rec.steps?.length ? `<h3 class="section-title">Steps</h3><ol class="fd-steps">${rec.steps.map((st) => /:$/.test(st) && st.length < 50 ? `<li class="fd-step-head">${esc(st)}</li>` : `<li>${esc(st)}</li>`).join('')}</ol>` : ''}
       ${rec.notes ? `<h3 class="section-title">Notes</h3><div class="card"><p style="white-space:pre-wrap">${esc(rec.notes)}</p></div>` : ''}` });
     $('#fd-edit', el).onclick = () => editRecipe(rec, { id });
+    $('#fd-fav', el).onclick = async () => { const on = await toggleFavRecipe(id); toast(on ? 'Added to favourites' : 'Removed from favourites'); s.render(); };
+    $('#fd-cooked', el).onclick = () => cookedSheet(id, () => s.render());
     $('#fd-log', el).onclick = () => logRecipe(scale === 1 ? rec : { ...scaledRecipe(rec, scale), title: `${rec.title} ${factorLabel(scale)}`, scale });
     // Scale: update numbers and ingredient rows in place so typing in the boxes keeps focus.
     const paint = () => {
@@ -615,7 +680,7 @@ export function openRecipe(id) {
     $('#fd-del', el).onclick = async () => {
       const copy = !!rec.from_library;
       if (await confirmSheet(copy ? 'Delete your version and go back to the original library recipe?' : `Delete "${rec.title}"? This cannot be undone.`, { ok: copy ? 'Delete my version' : 'Delete recipe', danger: true })) {
-        await store.remove(id); toast(copy ? 'Back to the original' : 'Recipe deleted'); s.close();
+        await store.remove(id); await forgetRecipe(id); toast(copy ? 'Back to the original' : 'Recipe deleted'); s.close();
       }
     };
     bindMeta(el, { current: () => ownView(store.get(id), recipePer, foods || {}), commit: async (fn) => { await store.put('recipe', withTotals(fn(store.get(id)))); s.render(); } });
@@ -657,7 +722,8 @@ export function logRecipe(rec, { day = today(), meal = null, entry = null } = {}
       };
       $('[data-a=ok]', el).onclick = async () => {
         const f = k();
-        if (!(f > 0)) return;
+        if (!(f > 0) || el.dataset.saving) return;
+        el.dataset.saving = '1';
         const a = parseNum($('#fd-amt', el).value);
         await store.put('meal', {
           ...(entry ? { id: entry.id, t: entry.t } : { t: new Date().toISOString() }), day: entry?.day || day, meal: m, label: rec.title,
@@ -673,61 +739,6 @@ export function logRecipe(rec, { day = today(), meal = null, entry = null } = {}
       upd();
     }, { sheet: true, onClose: () => resolve() });
   });
-}
-
-// ---------- recipe book (inside the Food tab) ----------
-export function renderBook(box) {
-  const f = local.get('fd-filter', { q: '', meal: null, technique: null, main: null });
-  const all = store.all('recipe').sort((a, b) => (b.created || '').localeCompare(a.created || ''));
-  const qf = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ł/g, 'l');
-  const list = all.filter((r) => (!f.q || qf(`${r.title} ${(r.ingredients || []).map((i) => i.name).join(' ')}`).includes(qf(f.q)))
-    && ['meal', 'technique', 'main'].every((d) => !f[d] || r.cats?.[d]?.includes(f[d])));
-  // Only show filter chips that some recipe uses.
-  const used = (dim) => CATEGORIES[dim].items.filter((it) => all.some((r) => r.cats?.[dim]?.includes(it.key)));
-  const chips = (dim) => used(dim).map((it) => `<button class="chip ${f[dim] === it.key ? 'on' : ''}" data-fdim="${dim}" data-key="${it.key}">${esc(it.label)}</button>`).join('');
-  const rows = ['meal', 'main', 'technique'].map(chips).filter(Boolean);
-  const chipBar = () => {
-    // One scrolling row when there are few filters, one row per dimension when there are many.
-    const n = ['meal', 'main', 'technique'].reduce((a, d) => a + used(d).length, 0);
-    return n <= 6 ? `<div class="chips">${rows.join('<span class="fd-chipsep"></span>')}</div>` : rows.map((r) => `<div class="chips">${r}</div>`).join('');
-  };
-  box.innerHTML = `
-    <div class="row" style="gap:8px"><div class="search grow">${icon('search')}<input id="fd-rq" type="search" placeholder="Search recipes or ingredients" value="${esc(f.q)}"></div>
-      <button class="primary" id="fd-import" style="padding:12px 14px">${icon('plus')} Add</button></div>
-    ${all.length && rows.length ? `<div class="fd-filters">${chipBar()}</div>` : ''}
-    ${!all.length ? `<div class="card empty" style="margin-top:14px">${icon('food')}<h2>Your recipe book is empty</h2>
-      <p class="small" style="margin:6px 0 14px">Type it in, with smart help matching ingredients and macros as you go.</p>
-      <button class="primary" id="fd-import2">Add your first recipe</button></div>`
-      : list.length ? `<div class="fd-grid">${list.map((r) => { const ps = recipePer(r); return `<button class="fd-rcard" data-rid="${r.id}">${img(r.image)}
-        <div class="fd-rcard-body"><b class="fd-2l">${esc(r.title)}</b>${r.from_library ? '<span class="fd-badge mine" style="align-self:flex-start">Your version</span>' : ''}<span class="small muted">${n0(ps.kcal)} kcal · <span class="fd-p">${n0(ps.p)} g P</span></span></div></button>`; }).join('')}</div>`
-      : '<div class="card empty" style="margin-top:14px">No recipes match these filters.</div>'}`;
-  const inp = $('#fd-rq', box);
-  let timer;
-  inp.oninput = () => {
-    clearTimeout(timer);
-    timer = setTimeout(() => {
-      local.set('fd-filter', { ...f, q: inp.value });
-      const pos = inp.selectionStart;
-      renderBook(box);
-      const ni = $('#fd-rq', box); ni.focus(); try { ni.setSelectionRange(pos, pos); } catch { /* search inputs */ }
-    }, 200);
-  };
-  $$('[data-fdim]', box).forEach((b) => { b.onclick = () => {
-    const d = b.dataset.fdim;
-    local.set('fd-filter', { ...f, [d]: f[d] === b.dataset.key ? null : b.dataset.key });
-    renderBook(box);
-  }; });
-  $$('[data-rid]', box).forEach((b) => {
-    // long-press a recipe (or right-click) to delete it
-    let timer2 = null; let fired = false;
-    const cancel = () => { clearTimeout(timer2); };
-    b.addEventListener('pointerdown', () => { fired = false; timer2 = setTimeout(() => { fired = true; deleteRecipeFlow(b.dataset.rid, () => renderBook(box)); }, 600); });
-    ['pointerup', 'pointerleave', 'pointercancel', 'pointermove'].forEach((ev) => b.addEventListener(ev, cancel));
-    b.addEventListener('contextmenu', (e) => { e.preventDefault(); });
-    b.onclick = () => { if (fired) { fired = false; return; } openRecipe(b.dataset.rid); };
-  });
-  $('#fd-import', box).onclick = () => editRecipe(blankDraft());
-  $('#fd-import2', box)?.addEventListener('click', () => editRecipe(blankDraft()));
 }
 
 export { uid };
