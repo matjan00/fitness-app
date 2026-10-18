@@ -76,12 +76,13 @@ export function redFlags(day, src, cfg = {}, start = null) {
     flags.push({ key: 'weighin', text: 'No weigh-in for 3 days' });
   }
 
-  // weekly check-in skipped: the last check-in day (before today) has no check-in within 2 days of it
-  let ci = addDays(day, -1);
-  while (weekday(ci) !== +c.checkinDay) ci = addDays(ci, -1);
-  if (inPlan(ci) && daysBetween(c.startDate, ci) >= 6
-    && !(src.checkins || []).some((x) => x && x.day >= addDays(ci, -1) && x.day <= addDays(ci, 2))) {
-    flags.push({ key: 'checkin', text: 'Weekly check-in skipped' });
+  // weekly review skipped: the review day (the day after the check-in day) and the 2 days after it have passed
+  // with nothing done for that week (neither the Sunday check-in nor the Monday review).
+  let r = addDays(day, -3);
+  while (weekday(r) !== (+c.checkinDay + 1) % 7) r = addDays(r, -1);
+  if (inPlan(addDays(r, -1)) && daysBetween(c.startDate, r) >= 7
+    && !(src.checkins || []).some((x) => x && (x.forDay === r || x.forDay === addDays(r, -1) || (x.day >= addDays(r, -1) && x.day <= addDays(r, 2))))) {
+    flags.push({ key: 'checkin', text: 'Weekly review skipped' });
   }
 
   // trend weight behind the last finished week's target by more than 1 kg

@@ -230,7 +230,7 @@ Implement on top of the existing `fit` app. Keep the existing tech stack and sty
    - Swap exercise (e.g. Pull-Up → Lat Pulldown, Machine Chest Press → DB Flat Press) keeps the history separate
    - Runs: distance + time → auto pace, compared against the prescribed pace
 3. **Plan**: all 11(+2) weeks, the current week highlighted, the checkpoint target weights, the deload weeks marked
-4. **Weekly review** (opens on check-in day, can't be dismissed until completed)
+4. **Weekly check-in and review**, in two steps, never forced: measurements + photos on the check-in day morning (Sunday), then the review of the full Monday–Sunday week the day after (Monday, once Sunday's training and steps are in; due Monday–Wednesday, a red flag after that)
    - Measurements + 3 photo slots
    - Auto summary: trend change vs target, avg kcal/protein/steps/sleep vs targets, sessions done, lift changes, grade
    - Adjustment suggestion from the Part 1 rules → Accept / Ignore (choices logged)

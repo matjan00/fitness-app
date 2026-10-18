@@ -8,7 +8,7 @@ import { startWorkout } from './gym-workout.js';
 import { cutSettings, currentTargets, openCutSettings, openPlan, addCutRoutines, syncCutRoutines, startWeight, isSetUp } from './cut.js';
 import { PLAN, PROGRAM_NAME, EASY_PACE, weekNumber, daysToGoal, daysBetween, emaTrend, trendOn, targetWeight } from './cut-calc.js';
 import { redFlags, isLogged } from './cut-flags.js';
-import { reviewNeeded, openReview, dueCheckin, checkinFor } from './cut-review.js';
+import { openReview, dueCheckin, checkinFor, measurementsDue, openCheckin } from './cut-review.js';
 import { liftDayExtra, sessionFor, sessionDone, dayFacts, dayStatus, handStepsPatch, streak, weekStreak, minimumDaysInWeek, weekTraining, TRAIN_CHOICES, SESSION_LABEL } from './cut-day.js';
 
 const STATUS = { green: ['Green day', 'up'], yellow: ['Yellow day', 'gold'], red: ['Red day', 'down'], open: ['In progress', ''] };
@@ -124,13 +124,17 @@ export function logRun(kind = null) {
   }, { sheet: true });
 }
 
-// Weekly review button: due (check-in day and the 2 days after) or done (grade).
+// Check-in day (Sunday): a nudge for measurements + photos. Review day and the 2 days after (Mon–Wed): the weekly
+// review of the finished week, or "done · grade". Neither opens by itself.
 function reviewBtn() {
-  const ci = dueCheckin();
-  if (!ci || today() > addDays(ci, 2)) return '';
-  const done = checkinFor(ci);
-  return done ? `<button class="link small ct-revdone" id="ct-review">Weekly review done · grade ${esc(done.grade || '–')} ›</button>`
-    : `<button class="primary block" id="ct-review" style="margin-bottom:12px">${icon('flag')} Weekly review</button>`;
+  const m = measurementsDue();
+  const r = dueCheckin();
+  const due = r && today() <= addDays(r, 2);
+  const done = due && checkinFor(r);
+  const ci = m ? `<button class="${due && !done ? 'ghost' : 'soft'} block" id="ct-checkin" style="margin-bottom:8px">${icon('scale')} Check-in: measurements &amp; photos</button>` : '';
+  if (!due) return ci;
+  return ci + (done ? `<button class="link small ct-revdone" id="ct-review">Weekly review done · grade ${esc(done.grade || '–')} ›</button>`
+    : `<button class="primary block" id="ct-review" style="margin-bottom:12px">${icon('flag')} Weekly review of last week</button>`);
 }
 
 // ---------- day type: normal / minimum / travel ----------
@@ -313,6 +317,7 @@ function render(el) {
   $$('.ct-train button', el).forEach((b) => { b.onclick = () => saveDaily(day, { train: b.dataset.v }); });
   $('#ct-trip', el).onclick = planTravel;
   $('#ct-review', el)?.addEventListener('click', () => openReview());
+  $('#ct-checkin', el)?.addEventListener('click', () => openCheckin());
   $('#ct-yday', el).onclick = () => openDay(addDays(day, -1));
   $('#ct-logrun', el)?.addEventListener('click', () => logRun(st.session.kind));
   $('#ct-start', el)?.addEventListener('click', async () => {
@@ -354,7 +359,6 @@ export const homeCard = { order: 0, render };
 export function init() {
   setTimeout(() => {
     const c = cutSettings();
-    if (reviewNeeded()) { openReview(); return; }
     const y = addDays(today(), -1);
     if (!c.startDate || y < c.startDate || local.get('cut.askedYesterday') === today()) return;
     if (!isLogged(y, sources())) {

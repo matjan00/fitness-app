@@ -50,11 +50,14 @@ test('red flags: check-in skipped, behind the checkpoint, strength down', () => 
   const cfg = { startDate: '2026-10-12', checkinDay: 0 };
   const weights = days('2026-10-12', 9).map((d) => ({ day: d, kg: 73 }));
   const f = redFlags('2026-10-20', base({ weights }), cfg, 73).map((x) => x.key);
-  assert.ok(f.includes('checkin'));
+  assert.ok(!f.includes('checkin')); // Monday's review can still be done until Wednesday
+  const w12 = days('2026-10-12', 11).map((d) => ({ day: d, kg: 73 }));
+  assert.ok(redFlags('2026-10-22', base({ weights: w12 }), cfg, 73).some((x) => x.key === 'checkin')); // Thursday: skipped
+  assert.ok(!redFlags('2026-10-22', base({ weights: w12, checkins: [{ day: '2026-10-18', forDay: '2026-10-19' }] }), cfg, 73).some((x) => x.key === 'checkin'));
   assert.ok(!f.includes('behind')); // 73 vs 72.3 target: 0.7 kg behind
   assert.ok(redFlags('2026-10-20', base({ weights: weights.map((w) => ({ ...w, kg: 74 })) }), cfg, 74.5).every((x) => x.key !== 'behind'));
   assert.ok(redFlags('2026-10-20', base({ weights: weights.map((w) => ({ ...w, kg: 74 })) }), cfg, 73).some((x) => x.key === 'behind'));
-  assert.ok(!redFlags('2026-10-20', base({ weights, checkins: [{ day: '2026-10-18' }] }), cfg, 73).some((x) => x.key === 'checkin'));
+  assert.ok(!redFlags('2026-10-22', base({ weights, checkins: [{ day: '2026-10-18' }] }), cfg, 73).some((x) => x.key === 'checkin'));
   const S = (kg, ...r) => r.map((x) => ({ type: 'n', kg, reps: x }));
   const press = (day, kg) => W(day, 'Upper A', { exercises: [{ exercise_id: 'Leverage_Chest_Press', sets: S(kg, 8, 8) }] });
   const st = redFlags('2026-10-20', base({ weights, workouts: [press('2026-10-12', 60), press('2026-10-19', 52.5)] }), cfg, 73);
