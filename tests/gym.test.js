@@ -228,7 +228,7 @@ test('suggestNext: add weight at top of range, otherwise +1 rep', () => {
   assert.equal(suggestNext([S(60, 12), S(60, 12)], r, 5).kg, 65);
   const rep = suggestNext([S(60, 12), S(60, 10), S(60, 9)], r, 2.5);
   assert.equal(rep.kind, 'rep');
-  assert.equal(rep.text, '60 kg — aim for 12 reps on every set, then go up');
+  assert.equal(rep.text, '60 kg — 10 reps on your weakest set; 12 on every set, then go up');
   // warm-ups are ignored, lighter back-off sets don't block progress at the top weight
   assert.equal(suggestNext([S(20, 12, 'w'), S(60, 12), S(50, 8)], r, 2.5).kind, 'weight');
   assert.equal(suggestNext([], r), null);

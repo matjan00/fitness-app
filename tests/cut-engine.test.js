@@ -41,14 +41,23 @@ test('prescription: +1 rep on the weakest set at the same weight', () => {
   assert.equal(rx.rule, 'reps');
   assert.equal(rx.kg, 40);
   assert.deepEqual(rx.reps, [8, 8, 8]);
-  // plan has 4 sets, last time 3: pad with the last value
-  assert.deepEqual(prescribe([{ sets: S(40, 9, 8, 8) }], slotPress).reps, [9, 9, 9, 9]);
+  // plan has 4 sets, last time 3: pad with the last value, still only one set gets +1
+  assert.deepEqual(prescribe([{ sets: S(40, 9, 8, 8) }], slotPress).reps, [9, 9, 8, 8]);
+  // ties: only the first weakest set goes up
+  assert.deepEqual(prescribe([{ sets: S(45, 15, 14, 14) }], { reps: '12-15', sets: 3, kind: 'iso' }).reps, [15, 15, 14]);
+  // below the range: still +1 on the weakest, not a jump to the bottom of the range
+  const low = prescribe([{ sets: S(7.5, 10, 9, 7) }], slotIso);
+  assert.equal(low.rule, 'reps');
+  assert.equal(low.kg, 7.5);
+  assert.deepEqual(low.reps, [10, 9, 8]);
 });
 
-test('prescription: repeat, −5 %, −10 %', () => {
+test('prescription: −5 %, −10 %', () => {
   const rep = prescribe([{ sets: S(40, 8, 7) }, { sets: S(40, 7, 5) }], { reps: '6-10', sets: 2, kind: 'main' });
-  assert.equal(rep.rule, 'repeat');
-  assert.equal(rep.kg, 40);
+  assert.equal(rep.rule, 'reps');
+  assert.deepEqual(rep.reps, [7, 6]);
+  // below the range twice but improving: keep the weight
+  assert.equal(prescribe([{ sets: S(7.5, 10, 9, 7) }, { sets: S(7.5, 11, 10, 7) }], slotIso).rule, 'reps');
   const m5 = prescribe([{ sets: S(40, 7, 5) }, { sets: S(40, 7, 5) }], { reps: '6-10', sets: 2, kind: 'main' });
   assert.equal(m5.rule, 'minus5');
   assert.equal(m5.kg, 37.5);

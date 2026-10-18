@@ -65,8 +65,8 @@ export function setMark(target, actual) {
 
 // Next session from the history of this exercise (oldest first: [{ sets }]) and its plan slot.
 // Returns { kg, reps:[per set], rule, text } or null without history (week 1: find working weights at RPE 7–8).
-//   rules: 'up' add weight · 'reps' same weight, +1 rep on the weakest set(s) · 'repeat' a set was below the range
-//          'minus5' below the range 2 sessions in a row · 'minus10' no improvement for 3 sessions
+//   rules: 'up' every set hit the top of the range: add weight · 'reps' same weight, +1 rep on the weakest set
+//          'minus5' below the range 2 sessions in a row without improving · 'minus10' no improvement for 3 sessions
 export function prescribe(history = [], slot = null, { sets = null } = {}) {
   const h = history.map((x) => ({ ...x, w: work(x.sets) })).filter((x) => x.w.length);
   if (!h.length) return null;
@@ -87,20 +87,19 @@ export function prescribe(history = [], slot = null, { sets = null } = {}) {
   if (last3.length === 3 && last3.every((v) => v !== 'beat')) {
     return out(roundTo(kg * 0.9, step), pad([lo]), 'minus10', 'No improvement for 3 sessions: −10% and rebuild');
   }
-  if (h.length >= 2 && below(L) && below(h[h.length - 2].w)) {
+  // Below the range twice in a row and not getting better: the weight is too heavy.
+  if (h.length >= 2 && below(L) && below(h[h.length - 2].w) && verdicts[verdicts.length - 1] !== 'beat') {
     return out(roundTo(kg * 0.95, step), pad([lo]), 'minus5', 'Below the rep range 2 sessions in a row: −5%');
-  }
-  if (below(L)) {
-    return out(kg, pad(atTop.map((s) => s.reps)), 'repeat', `A set was below ${lo} reps: same weight, repeat`);
   }
   if (atTop.length >= Math.min(n, L.length) && atTop.every((s) => s.reps >= hi) && L.every((s) => s.reps >= hi)) {
     return out(Math.round((kg + step) * 100) / 100, pad([lo]), 'up', `All sets hit ${hi}: +${fmt(step)} kg, back to ${lo} reps`);
   }
-  // Same weight, +1 rep on the weakest set(s).
-  const reps = pad(atTop.map((s) => s.reps));
-  const min = Math.min(...reps);
-  const next = reps.map((r) => (r === min ? Math.min(hi, r + 1) : r));
-  return out(kg, next, 'reps', 'Same weight: +1 rep on your weakest set');
+  // Same weight, beat last time's reps by one on the weakest set (only one set, even when several tie).
+  const last = atTop.map((s) => s.reps);
+  const reps = Array.from({ length: n }, (_, i) => Math.min(hi, last[i] ?? last[last.length - 1]));
+  const weakest = reps.indexOf(Math.min(...reps));
+  reps[weakest] = Math.min(hi, reps[weakest] + 1);
+  return out(kg, reps, 'reps', `Same weight: +1 rep on your weakest set · ${hi} on every set → add weight`);
 }
 
 // Whole session: 'progressed' | 'held' | 'dropped' ('completed' in deload weeks).

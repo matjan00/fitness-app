@@ -447,7 +447,7 @@ export function suggestNext(sets, range = DEFAULT_RANGE, step = 2.5) {
     return { kind: 'weight', kg: next, reps: range2.lo, text: `Go up: ${fmtNum(next)} kg × ${range2.lo}`, why: `All sets hit ${range2.hi} reps — time to add weight` };
   }
   const reps = Math.min(range2.hi, minReps + 1);
-  return { kind: 'rep', kg, reps, text: `${fmtNum(kg)} kg — aim for ${range2.hi} reps on every set, then go up`, why: `Last time your weakest set was ${minReps}` };
+  return { kind: 'rep', kg, reps, text: `${fmtNum(kg)} kg — ${reps} reps on your weakest set; ${range2.hi} on every set, then go up`, why: `Last time your weakest set was ${minReps}` };
 }
 
 // Per-session "strength number" of a series row: est. 1RM for weights, reps / secs otherwise.
