@@ -259,3 +259,29 @@
   .rn-pr-row { grid-template-columns: 1.2fr 1fr 1fr; }
   .rn-pr-row > :last-child { display: none; }
 }
+
+/* Fitness sparkline never wider than its box (phones) */
+.rn-spark canvas { max-width: 100%; }
+/* Cut plan: this week's two runs */
+.rn-week .rn-wk-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); }
+.rn-week .rn-wk-row:first-of-type { border-top: 0; }
+.rn-wk-ic { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--card-2); flex: none; }
+.rn-wk-row.done .rn-wk-ic { background: var(--up); color: var(--on-color); }
+.rn-wk-ic svg { width: 14px; height: 14px; }
+/* What to aim for on the next run */
+.rn-target { display: grid; gap: 2px; margin: 10px 0 4px; padding: 10px 12px; border-radius: 12px; background: var(--card-2); }
+.rn-target b { font-size: 20px; }
+.rn-target b small { font-size: 12px; font-weight: 500; color: var(--text-2); }
+.rn-target span { font-size: 12px; color: var(--text-2); }
+/* Rep scorecard on a quality run */
+.rn-reps { display: grid; gap: 4px; margin-top: 8px; }
+.rn-rep-row { display: grid; grid-template-columns: 56px 56px 1fr 64px 36px; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 10px; background: var(--card-2); font-size: 14px; }
+.rn-rep-row.ok { background: var(--up-soft); }
+.rn-rep-row.fast, .rn-rep-row.slow { background: var(--gold-soft); }
+.rn-rep-row svg { width: 16px; height: 16px; color: var(--up); }
+.rn-rep-row b small { font-size: 11px; font-weight: 500; color: var(--text-2); }
+/* Records + paces folded away */
+.rn-more summary { cursor: pointer; list-style: none; padding: 2px 0; }
+.rn-more summary::-webkit-details-marker { display: none; }
+.rn-more[open] summary { margin-bottom: 8px; }
+.rn-more > .card { box-shadow: none; padding: 10px 0 0; background: transparent; }

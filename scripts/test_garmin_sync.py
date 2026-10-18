@@ -130,13 +130,14 @@ class TestPureHelpers(unittest.TestCase):
         self.assertTrue(gs.needs_full_sync(None))
         self.assertTrue(gs.needs_full_sync({}))
         self.assertTrue(gs.needs_full_sync({"full_sync_done": False}))
-        self.assertFalse(gs.needs_full_sync({"full_sync_done": True}))
+        self.assertTrue(gs.needs_full_sync({"full_sync_done": True}))  # done before the 40-run fix: fill history once more
+        self.assertFalse(gs.needs_full_sync({"full_sync_done": True, "history_v2": True}))
 
     def test_sync_window_start_first_vs_incremental(self):
         import datetime as dt
         now = dt.datetime(2026, 9, 28, tzinfo=dt.timezone.utc)
         first = gs.sync_window_start(None, now)
-        later = gs.sync_window_start({"full_sync_done": True}, now)
+        later = gs.sync_window_start({"full_sync_done": True, "history_v2": True}, now)
         self.assertEqual((now - first).days, gs.FIRST_SYNC_DAYS)
         self.assertEqual((now - later).days, gs.INCREMENTAL_SYNC_DAYS)
 
@@ -204,3 +205,10 @@ class TestSleep(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestSplitsSkipRestLaps(unittest.TestCase):
+    def test_rest_lap_is_not_a_split(self):
+        laps = [{"distance": 1000, "movingDuration": 300}, {"distance": 5, "movingDuration": 0, "duration": 60}, {"distance": 1000, "movingDuration": 310}]
+        out = gs.splits_from_laps(laps)
+        self.assertEqual([x["d"] for x in out], [1000, 1000])

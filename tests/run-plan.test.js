@@ -238,8 +238,11 @@ test('sessionFeedback: flags intervals run faster than target', () => {
   const target = ctx.paces.interval;
   const session = { type: 'intervals', totalKm: 8, targetPace: [target - 5, target + 5] };
   const run = mkRun({ km: 8, pace: target - 25 });
-  const fb = P.sessionFeedback(session, run, ctx);
-  assert.ok(fb.some((f) => /quicker/i.test(f.text)));
+  const rep = { d: 1000, s: target - 25, pace: target - 25, hr: null };
+  const fb = P.sessionFeedback(session, run, { ...ctx, classOf: () => ({ type: 'intervals', reps: [rep, rep, rep, rep, rep] }) });
+  assert.ok(fb.some((f) => /0 of 5 reps on target/.test(f.text) && /faster than needed/i.test(f.text)));
+  // without laps the whole-run average is not judged against the rep target
+  assert.ok(P.sessionFeedback(session, run, ctx).some((f) => /warm-up and jogs included/.test(f.text)));
 });
 
 // ---------- structured steps ----------
@@ -293,4 +296,28 @@ test('sessionSteps: every generated session yields valid steps and a short name'
     for (const x of st.flatMap((y) => (y.steps ? y.steps : [y]))) assert.ok(x.distance_m || x.duration_s || x.open, `${s.type} step has an end condition`);
     assert.ok(P.watchWorkoutName(s).startsWith('Week '));
   }
+});
+
+test('matching by type and plan week: an easy run never ticks off a quality session', async () => {
+  const C = await import('../docs/run-coach.js');
+  const start = new Date('2026-09-07T00:00:00').getTime();
+  const plan = P.generatePlan({ ctx: {}, goal: { cut: true, distance_km: 5, time_s: 0 }, runsPerWeek: 2, startedAt: start });
+  const at = (days) => start + days * DAY + 8 * 3600e3;
+  const easyRun = { id: 'e', distance_m: 9000, moving_s: 3400, start: new Date(at(2)).toISOString() };
+  const hardRun = { id: 'q', distance_m: 7000, moving_s: 2400, start: new Date(at(4)).toISOString() };
+  const m1 = P.autoMatch(plan, easyRun, 'easy', at(2));
+  assert.equal(m1.type, 'easy');
+  assert.equal(m1.week, 1);
+  const m2 = P.autoMatch(plan, hardRun, 'intervals', at(4));
+  assert.equal(m2.type, 'intervals');
+  // a run in week 3 cannot tick off week 1's session
+  const late = P.autoMatch(plan, { ...easyRun, id: 'l' }, 'easy', at(15));
+  assert.equal(late.week, 3);
+  // rematching an old plan whose easy run had ticked the quality session
+  const wrong = { ...plan, sessions: plan.sessions.map((x) => (x.week === 1 && x.type === 'intervals' ? { ...x, status: 'done', doneRunId: 'e', doneAt: at(2) } : x)) };
+  const fixed = P.rematchPlan(wrong, [easyRun, hardRun], (r) => (r.id === 'q' ? 'intervals' : 'easy'));
+  assert.equal(fixed.sessions.find((x) => x.week === 1 && x.type === 'intervals').doneRunId, 'q');
+  assert.equal(fixed.sessions.find((x) => x.week === 1 && x.type === 'easy').doneRunId, 'e');
+  assert.equal(P.nextSession(fixed, at(15)).week, 3);
+  assert.ok(C.cleanRuns);
 });

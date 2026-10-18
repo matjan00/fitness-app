@@ -93,7 +93,7 @@ function editItem(key, day, f) {
 
 // ---------- runs ----------
 const parsePace = (t) => { const [m, s] = String(t).split(':').map(Number); return m * 60 + (s || 0); };
-const fmtPace = (secs) => `${Math.floor(secs / 60)}:${String(Math.round(secs % 60)).padStart(2, '0')}`;
+const fmtPace = (secs) => { const t = Math.round(secs); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
 const paceSecs = (r) => { const km = (+r.distance_m || 0) / 1000; const s = +r.moving_s || +r.elapsed_s || 0; return km > 0 && s > 0 ? s / km : null; };
 function todaysRun() {
   const d = today();
@@ -106,6 +106,7 @@ export function logRun(kind = null) {
     el.innerHTML = sheet({ title: kind ? `Log ${SESSION_LABEL[kind].toLowerCase()}` : 'Log a run', body: `<form class="form ct-entry">
       <div class="form-row"><label>Distance (km)<input name="km" inputmode="decimal" autocomplete="off"></label>
       <label>Time (mm:ss or h:mm:ss)<input name="t" inputmode="text" placeholder="32:30" autocomplete="off"></label></div>
+      <label>Day<input type="date" name="day" value="${today()}" max="${today()}"></label>
       <p class="small muted ct-pace">&nbsp;</p>
       <div class="sheet-actions" style="margin-top:10px"><button type="button" class="ghost" data-a="no">Cancel</button><button type="submit" class="primary">Save</button></div></form>` });
     const form = $('form', el);
@@ -117,7 +118,10 @@ export function logRun(kind = null) {
       e.preventDefault();
       const km = parseNum(form.km.value), t = secs();
       if (!(km > 0 && t > 0)) { toast('Enter distance and time'); return; }
-      await store.put('run', { name: kind ? SESSION_LABEL[kind] : 'Run', type: 'running', sport: 'running', manual: true, start: new Date(Date.now() - t * 1000).toISOString(), distance_m: Math.round(km * 1000), moving_s: t, elapsed_s: t });
+      // Today: it just finished. Another day: mid-morning that day, so it never lands on the wrong date.
+      const day = form.day.value || today();
+      const start = day === today() ? new Date(Date.now() - t * 1000) : new Date(`${day}T10:00:00`);
+      await store.put('run', { name: kind ? SESSION_LABEL[kind] : 'Run', type: 'running', sport: 'running', manual: true, start: start.toISOString(), distance_m: Math.round(km * 1000), moving_s: t, elapsed_s: t });
       toast('Run saved');
       s.close();
     };

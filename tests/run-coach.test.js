@@ -277,7 +277,8 @@ test('plan for a beginner with no history still works', () => {
   const ctx = C.buildContext({ runs: [], now: NOW, settings: { runs_per_week: 3 } });
   assert.equal(ctx.paces, null);
   assert.equal(ctx.plan.sessions.length, 3);
-  assert.match(ctx.plan.sessions[0].detail, /hard but controlled|comfortably hard/);
+  assert.ok(ctx.plan.sessions.every((x) => !x.hard)); // starter week: easy runs only, as its note says
+  assert.match(ctx.plan.notes[0], /Starter week/);
   assert.ok(ctx.today.title);
   assert.equal(ctx.est, null);
 });
@@ -334,4 +335,44 @@ test('demo data is deterministic, realistic and fully usable', () => {
 test('polyline encoding round-trips the reference example', () => {
   // Example from Google's polyline algorithm documentation.
   assert.equal(encodePolyline([[38.5, -120.2], [40.7, -120.95], [43.252, -126.453]]), '_p~iF~ps|U_ulLnnqC_mqNvxq`@');
+});
+
+test('cleanRuns drops accidental recordings and duplicates (manual + watch, Strava + Garmin)', () => {
+  const t = NOW - 2 * 86400e3;
+  const iso = (ms) => new Date(ms).toISOString();
+  const runs = [
+    { id: 'garmin', start: iso(t), distance_m: 8000, moving_s: 2880, splits: [{ d: 1000, s: 360 }] },
+    { id: 'strava', start: iso(t + 60e3), distance_m: 8040, moving_s: 2890 },
+    { id: 'manual', start: iso(t + 3 * 3600e3), distance_m: 7800, moving_s: 2900, manual: true },
+    { id: 'tiny', start: iso(t - 86400e3), distance_m: 60, moving_s: 40 },
+    { id: 'other', start: iso(t - 3 * 86400e3), distance_m: 5000, moving_s: 1800 },
+  ];
+  assert.deepEqual(C.cleanRuns(runs).map((r) => r.id), ['garmin', 'other']);
+});
+
+test('a GPS glitch best effort does not set the fitness score', () => {
+  const runs = weeksOfRuns(8, 2).map((r) => ({ ...r }));
+  const glitch = { ...runs[0], id: 'glitch', best_efforts: [{ name: '1 mile', distance: 1609, s: 270 }], max_speed: 3.4 };
+  const est = C.estimateVdot([glitch, ...runs.slice(1)], NOW);
+  assert.ok(!est || est.vdot < 50, `vdot ${est?.vdot}`);
+});
+
+test('intervals with standing rest laps stay intervals; the plan link and name decide the type', () => {
+  const lap = (d, s) => ({ d, s });
+  const rest = { d: 5, s: 60 };
+  const run = mkRun({ km: 6, pace: 330 });
+  run.laps = [lap(1500, 540), lap(400, 100), rest, lap(400, 100), rest, lap(400, 101), rest, lap(400, 100), rest, lap(400, 102), lap(1500, 545)];
+  const ctx = C.buildContext({ runs: weeksOfRuns(8, 3), now: NOW });
+  assert.equal(C.classifyRun(run, ctx).type, 'intervals');
+  const easyLooking = mkRun({ km: 8, pace: 400 });
+  assert.equal(C.classifyRun({ ...easyLooking, name: 'Tempo 2 × 10 min' }, ctx).type, 'tempo');
+  assert.equal(C.classifyRun(easyLooking, { ...ctx, linked: new Map([[easyLooking.id, 'intervals']]) }).type, 'intervals');
+});
+
+test('rep score judges reps against the target band', () => {
+  const reps = [320, 318, 322, 335].map((p) => ({ d: 1000, s: p, pace: p, hr: 170 }));
+  const sc = C.repScore({ type: 'intervals', reps }, [315, 325]);
+  assert.equal(sc.hit, 3);
+  assert.equal(sc.n, 4);
+  assert.equal(sc.fade, 15);
 });

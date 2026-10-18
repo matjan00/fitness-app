@@ -18,6 +18,9 @@ import { cutSettings, saveCut, currentTargets, startWeight, recordTargets } from
 import { statusOf, sources } from './cut-today.js';
 import { weekSummary, suggestions, liftChange, lastCheckinDay } from './cut-week.js';
 import { dayFacts } from './cut-day.js';
+import { runContext } from './run.js';
+import { getPlan } from './run-plan-ui.js';
+import * as RC from './run-coach.js';
 
 const PARTS = [['waist', 'Waist (navel)'], ['hips', 'Hips'], ['chest', 'Chest'], ['arm', 'Arm (relaxed)'], ['thigh', 'Mid-thigh']];
 const POSES = ['front', 'side', 'back'];
@@ -65,6 +68,30 @@ function buildReview(ci) {
   return { c, tg, summary, compliance, sugg };
 }
 
+// The week's running in one line: km, how much was easy, quality reps on target.
+function runWeekLine(from, to) {
+  let rc = null;
+  try { rc = runContext(); } catch { /* run tab not loaded */ }
+  if (!rc) return null;
+  const inWeek = rc.runs.filter((r) => { const d = RC.dayKey(RC.startMs(r)); return d >= from && d <= to; });
+  if (!inWeek.length) return null;
+  const km = inWeek.reduce((a, r) => a + RC.km(r.distance_m), 0);
+  const hard = inWeek.filter((r) => RC.HARD_TYPES.has(rc.classOf(r).type));
+  const hardKm = hard.reduce((a, r) => a + RC.km(r.distance_m), 0);
+  const plan = getPlan();
+  let hit = 0, n = 0;
+  for (const r of hard) {
+    const sess = plan?.sessions.find((x) => x.doneRunId === r.id);
+    const sc = sess?.targetPace && RC.repScore(rc.classOf(r), sess.targetPace);
+    if (sc) { hit += sc.hit; n += sc.n; }
+  }
+  const parts = [`${km.toFixed(1)} km in ${inWeek.length} run${inWeek.length === 1 ? '' : 's'}`, `${Math.round(((km - hardKm) / km) * 100)}% easy`];
+  if (n) parts.push(`${hit}/${n} reps on target`);
+  const easy = inWeek.filter((r) => !RC.HARD_TYPES.has(rc.classOf(r).type)).map((r) => RC.easyRunChecks(r, rc.maxHr)).filter(Boolean);
+  if (easy.some((x) => x.drift >= 5)) parts.push('easy-run heart rate drifted - check fuel and pace');
+  return parts.join(' · ');
+}
+
 const vs = (v, t, unit = '', digits = 0) => (v == null ? '–' : `${digits ? n1(v) : n0(v)}${unit}${t ? ` <span class="muted">/ ${n0(t)}</span>` : ''}`);
 
 export function openReview(ci = dueCheckin()) {
@@ -94,6 +121,7 @@ export function openReview(ci = dueCheckin()) {
         ${s.steps != null ? `<div class="row between"><span>Steps (avg)</span><b>${vs(s.steps, c.steps)}</b></div>` : ''}
         ${s.sleep != null ? `<div class="row between"><span>Sleep (avg)</span><b>${vs(s.sleep, c.sleep, ' h', 1)}</b></div>` : ''}
         <div class="row between"><span>Training</span><b>gym ${s.gymDone}/${s.goal.lift} · runs ${s.runsDone}/${s.goal.run}</b></div>
+        ${(() => { const rl = runWeekLine(s.from, s.to); return rl ? `<div class="row between" style="gap:12px"><span>Running</span><b style="text-align:right">${esc(rl)}</b></div>` : ''; })()}
         ${s.sessions.length ? `<div class="row between"><span>Lifts</span><b>${esc(s.sessions.map((x) => x[0].toUpperCase() + x.slice(1)).join(' · '))}</b></div>` : ''}
         <div class="row between"><span>Compliance (2 weeks)</span><b>${n0(compliance * 100)}%</b></div>
       </div>

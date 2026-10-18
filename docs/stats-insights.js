@@ -167,16 +167,18 @@ export function habits(end, days, factsOf, stepGoal = 10000) {
 }
 
 // ---------- running ----------
-// Per week: km, minutes, runs and the average pace (s/km) of the EASY runs - long runs (≥ 1.3 × the usual
-// distance, at least 9 km) are left out so the pace line does not zig-zag. [{ week, km, min, runs, pace|null }].
-export function runWeeks(runs = [], weeks) {
+// Per week: km, minutes, runs and the average pace (s/km) of the EASY runs only - interval, tempo, race and long
+// runs are left out so the pace line shows easy-running fitness, not the mix of run types. typeOf(run) is the Run
+// tab's classification ('easy' | 'recovery' | 'long' | 'tempo' | 'intervals' | 'race' | 'workout'); without it long
+// runs (≥ 1.3 × the usual distance, at least 9 km) are the only ones left out. [{ week, km, min, runs, pace|null }].
+export function runWeeks(runs = [], weeks, typeOf = null) {
   const ok = runs.filter((r) => r?.start && +r.distance_m > 500 && (+r.moving_s || +r.elapsed_s) > 0 && localDay(r.start));
   const dists = ok.map((r) => +r.distance_m).sort((a, b) => a - b);
   const median = dists.length ? dists[Math.floor(dists.length / 2)] : 0;
   const isLong = (r) => +r.distance_m >= Math.max(9000, median * 1.3);
   return weeks.map((w) => {
     const rs = ok.filter((r) => weekOf(localDay(r.start)) === w);
-    const easy = rs.filter((r) => !isLong(r));
+    const easy = rs.filter((r) => (typeOf ? ['easy', 'recovery'].includes(typeOf(r)) : !isLong(r)));
     const secs = (r) => +r.moving_s || +r.elapsed_s;
     const pace = easy.length ? Math.round(easy.reduce((s, r) => s + secs(r), 0) / easy.reduce((s, r) => s + +r.distance_m / 1000, 0)) : null;
     return { week: w, km: r1(rs.reduce((s, r) => s + +r.distance_m / 1000, 0)), min: Math.round(rs.reduce((s, r) => s + secs(r), 0) / 60), runs: rs.length, pace };

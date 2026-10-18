@@ -28,7 +28,7 @@ from datetime import datetime, timedelta, timezone
 # Config / constants
 # ---------------------------------------------------------------------------
 
-RUN_TYPE_KEYS = {"running", "treadmill_running", "trail_running", "track_running"}
+RUN_TYPE_KEYS = {"running", "treadmill_running", "trail_running", "track_running", "street_running", "virtual_run", "ultra_run", "indoor_running"}
 FIRST_SYNC_DAYS = 180
 INCREMENTAL_SYNC_DAYS = 21
 MAX_DETAIL_FETCHES = 40
@@ -179,7 +179,8 @@ def splits_from_laps(laps):
     for i, l in enumerate(laps):
         d = _r1(l.get("distance"))
         s = _r0(l.get("movingDuration") or l.get("duration"))
-        if not d or not s or d <= 0 or s <= 0:
+        # Standing-rest / button laps (under 100 m) are not splits: they would show as 200:00/km.
+        if not d or not s or d < 100 or s <= 0:
             continue
         out.append({
             "km": i + 1,
@@ -230,7 +231,10 @@ def best_efforts_from_splits(splits):
 
 
 def needs_full_sync(status):
-    return not bool((status or {}).get("full_sync_done"))
+    # history_v2: the first sync used to stop after 40 runs and still mark itself done, so syncs before this fix
+    # run the long window once more to fill in what was missed.
+    st = status or {}
+    return not (bool(st.get("full_sync_done")) and bool(st.get("history_v2")))
 
 
 def sync_window_start(status, now=None):
@@ -603,7 +607,10 @@ def main():
     new_status = {
         "last_sync_at": datetime.now(timezone.utc).isoformat(),
         "runs_total": runs_total,
-        "full_sync_done": True,
+        # The first (180-day) sync fetches details for at most MAX_DETAIL_FETCHES runs per job; it only counts as
+        # done once nothing was left over, so later jobs keep the long window until the whole history is in.
+        "full_sync_done": plan["skipped"] == 0 or (bool(prior_status.get("full_sync_done")) and bool(prior_status.get("history_v2"))),
+        "history_v2": plan["skipped"] == 0 or bool(prior_status.get("history_v2")),
         "sleep_sync_done": sleep_ok or bool(prior_status.get("sleep_sync_done")),
         "last_error": None,
     }

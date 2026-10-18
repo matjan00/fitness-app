@@ -126,24 +126,55 @@ export function vdotFromEasyPace(secPerKm) {
   return (lo + hi) / 2;
 }
 
+// ---------- cleaning ----------
+// Accidental recordings (under 500 m or 3 minutes) are not runs.
+export const isRealRun = (r) => num(r.distance_m) >= 500 && (num(r.moving_s) || num(r.elapsed_s) || 0) >= 180;
+const isManual = (r) => r.manual === true;
+// The same run recorded twice: Strava + Garmin (start within 10 min, distance within 5 %), or a run logged by hand
+// and later synced from the watch (same day, distance within 12 %). The synced copy with the most detail is kept.
+export function cleanRuns(runs = []) {
+  const detail = (r) => (isManual(r) ? 0 : 10) + (r.splits?.length ? 2 : 0) + (r.laps?.length ? 2 : 0) + (num(r.avg_hr) ? 1 : 0);
+  const sorted = runs.filter((r) => r && startMs(r) && isRealRun(r)).sort((a, b) => detail(b) - detail(a));
+  const kept = [];
+  for (const r of sorted) {
+    const t = startMs(r), d = num(r.distance_m);
+    const dup = kept.some((k) => {
+      const dd = Math.abs(num(k.distance_m) - d) / Math.max(d, 1);
+      if (Math.abs(startMs(k) - t) <= 10 * 60000 && dd <= 0.05) return true;
+      return (isManual(r) || isManual(k)) && dayKey(startMs(k)) === dayKey(t) && dd <= 0.12;
+    });
+    if (!dup) kept.push(r);
+  }
+  return kept.sort((a, b) => startMs(b) - startMs(a));
+}
+const isTreadmill = (r) => r.trainer === true || /treadmill|indoor|virtual/i.test(`${r.sport || ''} ${r.type || ''} ${r.name || ''}`);
+
 // ---------- fitness estimate ----------
 const RACE_NAME = /\b(race|parkrun|time ?trial|tt|zawody|marathon|półmaraton|polmaraton)\b/i;
 const EFFORT_NAMES = new Set(['1 mile', '2 mile', '5k', '10k', '15k', '10 mile', '20k', 'Half-Marathon', '30k', 'Marathon']);
 
 // Candidate performances from one run: Strava best efforts (1 mile and longer) and the whole run (≥ 3 km).
+// GPS glitches are filtered out: treadmill runs never count, a best effort may not be faster than the run's top
+// speed, and one may not score far above the run as a whole (a "4:30 mile" inside a 6:30/km easy run is a glitch;
+// real intervals stay within ~30 %). Races use the elapsed time - stopping the watch at lights doesn't make you faster.
 export function effortsOf(run) {
   const out = [];
+  if (isTreadmill(run)) return out;
   const t = startMs(run);
+  const d = num(run.distance_m);
+  const raceRun = num(run.workout_type) === 1 || RACE_NAME.test(run.name || '');
+  const s = raceRun ? num(run.elapsed_s) || num(run.moving_s) : num(run.moving_s);
+  const wholeV = d >= 3000 && s ? vdotFromRace(d, s) : null;
+  const top = num(run.max_speed); // m/s
   for (const e of run.best_efforts || []) {
     if (!EFFORT_NAMES.has(e.name)) continue;
     const v = vdotFromRace(e.distance, e.s);
-    if (v && v < 85) out.push({ name: e.name, distance: +e.distance, s: +e.s, vdot: v, t, run_id: run.id });
+    if (!v || v >= 85) continue;
+    if (top && +e.distance / +e.s > top * 1.03) continue;
+    if (wholeV && v > wholeV * 1.3) continue;
+    out.push({ name: e.name, distance: +e.distance, s: +e.s, vdot: v, t, run_id: run.id });
   }
-  const d = num(run.distance_m), s = num(run.moving_s);
-  if (d >= 3000 && s) {
-    const v = vdotFromRace(d, s);
-    if (v && v < 85) out.push({ name: `${fmtKm(d)} km run`, distance: d, s, vdot: v, t, run_id: run.id, whole: true });
-  }
+  if (wholeV && wholeV < 85) out.push({ name: `${fmtKm(d)} km run`, distance: d, s, vdot: wholeV, t, run_id: run.id, whole: true });
   return out;
 }
 
@@ -157,14 +188,18 @@ export function estimateVdot(runs, now = Date.now(), weeks = 8) {
   if (!inWin.length) return null;
   const typical = median(runs.filter((r) => startMs(r) <= now && startMs(r) >= now - 16 * WEEK).map(paceOf).filter(Boolean));
   const floor = typical ? vdotFromEasyPace(typical) * 0.9 : 0;
-  let best = null;
+  const cands = [];
   for (const r of inWin) {
     const race = num(r.workout_type) === 1 || RACE_NAME.test(r.name || '');
     for (const e of effortsOf(r)) {
       if (!race && e.vdot < floor) continue;
-      if (!best || e.vdot > best.vdot) best = e;
+      cands.push({ ...e, race });
     }
   }
+  cands.sort((a, b) => b.vdot - a.vdot);
+  // One effort far above everything else from another run (and not a race) is most likely a glitch: use the next.
+  const other = cands.find((c) => c.run_id !== cands[0]?.run_id);
+  const best = cands[0] && !cands[0].race && other && cands[0].vdot > other.vdot * 1.08 ? other : cands[0];
   return best ? { vdot: best.vdot, effort: best } : null;
 }
 
@@ -214,13 +249,21 @@ export const HARD_TYPES = new Set(['tempo', 'intervals', 'race', 'workout']);
 
 const fullSplits = (run) => (run.splits || []).filter((s) => num(s.d) >= 900 && num(s.s) > 0);
 
-// Rep blocks from laps: consecutive "fast" laps merged. Needs ≥ 4 laps.
+// Rep blocks from laps: consecutive "fast" laps merged. Needs ≥ 4 real laps. Short laps (standing rest, a lap
+// button pressed twice) end a rep instead of disappearing, so 6 × 400 m with standing rest stays 6 reps.
 export function repsFromLaps(run, paces) {
-  const laps = (run.laps || []).filter((l) => num(l.d) >= 100 && num(l.s) >= 20);
-  if (laps.length < 4) return [];
-  const lp = laps.map((l) => pace(l.d, l.s));
-  const med = median(lp);
-  const cut = paces ? Math.min(med * 0.95, paces.marathon + 5) : med * 0.9;
+  const all = (run.laps || []).filter((l) => num(l.s) > 0 || num(l.d) > 0);
+  const real = all.filter((l) => num(l.d) >= 100 && num(l.s) >= 20);
+  if (real.length < 4) return [];
+  // Fast vs slow laps: halfway between the fastest and the slowest lap (works whether most laps are reps or jogs);
+  // with no clear difference (≥ 12 %) there is no rep structure - an easy run with auto-laps.
+  const rp = real.map((l) => pace(l.d, l.s));
+  const fastest = Math.min(...rp), slowest = Math.max(...rp);
+  if (slowest < fastest * 1.12) return [];
+  const mid = (fastest + slowest) / 2;
+  const cut = paces ? Math.min(mid, paces.easy[0]) : mid; // a rep is at least quicker than easy pace
+  const laps = all;
+  const lp = laps.map((l) => (num(l.d) >= 100 && num(l.s) >= 20 ? pace(l.d, l.s) : Infinity));
   const blocks = [];
   let cur = null;
   laps.forEach((l, i) => {
@@ -247,7 +290,24 @@ function sustainedBlock(run, maxPace) {
 }
 
 
-// ctx: { paces, vdot, avgDist } — see buildContext.
+// What a run was meant to be, from the strongest signals: the plan session it is linked to, then its name
+// (watch workouts, "Interwały 5×1 km", "Tempo", "parkrun"). null when neither says.
+const NAME_INTERVALS = /interw|interval|repeats|fartlek|quality run|\b\d+\s*[x×]\s*\d/i;
+const NAME_TEMPO = /\btempo\b|threshold|progowy|próg/i;
+const NAME_EASY = /\b(easy|spokojn|recovery|regeneracyjn|rozbieg)/i;
+const SESSION_KIND = { easy: 'easy', long: 'long', strides: 'easy', recovery: 'recovery', fartlek: 'intervals', intervals: 'intervals', specific: 'intervals', tempo: 'tempo', test5k: 'race', test10k: 'race' };
+export function intendedType(run, ctx = {}) {
+  const linked = ctx.linked?.get(run.id);
+  if (linked && SESSION_KIND[linked]) return SESSION_KIND[linked];
+  const name = run.name || '';
+  if (RACE_NAME.test(name)) return 'race';
+  if (NAME_TEMPO.test(name)) return 'tempo';
+  if (NAME_INTERVALS.test(name)) return 'intervals';
+  if (NAME_EASY.test(name)) return 'easy';
+  return null;
+}
+
+// ctx: { paces, vdot, avgDist, linked (Map run id → plan session type) } — see buildContext.
 export function classifyRun(run, ctx = {}) {
   const paces = ctx.paces;
   const d = num(run.distance_m) || 0;
@@ -257,6 +317,20 @@ export function classifyRun(run, ctx = {}) {
   if (wt === 1) return { type: 'race' };
 
   const reps = repsFromLaps(run, paces);
+  // The plan or the run's name decide the type; the laps / splits only add the details (reps, tempo block).
+  const meant = intendedType(run, ctx);
+  if (meant === 'race') return { type: 'race' };
+  if (meant === 'intervals') return { type: 'intervals', reps: reps.filter((r) => r.d <= 3300), meant: true };
+  if (meant === 'tempo') {
+    const block = reps.length ? reps.reduce((a, b) => (b.d > a.d ? b : a)) : null;
+    const tempo = reps.length > 1 ? { d: reps.reduce((a, r) => a + r.d, 0), s: reps.reduce((a, r) => a + r.s, 0) } : block ? { d: block.d, s: block.s } : { d, s: mov };
+    return { type: 'tempo', tempo, reps, meant: true };
+  }
+  if (meant === 'easy' || meant === 'long' || meant === 'recovery') {
+    const longMin0 = Math.max(12000, (ctx.avgDist || 0) * 1.5);
+    return { type: meant === 'easy' && (d >= longMin0 || mov >= 80 * 60) ? 'long' : meant, meant: true };
+  }
+
   const shortReps = reps.filter((r) => r.d <= 3300);
   if (shortReps.length >= 3) return { type: 'intervals', reps: shortReps };
 
@@ -292,7 +366,7 @@ export function intensityOf(run, cls, ctx = {}) {
   const total = num(run.moving_s) || 0;
   if (!total) return { easy: 0, hard: 0 };
   if (cls.type === 'race') return { easy: 0, hard: total };
-  if (cls.type === 'intervals') {
+  if (cls.type === 'intervals' && cls.reps?.length) {
     const hard = Math.min(total, cls.reps.reduce((s, r) => s + r.s, 0));
     return { easy: total - hard, hard };
   }
@@ -342,8 +416,8 @@ export function legDayBefore(ms, workouts, isLeg) {
 
 // ---------- context ----------
 // Everything the screens need, computed once per data change.
-export function buildContext({ runs = [], workouts = [], settings = {}, now = Date.now(), isLeg } = {}) {
-  runs = runs.filter((r) => startMs(r) && num(r.distance_m) > 0).sort((a, b) => startMs(b) - startMs(a));
+export function buildContext({ runs = [], workouts = [], settings = {}, now = Date.now(), isLeg, linked = null } = {}) {
+  runs = cleanRuns(runs);
   const est = estimateVdot(runs, now, 8) || null;
   const olderEst = est ? null : estimateVdot(runs, now, 16);
   const recent = runs.filter((r) => startMs(r) >= now - 6 * WEEK && startMs(r) <= now);
@@ -360,7 +434,7 @@ export function buildContext({ runs = [], workouts = [], settings = {}, now = Da
   const paces = trainingPaces(zoneVdot);
   const maxHr = estimateMaxHr(runs, settings.max_hr);
   const ctx = {
-    now, runs, workouts, isLeg, settings,
+    now, runs, workouts, isLeg, settings, linked,
     runsPerWeek: clamp(num(settings.runs_per_week) || 4, 2, 6),
     focus: settings.focus === '10k' ? '10k' : '5k',
     est, olderEst, vdot: est?.vdot || olderEst?.vdot || null, zoneVdot, zoneSource, paces,
@@ -385,7 +459,12 @@ export function runFeedback(run, ctx = {}) {
   const paces = ctx.paces;
   const p = paceOf(run);
   const d = num(run.distance_m) || 0;
-  const easyTxt = paces ? `${paceRange(paces.easy)}/km` : null;
+  // A run done for a plan session is judged by that session's targets (the cut plan's paces), not by the coach's own
+  // fitness-based paces - one source of truth.
+  const sess = ctx.planSessionOf?.(run.id) || null;
+  const planHard = sess && ['intervals', 'tempo'].includes(sess.type) && sess.targetPace;
+  const easyRange = sess && !planHard && sess.targetPace ? [Math.min(...sess.targetPace), Math.max(...sess.targetPace)] : paces?.easy;
+  const easyTxt = easyRange ? `${paceRange(easyRange)}/km` : null;
 
   // PRs first — the most motivating.
   const prs = (run.best_efforts || []).filter((e) => num(e.pr_rank) === 1 && ['1k', '1 mile', '5k', '10k', 'Half-Marathon', 'Marathon'].includes(e.name));
@@ -395,9 +474,16 @@ export function runFeedback(run, ctx = {}) {
   }
 
   // Main verdict by type.
-  if (cls.type === 'race') {
+  const sc = planHard ? repScore(cls, sess.targetPace) : null;
+  if (sc) {
+    const band = `${fmtPace(Math.min(...sess.targetPace))}–${fmtPace(Math.max(...sess.targetPace))}/km`;
+    out.push({ tone: sc.hit === sc.n ? 'good' : 'info', text: `${sess.title}: ${sc.hit} of ${sc.n} ${sc.n > 1 ? 'reps' : 'tempo sections'} on the plan's ${band}, averaging ${fmtPace(sc.avg)}/km.${sc.reps.some((r) => r.fast) ? ' Faster than the plan asks - holding back keeps the last rep as good as the first.' : ''}` });
+    if (sc.n >= 3 && sc.fade >= 8) out.push({ tone: 'tip', text: `The last rep was ${sc.fade} s/km slower than the first. Start a touch more conservatively.` });
+  } else if (cls.type === 'race') {
     const v = vdotFromRace(d, num(run.moving_s));
     out.push({ tone: 'good', text: `${fmtKm(d, 2)} km in ${fmtTime(num(run.moving_s))} (${fmtPace(p)}/km)${v ? ` — a VDOT of ${v.toFixed(1)}` : ''}. Take 1–2 easy days before the next hard session.` });
+  } else if (cls.type === 'intervals' && !cls.reps?.length) {
+    out.push({ tone: 'info', text: 'Interval session (from the plan). Press the lap button at the start and end of each rep - then the coach can score every rep.' });
   } else if (cls.type === 'intervals') {
     const reps = cls.reps;
     const avg = pace(reps.reduce((s, r) => s + r.d, 0), reps.reduce((s, r) => s + r.s, 0));
@@ -423,11 +509,11 @@ export function runFeedback(run, ctx = {}) {
       if (diff < -8) out.push({ tone: 'tip', text: `${segTxt} at ${fmtPace(tp)}/km — quicker than your threshold pace ${fmtPace(paces.threshold)}/km. Tempo should feel "comfortably hard"; going faster turns it into a race.` });
       else out.push({ tone: 'good', text: `${segTxt} at ${fmtPace(tp)}/km (threshold ${fmtPace(paces.threshold)}/km). This raises the pace you can hold for 5k and 10k.` });
     } else out.push({ tone: 'good', text: `${segTxt} at ${fmtPace(tp)}/km. Nice sustained effort.` });
-  } else if (paces && p) {
+  } else if (easyRange && p) {
     const label = cls.type === 'long' ? 'Long run' : cls.type === 'recovery' ? 'Recovery run' : 'Easy run';
-    if (p < paces.easy[0] - 10) {
+    if (p < easyRange[0] - 10) {
       out.push({ tone: 'tip', text: `${label} at ${fmtPace(p)}/km — your easy pace is ${easyTxt}. Slowing down helps you recover and makes the hard sessions count.` });
-    } else if (p <= paces.easy[1] + 30) {
+    } else if (p <= easyRange[1] + 30) {
       out.push({ tone: 'good', text: `${label} at ${fmtPace(p)}/km — nicely inside your easy range (${easyTxt}).${cls.type === 'long' ? ' Long easy runs build the engine for 10k.' : ''}` });
     } else {
       out.push({ tone: 'info', text: `${label} at a relaxed ${fmtPace(p)}/km. Perfectly fine for recovery — easy can't really be too slow.` });
@@ -487,7 +573,7 @@ export function weeklySeries(runs, ctx = {}, now = Date.now(), weeks = 12) {
   const list = [];
   for (let i = weeks - 1; i >= 0; i--) {
     const ws = addDaysMs(start0, -7 * i);
-    list.push({ start: ws, week: dayKey(ws), km: 0, runs: 0, secs: 0, longest: 0, easy: 0, hard: 0, elev: 0 });
+    list.push({ start: ws, week: dayKey(ws), km: 0, runs: 0, secs: 0, longest: 0, easy: 0, hard: 0, elev: 0, easyKm: 0, qualityKm: 0 });
   }
   const first = list[0].start;
   for (const r of runs) {
@@ -501,6 +587,7 @@ export function weeklySeries(runs, ctx = {}, now = Date.now(), weeks = 12) {
     const cls = ctx.classOf ? ctx.classOf(r) : classifyRun(r, ctx);
     const it = intensityOf(r, cls, ctx);
     w.easy += it.easy; w.hard += it.hard;
+    if (HARD_TYPES.has(cls.type)) w.qualityKm += k; else w.easyKm += k;
   }
   return list;
 }
@@ -545,7 +632,7 @@ export function weeklyReview(ctx) {
   }
 
   // Long run share of last completed week.
-  if (lastWeek && lastWeek.km >= 15 && lastWeek.runs >= 2 && lastWeek.longest / lastWeek.km > 0.45) {
+  if ((ctx.runsPerWeek || 4) >= 3 && lastWeek && lastWeek.km >= 15 && lastWeek.runs >= 3 && lastWeek.longest / lastWeek.km > 0.45) {
     messages.push({ tone: 'tip', text: `Last week's long run was ${Math.round((lastWeek.longest / lastWeek.km) * 100)} % of the week. Keeping it to about a third spreads the load more safely.` });
   }
 
@@ -609,7 +696,9 @@ export function planWeek(ctx, opts = {}) {
   const mPace = pt(paces, 'marathon', 'steady');
   const wu = 2, cd = 1.5;
 
-  const layout = LAYOUTS[n].map((k) => (k === 'quality' ? (focus === '10k' ? 'tempo' : 'intervals') : k));
+  // Starter weeks (hardly any running yet) are easy runs only, as the note says; quality comes once there is a base.
+  const layout = base < 5 ? LAYOUTS[n].map((k, i) => (i === LAYOUTS[n].length - 1 ? 'long' : 'easy'))
+    : LAYOUTS[n].map((k) => (k === 'quality' ? (focus === '10k' ? 'tempo' : 'intervals') : k));
   const sessions = [];
 
   const intervals = () => {
@@ -650,7 +739,8 @@ export function planWeek(ctx, opts = {}) {
   }
   const strides = () => ({ type: 'strides', hard: false, title: 'Easy + strides', detail: `Relaxed @ ${easyTxt}, then 6 × 20 s strides (quick and smooth, full recovery).`, km: 0 });
   const long = () => {
-    const k = clamp(round(target * (n <= 4 ? 0.33 : 0.28), 0.5), 6, focus === '10k' ? 22 : 18);
+    const usual = (ctx.avgDist || 0) / 1000;
+    const k = clamp(Math.max(round(target * (n <= 4 ? 0.33 : 0.28), 0.5), round(usual * 1.2, 0.5)), 6, focus === '10k' ? 22 : 18);
     const finish = focus === '10k' && target >= 30 && weekIdx % 2 === 1 && !deload;
     return { type: 'long', hard: false, title: 'Long run', detail: finish ? `${kmShort(k)} km easy @ ${easyTxt}, with the last 3 km @ ${mPace}.` : `${kmShort(k)} km easy @ ${easyTxt}. Walk breaks are fine.`, km: k };
   };
@@ -673,7 +763,7 @@ export function planWeek(ctx, opts = {}) {
   const notes = [];
   if (review.load === 'high') notes.push('Recovery week: your load jumped, so this week is lighter with no hard intervals.');
   else if (deload) notes.push('Slightly lighter week to absorb the recent increase.');
-  else if (base >= 5) notes.push(`About ${Math.round(total)} km — a small step up from your recent ${Math.round(base)} km/week.`);
+  else if (base >= 5) notes.push(Math.round(total) > Math.round(base) ? `About ${Math.round(total)} km — a small step up from your recent ${Math.round(base)} km/week.` : `About ${Math.round(total)} km — about the same as your recent ${Math.round(base)} km/week.`);
   else notes.push('Starter week: short, easy runs to build the habit. The plan grows with you.');
   if (!ctx.est) notes.push(ctx.zoneSource === 'easy-runs' ? 'Paces are estimated from your easy runs. Run a hard 5k (race or time trial) to calibrate them.' : 'Paces come from an older effort — a fresh 5k time trial will sharpen them.');
 
@@ -751,7 +841,7 @@ export function easyPaceTrend(ctx, days = 120) {
   const lo = Math.round(maxHr * 0.65), hi = Math.round(maxHr * 0.8);
   const pts = runs.filter((r) => startMs(r) >= now - days * DAY && ['easy', 'long', 'recovery'].includes(ctx.classOf(r).type)
     && num(r.avg_hr) >= lo && num(r.avg_hr) <= hi && paceOf(r))
-    .map((r) => ({ t: startMs(r), pace: paceOf(r), hr: +r.avg_hr, id: r.id }))
+    .map((r) => ({ t: startMs(r), pace: paceOf(r), hr: +r.avg_hr, id: r.id, adj: paceOf(r) * (1 + 0.006 * (+r.avg_hr - (lo + hi) / 2)) }))
     .sort((a, b) => a.t - b.t);
   let slope = null;
   if (pts.length >= 4 && pts[pts.length - 1].t - pts[0].t >= 21 * DAY) {
@@ -763,10 +853,42 @@ export function easyPaceTrend(ctx, days = 120) {
     const sxx = xs.reduce((s, x) => s + (x - mx) ** 2, 0);
     slope = sxx ? (xs.reduce((s, x, i) => s + (x - mx) * (ys[i] - my), 0) / sxx) * 30 : null;
   }
-  return { lo, hi, points: pts, slope };
+  return { lo, hi, mid: Math.round((lo + hi) / 2), points: pts, slope };
 }
 
 // Short headline for a run list row.
 export function runSummary(run) {
   return { km: km(run.distance_m), pace: paceOf(run), time: num(run.moving_s), hr: num(run.avg_hr) };
+}
+
+// ---------- per-type numbers ----------
+// Easy pace at the usual easy heart rate (the band's middle), averaged over the last `days`: the fitness number
+// for easy running, unlike an average pace that moves with the mix of easy and hard runs. null without data.
+export function easyPaceNow(ctx, days = 28) {
+  const tr = easyPaceTrend(ctx, days);
+  if (!tr.points.length) return null;
+  return { pace: mean(tr.points.map((p) => p.adj)), hr: tr.mid, n: tr.points.length };
+}
+
+// Reps of a quality run against the plan's target band (sec/km [fast, slow]): each rep on target when within the band
+// ± 6 s. { reps: [{ pace, hr, ok, d }], hit, n, fade (s/km, last − first) } or null without reps / target.
+export function repScore(cls, target) {
+  const reps = cls?.reps?.length ? cls.reps : cls?.tempo ? [{ d: cls.tempo.d, s: cls.tempo.s, pace: pace(cls.tempo.d, cls.tempo.s), hr: null }] : [];
+  if (!reps.length || !target) return null;
+  const lo = Math.min(...target) - 6, hi = Math.max(...target) + 6;
+  const rows = reps.map((r) => ({ d: r.d, pace: r.pace, hr: r.hr, ok: r.pace >= lo && r.pace <= hi, fast: r.pace < lo }));
+  return { reps: rows, hit: rows.filter((r) => r.ok).length, n: rows.length, fade: rows.length >= 2 ? Math.round(rows[rows.length - 1].pace - rows[0].pace) : 0,
+    avg: pace(rows.reduce((a, r) => a + r.d, 0), rows.reduce((a, r) => a + r.d * r.pace / 1000, 0)) };
+}
+
+// Easy-run checks from the km splits: heart-rate drift (pace ÷ HR, first half vs second half) and minutes above the
+// easy ceiling (80 % of max HR). { drift (% , positive = HR crept up), above (min) } or null without HR splits.
+export function easyRunChecks(run, maxHr) {
+  const sp = (run.splits || []).filter((x) => num(x.d) >= 900 && num(x.s) > 0 && num(x.hr) > 0);
+  if (sp.length < 4) return null;
+  const half = sp.length >> 1;
+  const ef = (arr) => (arr.reduce((a, x) => a + +x.d, 0) / arr.reduce((a, x) => a + +x.s, 0)) / mean(arr.map((x) => +x.hr));
+  const a = ef(sp.slice(0, half)), b = ef(sp.slice(sp.length - half));
+  const cap = maxHr ? maxHr * 0.8 : null;
+  return { drift: Math.round((a / b - 1) * 1000) / 10, above: cap ? Math.round(sp.filter((x) => +x.hr > cap).reduce((t, x) => t + +x.s, 0) / 60) : 0, cap: cap ? Math.round(cap) : null };
 }

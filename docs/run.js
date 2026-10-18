@@ -17,6 +17,7 @@ import * as C from './run-coach.js';
 import { demoRuns, demoWorkouts } from './run-demo.js';
 import { runRow, wireRows, openRun, openAllRuns, feedbackHtml } from './run-detail.js';
 import * as RP from './run-plan-ui.js';
+import * as P from './run-plan.js';
 import { logRun } from './cut-today.js';
 
 export const tab = { id: 'run', title: 'Run', icon: 'run', render: renderTab };
@@ -78,7 +79,14 @@ function getCtx() {
   if (cache.key !== key) {
     const workouts = workoutsOf();
     if (workouts.length) loadExercises();
-    cache = { key, ctx: C.buildContext({ runs: runsOf(), workouts, settings: settings(), now, isLeg }) };
+    // Runs linked to plan sessions carry the session's type (the most reliable way to tell easy from quality).
+    const plan = demo ? null : RP.getPlan();
+    const linked = new Map((plan?.sessions || []).filter((x) => x.doneRunId).map((x) => [x.doneRunId, x.type]));
+    const ctx = C.buildContext({ runs: runsOf(), workouts, settings: settings(), now, isLeg, linked });
+    // The plan session a run did, and the same workout done before (for the rep card on the run page).
+    ctx.planSessionOf = (id) => plan?.sessions.find((x) => x.doneRunId === id) || null;
+    ctx.prevSame = (sess) => (plan ? P.previousSame(plan, sess) : null);
+    cache = { key, ctx };
   }
   if (!demo && matchedKey !== cache.key) {
     matchedKey = cache.key;
@@ -87,6 +95,8 @@ function getCtx() {
   return cache.ctx;
 }
 const findRun = (id) => getCtx().runs.find((r) => r.id === id);
+// For Stats and the weekly review (null while demo data is shown): the cleaned runs (no duplicates or accidental recordings) and each run's type.
+export function runContext() { return demo ? null : getCtx(); }
 const afterPlanChange = () => { version++; rerender(); };
 
 function rerender() {
@@ -168,11 +178,12 @@ function renderTab(el) {
   el.innerHTML = `
     <div class="page-head row between">
       <div><p class="muted">Week of ${esc(weekTitle(rv.thisWeek.start))}</p><h1>Run</h1></div>
-      <div class="row">${syncButton()}</div>
+      <div class="row" style="gap:6px">${demo ? '' : `<button class="icon-btn" data-a="log" aria-label="Log a run">${icon('plus')}</button>`}${syncButton()}</div>
     </div>
     ${demoBar()}
     <div class="stack">
-      ${heroHtml(ctx)}
+      ${heroHtml(ctx, plan)}
+      ${plan?.goal?.cut ? cutFitnessHtml(ctx, plan) : ''}
       ${fitnessHtml(ctx)}
       ${plan ? RP.planSectionHtml(ctx, plan) : goalPromptHtml(demo)}
       ${plan ? '' : planHtml(ctx)}
@@ -184,14 +195,14 @@ function renderTab(el) {
     <h3 class="section-title">Progress</h3>
     <div class="stack">
       ${volumeHtml(ctx)}
-      ${intensityHtml(ctx)}
       ${easyTrendHtml(ctx)}
-      ${prHtml(ctx)}
-      ${pacesHtml(ctx)}
+      ${intensityHtml(ctx)}
+      <details class="card rn-more"><summary><b>Records &amp; training paces</b></summary>${prHtml(ctx)}${pacesHtml(ctx)}</details>
     </div>
     <p class="tiny muted center rn-foot">Coaching is rule-based guidance, not medical advice. Listen to your body.${!demo && garminStatus() ? ' · Data from Garmin' : ''}</p>`;
 
   wireRows(el, ctx, findRun);
+  el.querySelector('.page-head [data-a="log"]')?.addEventListener('click', () => logRun());
   el.querySelector('[data-a="sync"]')?.addEventListener('click', () => doSync(false));
   el.querySelector('[data-a="exit-demo"]')?.addEventListener('click', stopDemo);
   el.querySelector('[data-a="all"]')?.addEventListener('click', () => openAllRuns(ctx));
@@ -205,24 +216,57 @@ function renderTab(el) {
   drawTabCharts(el, ctx);
 }
 
-function heroHtml(ctx) {
+// This week. Pace is never averaged over all runs (it would move with the mix of easy and interval runs, not with
+// fitness): the easy pace is shown at the usual easy heart rate instead. With the cut plan, progress is its 2 runs.
+function heroHtml(ctx, plan) {
   const { thisWeek: tw, lastWeek: lw } = ctx.review;
-  const target = ctx.plan.targetKm;
   const d = weekChange(ctx);
-  const avgPace = tw.km ? tw.secs / tw.km : null;
+  const easy = C.easyPaceNow(ctx);
+  let track, sub;
+  if (plan?.goal?.cut) {
+    const ws = P.weekSessions(plan, ctx.now);
+    const done = ws.filter((x) => x.status === 'done').length;
+    track = ws.length ? (done / ws.length) * 100 : 0;
+    const part = (x) => `${['intervals', 'tempo', 'test5k', 'test10k'].includes(x.type) ? 'quality' : 'easy'} ${x.status === 'done' ? '✓' : x.status === 'skipped' ? 'skipped' : 'to do'}`;
+    sub = ws.length ? (done === ws.length ? 'Both runs of the plan week done — great work!' : `Plan: ${ws.map(part).join(' · ')}`) : '';
+  } else {
+    const target = ctx.plan.targetKm;
+    track = target ? (tw.km / target) * 100 : 0;
+    sub = tw.km >= target ? 'Weekly target reached — great work!' : `${kmTxt(Math.max(0, target - tw.km))} km to go of ~${Math.round(target)} km planned`;
+  }
   return `<div class="rn-hero">
     <div class="row between"><span class="rn-hero-label">This week</span>
       ${d != null ? `<span class="rn-hero-chip">${signed(d)} vs same days last week</span>` : ''}</div>
     <div class="rn-big">${kmTxt(tw.km)}<small> km</small></div>
-    <div class="rn-hero-track"><i style="width:${Math.min(100, target ? (tw.km / target) * 100 : 0).toFixed(1)}%"></i></div>
-    <p class="rn-hero-sub">${tw.km >= target ? 'Weekly target reached — great work!' : `${kmTxt(Math.max(0, target - tw.km))} km to go of ~${Math.round(target)} km planned`}</p>
+    <div class="rn-hero-track"><i style="width:${Math.min(100, track).toFixed(1)}%"></i></div>
+    <p class="rn-hero-sub">${esc(sub)}</p>
     <div class="rn-hero-stats">
       <div><b>${tw.runs}</b><span>run${tw.runs === 1 ? '' : 's'}</span></div>
       <div><b>${tw.secs ? mins(tw.secs) : '0 min'}</b><span>time</span></div>
-      <div><b>${avgPace ? C.fmtPace(avgPace) : '–'}</b><span>avg /km</span></div>
+      <div><b>${easy ? C.fmtPace(easy.pace) : '–'}</b><span>easy @${easy ? easy.hr : '–'} bpm</span></div>
       <div><b>${kmTxt(lw.km)}</b><span>last week</span></div>
     </div>
   </div>`;
+}
+
+// Running fitness through the cut: quality reps on target and easy pace at the same heart rate. When both slip
+// while weight drops fast, the deficit is probably too deep for good running.
+function cutFitnessHtml(ctx, plan) {
+  const since = ctx.now - 28 * 864e5;
+  const quality = plan.sessions.filter((x) => x.status === 'done' && x.doneRunId && x.targetPace && ['intervals', 'tempo'].includes(x.type) && (x.doneAt || 0) >= since);
+  let hit = 0, n = 0;
+  for (const x of quality) {
+    const r = ctx.runs.find((y) => y.id === x.doneRunId);
+    const sc = r && C.repScore(ctx.classOf(r), x.targetPace);
+    if (sc) { hit += sc.hit; n += sc.n; }
+  }
+  const tr = C.easyPaceTrend(ctx, 56);
+  if (!n && tr.slope == null) return '';
+  const easyTxt = tr.slope == null ? null : tr.slope <= -2 ? `easy pace ${Math.round(-tr.slope)} s/km a month faster at the same heart rate` : tr.slope >= 3 ? `easy pace ${Math.round(tr.slope)} s/km a month slower at the same heart rate` : 'easy pace steady at the same heart rate';
+  const slipping = (n && hit / n < 0.5) && tr.slope != null && tr.slope >= 3;
+  return `<div class="card"><div class="card-head"><h2>Running on the cut</h2><span class="tiny muted">last 4 weeks</span></div>
+    <p class="small">${[n ? `${hit} of ${n} quality reps on target` : null, easyTxt].filter(Boolean).map(esc).join(' · ')}.</p>
+    <p class="tiny muted" style="margin-top:6px">${slipping ? 'Both are slipping - if weight is also dropping fast, eat a little more on quality days (carbs before the run).' : 'Holding these while losing weight means the deficit is not costing you fitness.'}</p></div>`;
 }
 
 function fitnessHtml(ctx) {
@@ -320,6 +364,7 @@ function volumeHtml(ctx) {
   const done = weeks.slice(0, -1).filter((w) => w.km > 0);
   const avg = done.length ? done.reduce((s, w) => s + w.km, 0) / done.length : 0;
   return `<div class="card"><div class="card-head"><h2>Weekly distance</h2><span class="small muted">avg ${kmTxt(avg)} km</span></div>
+    <p class="tiny muted">Easy and quality km (interval, tempo and race runs).</p>
     <div class="chart-box"><canvas id="rn-weeks"></canvas></div></div>`;
 }
 
@@ -341,7 +386,8 @@ function easyTrendHtml(ctx) {
   else if (tr.slope <= -2) msg = `<p class="small"><b class="up">Getting fitter:</b> about ${Math.round(-tr.slope)} s/km faster per month at the same heart rate.</p>`;
   else if (tr.slope >= 3) msg = `<p class="small"><b class="down">${Math.round(tr.slope)} s/km per month slower</b> at the same heart rate — often heat, fatigue or a busy stretch. Prioritise sleep and easy runs.</p>`;
   else msg = '<p class="small">Steady at the same heart rate. Consistent easy mileage will move this.</p>';
-  return `<div class="card"><div class="card-head"><h2>Easy pace at ${tr.lo}–${tr.hi} bpm</h2></div>
+  return `<div class="card"><div class="card-head"><h2>Easy pace at ${tr.mid} bpm</h2></div>
+    <p class="tiny muted">Easy runs only (interval and tempo runs left out), each scaled to the same heart rate, so the dots show fitness rather than effort.</p>
     ${tr.points.length >= 2 ? '<div class="chart-box short rn-chart-gap"><canvas id="rn-easy"></canvas></div>' : ''}${msg}</div>`;
 }
 
@@ -388,18 +434,22 @@ function drawTabCharts(el, ctx) {
       type: 'bar',
       data: {
         labels: weeks.map((w) => weekTitle(w.start)),
-        datasets: [{ data: weeks.map((w) => Math.round(w.km * 10) / 10), backgroundColor: weeks.map((w, i) => (i === weeks.length - 1 ? run : `${run}80`)), borderRadius: 6, maxBarThickness: 26 }],
+        datasets: [
+          { label: 'Easy', data: weeks.map((w) => Math.round(w.easyKm * 10) / 10), backgroundColor: weeks.map((w, i) => (i === weeks.length - 1 ? `${run}aa` : run)), borderRadius: 4, maxBarThickness: 26, stack: 'k' },
+          { label: 'Quality', data: weeks.map((w) => Math.round(w.qualityKm * 10) / 10), backgroundColor: weeks.map((w, i) => (i === weeks.length - 1 ? `${cssVar('--protein')}aa` : cssVar('--protein'))), borderRadius: 4, maxBarThickness: 26, stack: 'k' },
+        ],
       },
       options: {
-        scales: { x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 6 } }, y: { beginAtZero: true, ticks: { maxTicksLimit: 5 } } },
-        plugins: { tooltip: { callbacks: { title: (it) => `Week of ${it[0].label}`, label: (it) => ` ${it.raw} km · ${weeks[it.dataIndex].runs} run${weeks[it.dataIndex].runs === 1 ? '' : 's'}` } } },
+        scales: { x: { stacked: true, grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 6 } }, y: { stacked: true, beginAtZero: true, ticks: { maxTicksLimit: 5 } } },
+        plugins: { legend: { display: true, labels: { boxWidth: 10, boxHeight: 10 } }, tooltip: { callbacks: { title: (it) => `Week of ${it[0].label}`, label: (it) => ` ${it.dataset.label} ${it.raw} km`, footer: (it) => `${Math.round(weeks[it[0].dataIndex].km * 10) / 10} km · ${weeks[it[0].dataIndex].runs} run${weeks[it[0].dataIndex].runs === 1 ? '' : 's'}` } } },
       },
     });
   }
   const ez = $('#rn-easy', el);
   if (ez) {
-    const pts = C.easyPaceTrend(ctx).points;
-    const xs = pts.map((p) => p.t), ys = pts.map((p) => p.pace);
+    const tr = C.easyPaceTrend(ctx);
+    const pts = tr.points;
+    const xs = pts.map((p) => p.t), ys = pts.map((p) => Math.round(p.adj));
     let line = null;
     if (pts.length >= 3) {
       const mx = xs.reduce((a, b) => a + b, 0) / xs.length, my = ys.reduce((a, b) => a + b, 0) / ys.length;
@@ -418,7 +468,7 @@ function drawTabCharts(el, ctx) {
       },
       options: {
         scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 4, maxRotation: 0 } }, y: { reverse: true, ticks: { callback: (v) => C.fmtPace(v), maxTicksLimit: 4 } } },
-        plugins: { tooltip: { filter: (it) => it.datasetIndex === 0, callbacks: { label: (it) => ` ${C.fmtPace(it.raw)}/km at ${Math.round(pts[it.dataIndex].hr)} bpm` } } },
+        plugins: { tooltip: { filter: (it) => it.datasetIndex === 0, callbacks: { label: (it) => ` ${C.fmtPace(it.raw)}/km at ${tr.mid} bpm (ran ${C.fmtPace(pts[it.dataIndex].pace)}/km at ${Math.round(pts[it.dataIndex].hr)} bpm)` } } },
       },
     });
   }
@@ -491,7 +541,7 @@ function renderHome(el) {
       <p class="small"><b>${esc(last.name || 'Run')}</b> <span class="muted">· ${esc(relDay(last.start))} · ${C.km(last.distance_m).toFixed(1)} km · ${C.fmtPace(C.paceOf(last))}/km</span></p>
       ${fb ? `<p class="small rn-home-fb rn-fb-${esc(fb.tone)}">${icon(TONE_ICON[fb.tone] || 'info')}<span>${esc(fb.text)}</span></p>` : ''}
     </button>
-    ${plan ? RP.homeNextSessionHtml(plan, ctx.now) : `<div class="rn-home-today"><b>Today: ${esc(today.title)}</b><p class="small muted">${esc(today.detail)}</p></div>`}
+    ${plan ? RP.homeNextSessionHtml(plan, ctx.now, ctx.maxHr) : `<div class="rn-home-today"><b>Today: ${esc(today.title)}</b><p class="small muted">${esc(today.detail)}</p></div>`}
   </div>`;
   const card = el.firstElementChild;
   card.onclick = () => window.showTab?.('run');

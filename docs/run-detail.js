@@ -1,7 +1,8 @@
 // Run list rows, the run detail screen and the "All runs" screen.
 
-import { $, $$, esc, icon, niceDate, niceTime, relDay } from './util.js';
-import { push, page } from './nav.js';
+import { $, $$, esc, icon, toast, niceDate, niceTime, relDay } from './util.js';
+import * as store from './store.js';
+import { push, page, confirmSheet } from './nav.js';
 import { chart, cssVar } from './charts.js';
 import * as C from './run-coach.js';
 
@@ -88,14 +89,47 @@ function routeSvg(polyline) {
 // ---------- detail screen ----------
 const MAIN_EFFORTS = ['400m', '1/2 mile', '1k', '1 mile', '2 mile', '5k', '10k', '15k', '10 mile', '20k', 'Half-Marathon', '30k', 'Marathon'];
 
+// Quality run vs the plan: every rep against the target band, and the same workout last time.
+function repCardHtml(run, cls, ctx) {
+  const sess = ctx.planSessionOf?.(run.id);
+  if (!sess?.targetPace || !['intervals', 'tempo', 'test5k', 'test10k'].includes(sess.type)) return '';
+  const sc = C.repScore(cls, sess.targetPace);
+  const band = `${C.fmtPace(Math.min(...sess.targetPace))}–${C.fmtPace(Math.max(...sess.targetPace))}/km`;
+  if (!sc) return `<div class="card"><div class="card-head"><h2>${esc(sess.title)}</h2></div><p class="small muted">Target ${band}. No laps were recorded, so the reps can't be scored - press the lap button at the start and end of each rep next time.</p></div>`;
+  const prev = ctx.prevSame?.(sess);
+  const prevRun = prev && ctx.runs.find((r) => r.id === prev.doneRunId);
+  const ps = prevRun && C.repScore(ctx.classOf(prevRun), prev.targetPace || sess.targetPace);
+  const hrAvg = (x) => { const h = x.reps.filter((r) => r.hr); return h.length ? Math.round(h.reduce((a, r) => a + r.hr, 0) / h.length) : null; };
+  return `<div class="card"><div class="card-head"><h2>${esc(sess.title)}</h2><span class="pill ${sc.hit === sc.n ? 'rn-pill-run' : ''}">${sc.hit}/${sc.n} on target</span></div>
+    <p class="tiny muted">Target ${band} for each ${sc.n > 1 ? 'rep' : 'tempo section'}.</p>
+    <div class="rn-reps">${sc.reps.map((r, i) => `<div class="rn-rep-row ${r.ok ? 'ok' : r.fast ? 'fast' : 'slow'}"><span>${sc.n > 1 ? `Rep ${i + 1}` : 'Tempo'}</span><span class="muted small">${r.d >= 1000 ? `${C.kmShort(Math.round(r.d / 10) / 100)} km` : `${Math.round(r.d)} m`}</span><b>${C.fmtPace(r.pace)}<small>/km</small></b><span class="small muted">${r.hr ? `${Math.round(r.hr)} bpm` : ''}</span><span>${r.ok ? icon('check') : r.fast ? 'fast' : 'slow'}</span></div>`).join('')}</div>
+    ${ps ? `<p class="small" style="margin-top:8px"><b>Last time</b> (${esc(niceDate(prevRun.start))}): ${C.fmtPace(ps.avg)}/km${hrAvg(ps) ? ` at ${hrAvg(ps)} bpm` : ''}, ${ps.hit}/${ps.n} on target → today ${C.fmtPace(sc.avg)}/km${hrAvg(sc) ? ` at ${hrAvg(sc)} bpm` : ''}.
+      ${sc.avg < ps.avg - 2 && (!hrAvg(sc) || !hrAvg(ps) || hrAvg(sc) <= hrAvg(ps) + 2) ? '<span class="up">Faster for the same effort.</span>' : ''}</p>` : ''}
+  </div>`;
+}
+
+// Easy run: did heart rate creep up for the same pace (drift), and how long was it above the easy ceiling?
+function easyChecksHtml(run, cls, ctx) {
+  if (!['easy', 'long', 'recovery'].includes(cls.type)) return '';
+  const ck = C.easyRunChecks(run, ctx.maxHr);
+  if (!ck) return '';
+  const drift = ck.drift >= 5 ? `<p class="small"><b class="warn">Heart rate drifted ${ck.drift}%</b> in the second half for the same pace - heat, too fast a start, or running low on fuel and fluids.</p>`
+    : `<p class="small"><b class="up">Steady:</b> heart rate held for the same pace (drift ${Math.max(0, ck.drift)}%, under 5% is aerobically solid).</p>`;
+  const above = ck.cap && ck.above >= 3 ? `<p class="small" style="margin-top:4px">${ck.above} min above ${ck.cap} bpm - slow down or walk briefly to keep easy runs easy.</p>` : '';
+  return `<div class="card"><div class="card-head"><h2>Easy run check</h2></div>${drift}${above}</div>`;
+}
+
 export function openRun(run, ctx) {
-  push((el) => {
+  push((el, scr) => {
     const cls = ctx.classOf(run);
     const fb = C.runFeedback(run, ctx);
     const p = C.paceOf(run);
     const splits = (run.splits || []).filter((s) => s.d > 0 && s.s > 0);
     const laps = (run.laps || []).filter((l) => l.d > 0 && l.s > 0);
     const lapsUseful = laps.length > 1 && !laps.every((l) => Math.abs(l.d - 1000) < 30 || l === laps[laps.length - 1]);
+    // Garmin runs store their laps as "splits" too: with real laps (a workout) show them once, as laps.
+    const splitsAreLaps = splits.length === laps.length && splits.every((x, i) => Math.abs(x.d - laps[i].d) < 5);
+    const showSplits = splits.length >= 2 && !(splitsAreLaps && lapsUseful);
     const efforts = (run.best_efforts || []).filter((e) => MAIN_EFFORTS.includes(e.name)).sort((a, b) => a.distance - b.distance);
     const repSet = new Set();
     if (cls.type === 'intervals') {
@@ -119,13 +153,15 @@ export function openRun(run, ctx) {
       title: run.name || 'Run',
       sub: esc(`${niceDate(run.start, { weekday: true, year: new Date(run.start).getFullYear() !== new Date().getFullYear() })} · ${niceTime(run.start)}`),
       body: `
-        <div class="rn-detail-tags">${typePill(cls.type)}${run.trainer ? '<span class="pill">Treadmill</span>' : ''}${run.sport === 'TrailRun' ? '<span class="pill">Trail</span>' : ''}
+        <div class="rn-detail-tags">${typePill(cls.type)}${run.trainer ? '<span class="pill">Treadmill</span>' : ''}${/trail/i.test(`${run.sport || ''} ${run.type || ''}`) ? '<span class="pill">Trail</span>' : ''}${run.manual ? '<span class="pill">Logged by hand</span>' : ''}
           ${efforts.filter((e) => Number(e.pr_rank) === 1).map((e) => `<span class="pill gold">${icon('trophy')}${esc(e.name)} PR</span>`).join('')}</div>
         <div class="stats rn-dstats">${stats}</div>
+        ${repCardHtml(run, cls, ctx)}
         ${fb.length ? `<div class="card rn-coach"><div class="card-head"><h2>Coach</h2></div>${feedbackHtml(fb)}</div>` : ''}
+        ${easyChecksHtml(run, cls, ctx)}
         ${run.detail === false ? '<p class="card flat small muted">Splits and laps are still loading from Garmin — they appear after the next sync.</p>' : ''}
         ${run.polyline ? `<div class="card rn-route-card">${routeSvg(run.polyline)}</div>` : ''}
-        ${splits.length >= 2 ? `<div class="card"><div class="card-head"><h2>Splits</h2><span class="tiny muted rn-legend"><i class="rn-lg-pace"></i>pace${splits.some((s) => s.hr) ? '<i class="rn-lg-hr"></i>heart rate' : ''}</span></div>
+        ${showSplits ? `<div class="card"><div class="card-head"><h2>Splits</h2><span class="tiny muted rn-legend"><i class="rn-lg-pace"></i>pace${splits.some((s) => s.hr) ? '<i class="rn-lg-hr"></i>heart rate' : ''}</span></div>
           <div class="chart-box"><canvas id="rn-splits"></canvas></div>
           <table class="rn-table"><thead><tr><th>Km</th><th>Pace</th><th>HR</th><th>Elev</th></tr></thead><tbody>
           ${splits.map((s) => `<tr><td>${s.d < 950 ? C.kmShort(Math.round(s.d / 10) / 100) : s.km}</td><td><b>${C.fmtPace(s.s / (s.d / 1000))}</b></td><td>${s.hr ? Math.round(s.hr) : '–'}</td><td>${s.elev != null ? `${s.elev > 0 ? '+' : ''}${Math.round(s.elev)} m` : '–'}</td></tr>`).join('')}
@@ -138,9 +174,13 @@ export function openRun(run, ctx) {
           <table class="rn-table"><tbody>${efforts.map((e) => `<tr><td>${esc(e.name)}</td><td><b>${C.fmtTime(e.s)}</b></td><td class="muted">${C.fmtPace(e.s / (e.distance / 1000))}/km</td><td>${Number(e.pr_rank) === 1 ? '<span class="pill gold">PR</span>' : Number(e.pr_rank) === 2 ? '<span class="pill">2nd</span>' : Number(e.pr_rank) === 3 ? '<span class="pill">3rd</span>' : ''}</td></tr>`).join('')}</tbody></table></div>` : ''}
         ${run.description ? `<div class="card flat small">${esc(run.description)}</div>` : ''}
         ${run.garmin_id && !run.demo ? `<a class="rn-garmin-link" href="https://connect.garmin.com/modern/activity/${encodeURIComponent(run.garmin_id)}" target="_blank" rel="noopener">View on Garmin Connect</a>` : ''}
+        ${run.manual && !run.demo ? '<button class="ghost danger-text block" data-a="rn-del" style="margin-top:16px">Delete this run</button>' : ''}
       `,
     });
-    if (splits.length >= 2) drawSplits($('#rn-splits', el), splits);
+    if (showSplits) drawSplits($('#rn-splits', el), splits);
+    $('[data-a="rn-del"]', el)?.addEventListener('click', async () => {
+      if (await confirmSheet('Delete this run you logged by hand?', { ok: 'Delete', danger: true })) { await store.remove(run.id); toast('Run deleted'); scr.close(); }
+    });
   });
 }
 

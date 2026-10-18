@@ -8,6 +8,7 @@ import { chart, cssVar, fade, seriesColor, onThemeChange } from './charts.js';
 import { targets } from './food-ui.js';
 import { computePRs, PR_KINDS, formatMetric } from './gym-calc.js';
 import { loadDb, exName, groupsOf } from './gym-data.js';
+import { runContext } from './run.js';
 import { renderProgress } from './cut-progress.js';
 import { isSetUp, cutSettings, startWeight } from './cut.js';
 import { projectedWeight, daysToGoal, emaTrend, trendOn } from './cut-calc.js';
@@ -50,7 +51,11 @@ function gather() {
   const src = { weights: store.all('bodyweight'), dailies: store.all('daily'), meals: store.all('meal') };
   const factsOf = (d) => dayFacts(d, src);
   const workouts = store.all('workout').filter((w) => w?.started_at);
-  const runs = store.all('run').filter((r) => r?.start);
+  // The Run tab's runs: duplicates (manual + watch, Strava + Garmin) and accidental recordings removed, each with its
+  // type (easy / quality) for the easy-pace line.
+  let runs = store.all('run').filter((r) => r?.start);
+  let runType = null;
+  try { const rc = runContext(); if (rc) { runs = rc.runs; runType = (r) => rc.classOf(r).type; } } catch { /* no runs yet */ }
   const cut = isSetUp() ? cutSettings() : null;
   const from = addDays(t, -days + 1);
   // Weekly charts: whole weeks covering the range, without empty weeks before the first data.
@@ -60,7 +65,7 @@ function gather() {
   if (firstData) { const fw = weekOf(firstData); const trimmed = weeks.filter((w) => w >= fw); weeks = trimmed.length >= 4 ? trimmed : weeks.slice(-4); }
   const tdeeOf = (d) => adaptiveTdee(d, { weights: src.weights, kcalOf: (x) => factsOf(x).kcal });
   const training = (w) => weekTraining(w, { workouts, runs, dailies: src.dailies, through: addDays(w, 6) < t ? addDays(w, 6) : t });
-  return { t, src, factsOf, workouts, runs, cut, from, weeks, tdeeOf, training };
+  return { t, src, factsOf, workouts, runs, runType, cut, from, weeks, tdeeOf, training };
 }
 
 // ---------- page ----------
@@ -91,7 +96,7 @@ function render(el) {
       ${chartCard('Body weight', 'st-weight', 'Dots are weigh-ins, the line is the trend (the same one the cut plan uses).')}
       <h3 class="section-title">Training</h3>
       ${chartCard('Weekly plan', 'st-plan', 'Gym sessions and runs per week. Dashed: the goal of 3 gym + 2 runs.')}
-      ${chartCard('Running', 'st-run', 'Km per week; the line is the pace of easy runs (long runs left out).')}
+      ${chartCard('Running', 'st-run', 'Km per week; the line is the pace of easy runs only (interval, tempo and long runs left out).')}
       <div id="st-strength"></div>
       ${chartCard('Hard sets per muscle', 'st-sets', 'Working sets per week, averaged over the range. Around 10+ a week per muscle keeps it growing; on a cut, holding them is the goal.')}
       <div id="st-prs"></div>
@@ -260,7 +265,7 @@ function drawPlan(el, g) {
 }
 
 function drawRun(el, g) {
-  const r = runWeeks(g.runs, g.weeks);
+  const r = runWeeks(g.runs, g.weeks, g.runType);
   if (!empty(el, 'st-run', r.some((w) => w.km > 0) ? '' : 'No runs in this period yet (manual, Strava or Garmin).')) return;
   const col = cssVar('--up');
   chart('st-run', base(g.weeks.map(wkLabel), [

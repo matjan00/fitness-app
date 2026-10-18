@@ -85,9 +85,11 @@ export function sessionFor(day, { workouts = [], runs = [], routineCut, dailies 
 }
 
 // Was the day's session done? Lift: a finished workout that day. Run: a run that day.
+const tinyRun = (r) => (r.distance_m != null && +r.distance_m < 500) || ((r.moving_s != null || r.elapsed_s != null) && (+r.moving_s || +r.elapsed_s || 0) < 180);
 export function sessionDone(kind, day, { workouts = [], runs = [] } = {}) {
   if (kind === 'lift') return workouts.some((w) => w && w.ended_at && w.started_at && localDay(w.started_at) === day);
-  if (kind === 'easy' || kind === 'quality') return runs.some((r) => r && r.start && localDay(r.start) === day);
+  // accidental recordings (under 500 m or 3 min) don't count as a run
+  if (kind === 'easy' || kind === 'quality') return runs.some((r) => r && r.start && localDay(r.start) === day && !tinyRun(r));
   return false;
 }
 

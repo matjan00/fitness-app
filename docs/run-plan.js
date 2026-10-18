@@ -285,30 +285,51 @@ function generateCutPlan({ ctx = {}, goal, startedAt }) {
 const HARD_SESSION_TYPES = new Set(['tempo', 'intervals', 'test5k', 'test10k']);
 const HARD_RUN_TYPES = new Set(['tempo', 'intervals', 'race', 'workout']);
 
+// A run fits a session when both are hard (intervals / tempo / test vs a hard run) or both are easy - distance alone
+// never decides (an easy 8 km run is not a 10 km interval session). Easy sessions also want a sensible distance.
 export function sessionMatches(session, run, runType) {
   if (!session || session.status !== 'planned') return false;
+  const hardSession = HARD_SESSION_TYPES.has(session.type);
+  const hardRun = HARD_RUN_TYPES.has(runType);
+  if (hardSession !== hardRun) return false;
+  if (hardSession) return true;
   const distKm = C.km(run.distance_m);
-  if (session.totalKm > 0 && distKm >= session.totalKm * 0.65 && distKm <= session.totalKm * 1.35) return true;
-  if (HARD_SESSION_TYPES.has(session.type) && HARD_RUN_TYPES.has(runType)) return true;
-  return false;
+  return !(session.totalKm > 0) || distKm >= session.totalKm * 0.5;
 }
 
-// Returns an updated copy of the session that should be auto-matched to `run`, or null.
+// Plan week (1-based) a moment falls in.
+export const planWeekOf = (plan, ms) => Math.floor((ms - plan.startedAt) / WEEK) + 1;
+
+// Returns an updated copy of the session that should be auto-matched to `run`, or null. Only sessions of the run's
+// own plan week are candidates (so a run never ticks off a session weeks ahead), the first one of the right kind.
 export function autoMatch(plan, run, runType, runStartMs) {
   if (!plan || runStartMs < plan.startedAt) return null;
-  let lastDoneIdx = -1;
-  plan.sessions.forEach((s, i) => { if (s.status !== 'planned') lastDoneIdx = i; });
-  const lastDoneAt = lastDoneIdx >= 0 ? (plan.sessions[lastDoneIdx].doneAt || plan.startedAt) : plan.startedAt;
-  if (runStartMs < lastDoneAt) return null;
-  const next = plan.sessions[lastDoneIdx + 1];
-  if (!next || !sessionMatches(next, run, runType)) return null;
-  return { ...next, status: 'done', doneRunId: run.id, doneAt: runStartMs };
+  const wk = planWeekOf(plan, runStartMs);
+  // The cut plan follows the calendar: only the run's own week. A goal plan may run behind (it has Move / Skip), so
+  // there the earliest open session of the right kind up to this week is done first.
+  const cand = plan.goal?.cut ? plan.sessions.find((s) => s.week === wk && sessionMatches(s, run, runType))
+    : plan.sessions.find((s) => s.week <= wk && sessionMatches(s, run, runType));
+  if (!cand) return null;
+  return { ...cand, status: 'done', doneRunId: run.id, doneAt: runStartMs, auto: true };
+}
+
+// Re-match the whole plan from scratch (sessions you linked or skipped by hand stay as they are). Plans from before
+// matching by type (no matchV) had every link made automatically, so those are all redone.
+export function rematchPlan(plan, runs, typeOf) {
+  const keep = (x) => x.status === 'skipped' || (x.status === 'done' && (plan.matchV >= 2 ? !x.auto : false));
+  let out = { ...plan, matchV: 2, sessions: plan.sessions.map((x) => (keep(x) ? x : { ...x, status: 'planned', doneRunId: null, doneAt: null, auto: false })) };
+  const linked = new Set(out.sessions.filter((x) => x.doneRunId).map((x) => x.doneRunId));
+  for (const r of [...runs].filter((r) => C.startMs(r) >= plan.startedAt && !linked.has(r.id)).sort((a, b) => C.startMs(a) - C.startMs(b))) {
+    const u = autoMatch(out, r, typeOf(r), C.startMs(r));
+    if (u) out = { ...out, sessions: out.sessions.map((x) => (x.id === u.id ? u : x)) };
+  }
+  return out;
 }
 
 export function markDone(plan, sessionId, run) {
   return {
     ...plan,
-    sessions: plan.sessions.map((s) => (s.id === sessionId ? { ...s, status: 'done', doneRunId: run?.id || null, doneAt: run ? C.startMs(run) : Date.now() } : s)),
+    sessions: plan.sessions.map((s) => (s.id === sessionId ? { ...s, status: 'done', doneRunId: run?.id || null, doneAt: run ? C.startMs(run) : Date.now(), auto: false } : s)),
   };
 }
 export function markSkipped(plan, sessionId) {
@@ -337,14 +358,19 @@ export function sessionFeedback(session, run, ctx = {}) {
     }
   } else if (session.type === 'intervals' || session.type === 'tempo') {
     const target = session.targetPace;
-    if (target && p) {
-      const mid = (target[0] + target[1]) / 2;
-      const diff = p - mid;
-      if (diff < -8) out.push({ tone: 'tip', text: `Average ${C.fmtPace(p)}/km was quicker than the ${C.fmtPace(target[0])}–${C.fmtPace(target[1])}/km target. Strong, but running quality sessions too hard adds fatigue without much extra benefit.` });
-      else if (diff > 12) out.push({ tone: 'info', text: `Average ${C.fmtPace(p)}/km landed slower than the ${C.fmtPace(target[0])}–${C.fmtPace(target[1])}/km target. Fine if it felt hard — heat, hills or tired legs all slow this down.` });
-      else out.push({ tone: 'good', text: `Average ${C.fmtPace(p)}/km — right in the ${C.fmtPace(target[0])}–${C.fmtPace(target[1])}/km target zone.` });
+    // Judge the reps / tempo block, never the whole run's average (that includes warm-up, cool-down and jogs).
+    const sc = target && ctx.classOf ? C.repScore(ctx.classOf(run), target) : null;
+    const band = target ? `${C.fmtPace(Math.min(...target))}–${C.fmtPace(Math.max(...target))}/km` : '';
+    if (sc) {
+      const what = sc.n > 1 ? `${sc.hit} of ${sc.n} reps on target (${band}), averaging ${C.fmtPace(sc.avg)}/km` : `Tempo section at ${C.fmtPace(sc.avg)}/km (target ${band})`;
+      const tone = sc.hit === sc.n ? 'good' : sc.hit >= sc.n / 2 ? 'info' : 'tip';
+      const why = sc.hit === sc.n ? ' Well judged.' : sc.reps.some((r) => r.fast) ? ' Some were faster than needed - holding back keeps the last reps as good as the first.' : ' Fine if it felt hard - heat, hills or tired legs slow reps down.';
+      out.push({ tone, text: `${what}.${why}` });
+      if (sc.n >= 3 && sc.fade >= 8) out.push({ tone: 'tip', text: `The last rep was ${sc.fade} s/km slower than the first - start a touch more conservatively.` });
+    } else if (target && p) {
+      out.push({ tone: 'info', text: `Average ${C.fmtPace(p)}/km for the whole run, warm-up and jogs included - the reps themselves are not visible without laps. Press the lap button at the start and end of each rep to get every rep scored against ${band}.` });
     }
-    const sp = (run.splits || []).filter((s) => Number(s.d) >= 900 && Number(s.s) > 0);
+    const sp = sc ? [] : (run.splits || []).filter((s) => Number(s.d) >= 900 && Number(s.s) > 0);
     if (sp.length >= 4) {
       const half = sp.length >> 1;
       const pace = (arr) => arr.reduce((s, x) => s + x.s, 0) / (arr.reduce((s, x) => s + x.d, 0) / 1000);
@@ -360,7 +386,7 @@ export function sessionFeedback(session, run, ctx = {}) {
   }
 
   const next = session.type === 'long' ? 'Next long run, try to hold the same relaxed effort even as the distance grows.'
-    : session.type === 'intervals' ? 'Next time, focus on even pacing across all the reps rather than fast early ones.'
+    : session.type === 'intervals' ? 'Focus on even pacing across all the reps rather than fast early ones.'
     : session.type === 'tempo' ? 'Keep tempo runs at "comfortably hard" — you should be able to hold the pace for the whole segment.'
     : 'Keep stacking easy miles — consistency beats any single session.';
   out.push({ tone: 'info', text: `Next time: ${next}` });
@@ -369,7 +395,7 @@ export function sessionFeedback(session, run, ctx = {}) {
 
 // ---------- behind / missed sessions ----------
 export function computeBehind(plan, now = Date.now()) {
-  if (!plan || !plan.sessions.length) return null;
+  if (!plan || !plan.sessions.length || plan.goal?.cut) return null; // the cut plan follows the calendar (see nextSession)
   const doneOrSkipped = plan.sessions.filter((s) => s.status !== 'planned');
   const remaining = plan.sessions.filter((s) => s.status === 'planned');
   if (!remaining.length) return null;
@@ -433,8 +459,19 @@ export function planProgress(plan) {
   const total = plan.sessions.length;
   return { done, total, pct: total ? Math.round((done / total) * 100) : 0 };
 }
-export function nextSession(plan) {
+// The next session to do. The cut plan follows the calendar: sessions of weeks that are over are left behind, so
+// "next" is in the current plan week (or later), never an old week's run.
+export function nextSession(plan, now = Date.now()) {
+  if (plan.goal?.cut) {
+    const wk = planWeekOf(plan, now);
+    return plan.sessions.find((s) => s.status === 'planned' && s.week >= wk) || null;
+  }
   return plan.sessions.find((s) => s.status === 'planned') || null;
+}
+// This plan week's sessions with their state, for the "this week" view: [{ session, done, run_id }].
+export function weekSessions(plan, now = Date.now()) {
+  const wk = planWeekOf(plan, now);
+  return plan.sessions.filter((s) => s.week === wk);
 }
 export function currentWeekLabel(plan, session) {
   if (!session) return '';
@@ -532,4 +569,10 @@ export function watchWorkoutName(session, sessions = []) {
   const inWeek = sessions.filter((s) => s.week === session.week).sort((a, b) => a.index - b.index);
   const n = inWeek.findIndex((s) => s.id === session.id) + 1;
   return n > 0 ? `Week ${session.week} · Run ${n}` : `Week ${session.week} · ${session.title || 'Run'}`.slice(0, 40);
+}
+
+// The last completed session with the same title before this one (e.g. "Intervals 5 × 1 km" in week 4 vs week 9).
+export function previousSame(plan, session) {
+  return plan.sessions.filter((x) => x.id !== session.id && x.title === session.title && x.status === 'done' && x.doneRunId && (x.doneAt || 0) < (session.doneAt || Infinity))
+    .sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0))[0] || null;
 }

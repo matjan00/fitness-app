@@ -146,12 +146,19 @@ export function wireWatch(el) {
 export async function syncPlanMatches(ctx) {
   let plan = getPlan();
   if (!plan || !plan.sessions?.length) return false;
+  // Plans matched the old way (by distance only, in order) are re-matched once by run type and plan week.
+  if (!(plan.matchV >= 2)) {
+    // Judge each run by itself here (its name, laps, pace), not by the old links being replaced.
+    await savePlan(P.rematchPlan(plan, ctx.runs, (r) => C.classifyRun(r, { ...ctx, linked: null }).type));
+    return true;
+  }
   let changed = false;
   const linked = new Set(plan.sessions.filter((s) => s.doneRunId).map((s) => s.doneRunId));
   const runs = [...ctx.runs].filter((r) => C.startMs(r) >= plan.startedAt && !linked.has(r.id)).sort((a, b) => C.startMs(a) - C.startMs(b));
   for (const r of runs) {
     const runType = ctx.classOf(r).type;
     const updated = P.autoMatch(plan, r, runType, C.startMs(r));
+    if (!updated) continue;
     if (updated) {
       plan = { ...plan, sessions: plan.sessions.map((s) => (s.id === updated.id ? updated : s)) };
       changed = true;
@@ -170,10 +177,11 @@ export function planSectionHtml(ctx, plan) {
   const goalPct = plan.startVdot && plan.goalVdot > plan.startVdot
     ? Math.min(100, Math.round((((est?.vdot || plan.startVdot) - plan.startVdot) / (plan.goalVdot - plan.startVdot)) * 100))
     : (progress.pct);
-  const next = P.nextSession(plan);
+  const next = P.nextSession(plan, ctx.now);
 
   return `
   ${behind ? behindBannerHtml(behind) : ''}
+  ${plan.goal.cut ? thisWeekHtml(plan, ctx) : ''}
   <div class="card rn-goal">
     <div class="card-head"><h2>${plan.goal.cut ? '' : 'Goal: '}${esc(goalTxt(plan.goal))}</h2><button class="link small" data-a="rn-view-plan">View plan</button></div>
     <p class="small muted">Current estimated ${esc(plan.goal.distance_km)} km time: <b>${currentTime ? esc(C.fmtTime(currentTime)) : 'not yet measured'}</b></p>
@@ -204,11 +212,41 @@ function sessionBody(s, paceExtra = '') {
     ${s.tips?.length ? `<ul class="rn-tips small muted">${s.tips.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}${paceExtra}`;
 }
 
+// The cut plan's week at a glance: its two runs, done or still to do.
+const isHard = (s) => ['intervals', 'tempo', 'test5k', 'test10k'].includes(s.type);
+function thisWeekHtml(plan, ctx) {
+  const ws = P.weekSessions(plan, ctx.now);
+  if (!ws.length) return '';
+  const row = (s) => {
+    const run = s.doneRunId ? ctx.runs.find((r) => r.id === s.doneRunId) : null;
+    return `<div class="rn-wk-row ${s.status}"><span class="rn-wk-ic">${s.status === 'done' ? icon('check') : s.status === 'skipped' ? '–' : ''}</span>
+      <div class="grow"><b>${isHard(s) ? 'Quality' : 'Easy'}</b> <span class="small muted">${esc(s.title)}</span></div>
+      <span class="small ${s.status === 'done' ? '' : 'muted'}">${s.status === 'done' ? (run ? `${C.km(run.distance_m).toFixed(1)} km` : 'done') : s.status === 'skipped' ? 'skipped' : 'to do'}</span></div>`;
+  };
+  return `<div class="card rn-week"><div class="card-head"><h2>This week</h2><span class="tiny muted">plan week ${ws[0].week} of 13</span></div>${ws.map(row).join('')}</div>`;
+}
+
+// What to aim for on the run itself: an easy run is led by heart rate, quality reps by pace.
+function targetLine(s, ctx) {
+  if (isHard(s) && s.targetPace) return `<div class="rn-target"><b>${C.fmtPace(Math.min(...s.targetPace))}–${C.fmtPace(Math.max(...s.targetPace))}<small>/km</small></b><span>pace for each rep (judge reps by pace, not heart rate)</span></div>`;
+  if (!isHard(s) && ctx.maxHr) return `<div class="rn-target"><b>under ${Math.round(ctx.maxHr * 0.8)}<small> bpm</small></b><span>heart-rate cap - slow down or walk to stay under it</span></div>`;
+  return '';
+}
+// Quality day notes: fresh legs and some carbs before.
+function qualityNotes(s, ctx) {
+  if (!isHard(s)) return '';
+  const legs = C.legDayBefore(ctx.now, ctx.workouts, ctx.isLeg);
+  return `${legs ? `<p class="small warn" style="margin-top:8px">${icon('info')} Heavy leg session in the last day - do the easy run today if you can and keep this one for fresher legs.</p>` : ''}
+    <p class="tiny muted" style="margin-top:6px">Quality day: have some carbs 1-3 h before (a banana, rice, bread) from your day's targets - reps on an empty tank feel harder and go slower.</p>`;
+}
+
 function nextSessionHtml(s, plan, ctx) {
   return `<div class="card rn-next-session">
     <div class="card-head"><h2>${esc(s.title)}</h2><span class="pill rn-pill-run">${C.kmShort(s.totalKm)} km</span></div>
     <p class="tiny muted">${esc(P.currentWeekLabel(plan, s))} · ${esc(s.phase)} phase</p>
+    ${targetLine(s, ctx)}
     ${sessionBody(s)}
+    ${qualityNotes(s, ctx)}
     ${watchHtml(s)}
     <div class="row" style="gap:8px;margin-top:14px">
       <button class="ghost" style="flex:1" data-a="rn-skip-session" data-id="${esc(s.id)}">Skip</button>
@@ -241,7 +279,7 @@ export function wirePlanSection(el, ctx, plan, afterChange) {
 async function markDoneFlow(plan, sessionId, ctx, afterChange) {
   const linked = new Set(plan.sessions.filter((s) => s.doneRunId).map((s) => s.doneRunId));
   const candidates = ctx.runs.filter((r) => !linked.has(r.id) && C.startMs(r) >= plan.startedAt).slice(0, 8);
-  const options = candidates.map((r) => ({ value: r.id, label: `${niceDate(r.start)} · ${C.km(r.distance_m).toFixed(1)} km · ${C.fmtTime(r.moving_s)}` }));
+  const options = candidates.map((r) => ({ value: r.id, label: `${niceDate(r.start)} · ${C.TYPE_LABELS[ctx.classOf(r).type] || 'Run'} · ${C.km(r.distance_m).toFixed(1)} km · ${C.fmtTime(r.moving_s)}` }));
   options.push({ value: '__none__', label: 'Mark done without linking a run' });
   const choice = await chooseSheet('Which run was this?', options);
   if (!choice) return;
@@ -397,8 +435,8 @@ export function meGoalPlanHtml(plan) {
   if (!plan) return '';
   return `<div><p class="rn-label">Goal plan</p>
     <p class="small muted">${esc(goalTxt(plan.goal))}</p>
-    <p class="rn-label" style="margin-top:10px">Runs per week</p>
-    <div class="seg" id="rn-plan-rpw">${[2, 3, 4, 5].map((n) => `<button data-v="${n}" class="${plan.runsPerWeek === n ? 'on' : ''}">${n}</button>`).join('')}</div>
+    ${plan.goal.cut ? '<p class="small muted" style="margin-top:10px">Runs per week: 2, set by the cut plan (an easy run and a quality run).</p>' : `<p class="rn-label" style="margin-top:10px">Runs per week</p>
+    <div class="seg" id="rn-plan-rpw">${[2, 3, 4, 5].map((n) => `<button data-v="${n}" class="${plan.runsPerWeek === n ? 'on' : ''}">${n}</button>`).join('')}</div>`}
     <div class="row" style="gap:8px;margin-top:12px"><button class="ghost" style="flex:1" data-a="rn-edit-goal">Change goal</button><button class="danger-text" style="flex:1" data-a="rn-reset-plan">Reset plan</button></div></div>`;
 }
 
@@ -420,10 +458,11 @@ export function wireMeGoalPlan(el, ctx, afterChange) {
 }
 
 // ---------- Home card fragment ----------
-export function homeNextSessionHtml(plan, now) {
+export function homeNextSessionHtml(plan, now, maxHr = null) {
   const behind = P.computeBehind(plan, now);
-  const next = P.nextSession(plan);
+  const next = P.nextSession(plan, now);
   if (!next) return '';
-  return `<div class="rn-home-today"><b>Next: ${esc(next.title)}</b><p class="small muted">${esc(next.main)}</p>
+  const aim = isHard(next) && next.targetPace ? `reps at ${C.fmtPace(Math.min(...next.targetPace))}–${C.fmtPace(Math.max(...next.targetPace))}/km` : !isHard(next) && maxHr ? `keep heart rate under ${Math.round(maxHr * 0.8)} bpm` : '';
+  return `<div class="rn-home-today"><b>Next: ${esc(next.title)}</b><p class="small muted">${esc(next.main)}</p>${aim ? `<p class="small"><b>Aim:</b> ${esc(aim)}</p>` : ''}
     ${behind ? `<p class="small warn">${behind.sessionsOverdue} session${behind.sessionsOverdue > 1 ? 's' : ''} behind the plan</p>` : ''}</div>`;
 }
