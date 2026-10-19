@@ -1,55 +1,23 @@
-// Macro maths, daily totals, targets (TDEE) and body-weight trend. Pure functions — tests/food-calc.test.js.
+// Daily food totals, targets (TDEE) and body-weight trend. Pure functions — tests/food-calc.test.js.
 
 export const round = (x, d = 0) => {
   const k = 10 ** d;
   return Math.round((Number(x) || 0) * k) / k;
 };
 
-// food has per-100 g values { k, p, c, f }
-export function macrosFor(food, grams) {
-  const g = Number(grams) || 0;
-  if (!food || !g) return { kcal: 0, p: 0, c: 0, f: 0 };
-  return { kcal: (food.k || 0) * g / 100, p: (food.p || 0) * g / 100, c: (food.c || 0) * g / 100, f: (food.f || 0) * g / 100 };
-}
-
-export function addMacros(a, b) {
-  return { kcal: (a.kcal || 0) + (b.kcal || 0), p: (a.p || 0) + (b.p || 0), c: (a.c || 0) + (b.c || 0), f: (a.f || 0) + (b.f || 0) };
-}
-export const ZERO = Object.freeze({ kcal: 0, p: 0, c: 0, f: 0 });
-export const scaleMacros = (m, k) => ({ kcal: m.kcal * k, p: m.p * k, c: m.c * k, f: m.f * k });
-export const roundMacros = (m) => ({ kcal: round(m.kcal), p: round(m.p, 1), c: round(m.c, 1), f: round(m.f, 1) });
-
-// Ingredient row status: 'ok' | 'nofood' | 'nograms' | 'skip' (headings, "to taste" with 0 g)
-export function ingredientStatus(ing) {
-  if (ing.head) return 'skip';
-  if (!ing.food) return ing.toTaste ? 'skip' : 'nofood';
-  if (ing.grams == null || ing.grams === '' || Number.isNaN(Number(ing.grams))) return 'nograms';
-  return 'ok';
-}
-
-// Totals for a recipe (all servings). Unmatched rows are excluded and counted.
-export function recipeTotals(ingredients = []) {
-  let t = { ...ZERO };
-  let grams = 0;
-  let missing = 0;
-  for (const ing of ingredients) {
-    const st = ingredientStatus(ing);
-    if (st === 'ok') {
-      t = addMacros(t, macrosFor(ing.food, ing.grams));
-      grams += Number(ing.grams) || 0;
-    } else if (st !== 'skip') missing++;
-  }
-  return { ...t, grams, missing };
-}
-
-export function perServing(totals, servings) {
-  const s = Math.max(1, Number(servings) || 1);
-  return { kcal: totals.kcal / s, p: totals.p / s, c: totals.c / s, f: totals.f / s, grams: (totals.grams || 0) / s };
-}
+const addMacros = (a, b) => ({ kcal: (a.kcal || 0) + (b.kcal || 0), p: (a.p || 0) + (b.p || 0), c: (a.c || 0) + (b.c || 0), f: (a.f || 0) + (b.f || 0) });
 
 // Sum of diary entries (each has kcal, p, c, f)
 export function sumEntries(entries = []) {
-  return entries.reduce((acc, e) => addMacros(acc, e), { ...ZERO });
+  return entries.reduce((acc, e) => addMacros(acc, e), { kcal: 0, p: 0, c: 0, f: 0 });
+}
+
+// What was eaten, as {day, kcal, p, c, f} entries: one per day synced from Fitatu ('fitatu-day'
+// records), plus the old in-app diary entries ('meal' records) for days Fitatu has nothing for.
+export function foodEntries(fitatuDays = [], meals = []) {
+  const synced = new Map();
+  for (const d of fitatuDays) if (d && d.day) synced.set(d.day, { day: d.day, kcal: +d.kcal || 0, p: +d.p || 0, c: +d.c || 0, f: +d.f || 0, fitatu: true });
+  return [...synced.values(), ...meals.filter((m) => m && m.day && !synced.has(m.day))];
 }
 
 // ---------- targets ----------

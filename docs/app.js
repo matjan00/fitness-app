@@ -19,7 +19,6 @@ import * as me from './me.js';
 import * as cutToday from './cut-today.js';
 import * as update from './update.js';
 import { mountSyncLine } from './sync-line.js';
-import { cleanUpLibrary } from './food-library-ui.js';
 
 const modules = [gym, run, food, me, cutToday];
 const tabs = [
@@ -127,7 +126,6 @@ async function start() {
   store.onChange((kinds) => {
     // Sync progress alone changes no data: skip it so a background sync doesn't redraw the tab under your thumb.
     if (kinds.size === 1 && kinds.has('__sync')) return;
-    if (kinds.has('library')) cleanUpLibrary();
     // Batch bursts of changes into one redraw.
     if (pending) return;
     pending = requestAnimationFrame(() => {
@@ -137,7 +135,7 @@ async function start() {
   });
   setRevealHandler(renderTab);
   syncSegState();
-  store.syncNow().catch(() => {}).finally(cleanUpLibrary);
+  store.syncNow().catch(() => {});
   checkForUpdate();
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkForUpdate(); });
 

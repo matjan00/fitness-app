@@ -3,7 +3,7 @@
 ## Done
 - Foundation, Gym, Food, Running — built, QA'd twice (87 tests pass), committed locally.
 - Supabase: `records` + `strava_tokens` tables (RLS on), sign-ups off, user login created.
-- Edge functions deployed: `fetch-recipe` (checks the user's login itself; strangers get 401) and `strava` (--no-verify-jwt, checks login itself).
+- Edge functions deployed: `fetch-recipe` (no longer used since the Fitatu sync, can be deleted in Supabase) and `strava` (--no-verify-jwt, checks login itself).
   Deploy command (bundled npx; the global npx/npm 6 on this PC is broken):
   "C:\Program Files\nodejs\node.exe" "C:\Program Files\nodejs\node_modules\npm\bin\npx-cli.js" --yes supabase@2.118.0 functions deploy <name> --project-ref txhcnqwrdazgaxjwabln --use-api
   SQL: same prefix + `db query --linked --project-ref txhcnqwrdazgaxjwabln -f file.sql`

@@ -1,0 +1,31 @@
+name: Fitatu sync
+
+on:
+  schedule:
+    - cron: "41 */2 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: fitatu
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run unit tests (no network)
+        run: python scripts/test_fitatu_sync.py -v
+
+      - name: Sync Fitatu day totals
+        env:
+          FITATU_EMAIL: ${{ secrets.FITATU_EMAIL }}
+          FITATU_PASSWORD: ${{ secrets.FITATU_PASSWORD }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          SUPABASE_USER_ID: ${{ secrets.SUPABASE_USER_ID }}
+        run: python scripts/fitatu_sync.py

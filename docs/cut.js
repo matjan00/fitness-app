@@ -43,7 +43,7 @@ export async function recordTargets(next, reason) {
 
 // Maintenance learned from the last 21 days (calories eaten vs trend change); null until 14 days are logged.
 export function learnedMaintenance(day = today()) {
-  const src = { weights: store.all('bodyweight'), dailies: store.all('daily'), meals: store.all('meal') };
+  const src = { weights: store.all('bodyweight'), dailies: store.all('daily'), meals: foodUi.allFoodEntries() };
   return adaptiveTdee(day, { weights: src.weights, kcalOf: (d) => dayFacts(d, src).kcal });
 }
 const maintenanceHtml = (c) => {

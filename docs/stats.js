@@ -5,7 +5,7 @@
 import { $, $$, esc, local, today, n0, n1, niceDate, fromDay } from './util.js';
 import * as store from './store.js';
 import { chart, cssVar, fade, seriesColor, onThemeChange } from './charts.js';
-import { targets } from './food-ui.js';
+import { targets, allFoodEntries } from './food-ui.js';
 import { computePRs, PR_KINDS, formatMetric } from './gym-calc.js';
 import { loadDb, exName, groupsOf } from './gym-data.js';
 import { runContext } from './run.js';
@@ -48,7 +48,7 @@ const note = (el, id, html) => { const n = $(`#${id}-note`, el); if (n) { n.inne
 // ---------- data shared by the cards ----------
 function gather() {
   const t = today();
-  const src = { weights: store.all('bodyweight'), dailies: store.all('daily'), meals: store.all('meal') };
+  const src = { weights: store.all('bodyweight'), dailies: store.all('daily'), meals: allFoodEntries() };
   const factsOf = (d) => dayFacts(d, src);
   const workouts = store.all('workout').filter((w) => w?.started_at);
   // The Run tab's runs: duplicates (manual + watch, Strava + Garmin) and accidental recordings removed, each with its

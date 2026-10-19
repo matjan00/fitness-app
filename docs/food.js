@@ -1,68 +1,64 @@
-// Food: diary (Fitatu-style), recipe book, targets calculator, body weight. See food-recipes.js / food-ui.js for the rest.
+// Food: whole-day calories and macros synced from Fitatu (scripts/fitatu_sync.py, every 2 hours), daily
+// targets calculator, body weight. No meals or ingredients are kept here, only day totals.
 
-import { $, $$, esc, icon, toast, n0, n1, parseNum, local, today, addDays, fromDay, niceDate, relDay } from './util.js';
+import { $, $$, esc, icon, toast, n0, n1, parseNum, today, addDays, fromDay, niceDate, relDay } from './util.js';
 import * as store from './store.js';
 import { push, page, sheet, chooseSheet } from './nav.js';
 import { chart, fade, cssVar } from './charts.js';
-import { sumEntries, suggestTargets, ACTIVITY, weightTrend, weeklyChange, latestWeight, macrosFor } from './food-calc.js';
-import { MEALS, mealLabel, settings, targets, dayTargets, saveSettings, ring, bar, pickFood, amountSheet, snap, customFoodForm, img, getProductIndex } from './food-ui.js';
-import { openManual, blankDraft, logRecipe, recipePer, openRecipe, editRecipe } from './food-recipes.js';
-import { loadFoods } from './food-db.js';
-import { renderLearn, loadLessons } from './food-learn.js';
-import { renderLibrary } from './food-library-ui.js';
-import { mealMenu, copyDay, moveEntry } from './diary-copy-ui.js';
-import { undoAdded, undoChanged, removeEntries } from './diary-undo.js';
-import { openShopping } from './shopping-ui.js';
-import { gymLeadsHome } from './gym.js';
-import { isSetUp as cutPlanOn } from './cut.js';
+import { sumEntries, suggestTargets, ACTIVITY, weightTrend, weeklyChange, latestWeight } from './food-calc.js';
+import { settings, targets, dayTargets, saveSettings, ring, bar, allFoodEntries } from './food-ui.js';
 
 export const tab = { id: 'food', title: 'Food', icon: 'food', render };
 
 let day = today();
 let dayChosenAt = Date.now();
-const view = () => local.get('fd-view', 'diary');
 
-function entriesOf(d, meal) {
-  return store.all('meal').filter((e) => e.day === d && (!meal || e.meal === meal)).sort((a, b) => (a.t || '').localeCompare(b.t || ''));
-}
-const mealNow = () => { const h = new Date().getHours(); return h < 11 ? 'breakfast' : h < 16 ? 'lunch' : h < 21 ? 'dinner' : 'snack'; };
+const entriesOf = (d) => allFoodEntries().filter((e) => e.day === d);
+const fitatuStatus = () => store.all('fitatu-status')[0] || null;
 
 // ---------- tab ----------
 function render(el) {
-  if (!productsWarm) { productsWarm = true; setTimeout(() => getProductIndex().catch(() => {}), 800); }
   // After a long pause (e.g. next morning) jump back to today.
   if (Date.now() - dayChosenAt > 3 * 3600 * 1000) { day = today(); dayChosenAt = Date.now(); }
-  const lessons = Boolean(settings().showLessons);
-  const v0 = view() === 'library' ? 'recipes' : view(); // Library and My recipes are one Recipes view now
-  const v = v0 === 'learn' && !lessons ? 'diary' : v0;
-  const segs = [['diary', 'Diary'], ['recipes', 'Recipes'], ...(lessons ? [['learn', 'Learn']] : [])];
-  el.innerHTML = `<div class="page-head row between"><div class="row" style="gap:6px"><h1>Food</h1><button class="icon-btn" id="fd-shop" aria-label="Shopping list">${icon('list')}</button></div>
-      <div class="seg fd-viewseg">${segs.map(([k, l]) => `<button data-v="${k}" class="${v === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
-    <div id="fd-body"></div>`;
-  $$('.fd-viewseg button', el).forEach((b) => { b.onclick = () => { local.set('fd-view', b.dataset.v); render(el); }; });
-  $('#fd-shop', el).onclick = openShopping;
-  const body = $('#fd-body', el);
-  if (v === 'recipes') renderLibrary(body); else if (v === 'learn') renderLearn(body); else renderDiary(body);
+  el.innerHTML = '<div class="page-head"><h1>Food</h1></div><div id="fd-body"></div>';
+  renderDiary($('#fd-body', el));
 }
 
 function dayTitle(d) {
   const r = relDay(fromDay(d));
   const year = fromDay(d).getFullYear() !== new Date().getFullYear();
-  return r === 'Today' || r === 'Yesterday' || r === 'Tomorrow' ? `${r}, ${niceDate(fromDay(d))}` : niceDate(fromDay(d), { weekday: true, year });
+  return r === 'Today' || r === 'Yesterday' ? `${r}, ${niceDate(fromDay(d))}` : niceDate(fromDay(d), { weekday: true, year });
+}
+
+function ago(iso) {
+  const min = Math.round((Date.now() - Date.parse(iso)) / 60000);
+  if (!(min > 1)) return 'just now';
+  if (min < 60) return `${min} min ago`;
+  if (min < 48 * 60) return `${Math.round(min / 60)} h ago`;
+  return `${Math.round(min / 1440)} days ago`;
+}
+
+function syncLine() {
+  const st = fitatuStatus();
+  if (!st) return '<div class="card fd-sync"><p class="small"><b>Not connected to Fitatu yet.</b> Add your Fitatu login as GitHub secrets and run the "Fitatu sync" action once (steps in FITATU-SETUP.md).</p></div>';
+  if (st.last_error) return `<div class="fd-warn fd-sync">${icon('info')}<span class="small">Fitatu sync problem: ${esc(st.last_error)}${st.last_sync_at ? ` Last good sync ${esc(ago(st.last_sync_at))}.` : ''}</span></div>`;
+  return `<p class="tiny muted center fd-sync">Synced from Fitatu ${st.last_sync_at ? esc(ago(st.last_sync_at)) : ''} · updates every 2 hours</p>`;
 }
 
 function renderDiary(box) {
   const t = dayTargets(day);
   const dayEntries = entriesOf(day);
-  const ofMeal = (k) => dayEntries.filter((e) => e.meal === k);
   const sum = sumEntries(dayEntries);
+  const logged = dayEntries.length > 0;
   const leftK = t ? t.kcal - sum.kcal : 0;
   const leftP = t?.p ? t.p - sum.p : 0;
+  const oldDiary = logged && !dayEntries[0].fitatu;
   box.innerHTML = `
+    ${syncLine()}
     <div class="fd-daynav">
       <button class="icon-btn" data-d="-1" aria-label="Previous day">${icon('back')}</button>
       <button class="fd-daylabel" id="fd-daypick">${esc(dayTitle(day))}</button>
-      <button class="icon-btn fd-next" data-d="1" aria-label="Next day">${icon('back')}</button>
+      <button class="icon-btn fd-next" data-d="1" aria-label="Next day" ${day >= today() ? 'disabled' : ''}>${icon('back')}</button>
     </div>
     ${day !== today() ? '<div class="center" style="margin:-4px 0 8px"><button class="link small" id="fd-today">Back to today</button></div>' : ''}
     <div class="card fd-summary">
@@ -72,12 +68,12 @@ function renderDiary(box) {
           ${t?.liftDay ? `<p class="tiny muted">Lifting day: +${n0(t.liftDay)} kcal</p>` : ''}
           ${bar('Protein', sum.p, t?.p, 'fd-bp')}${bar('Carbs', sum.c, t?.c, 'fd-bc')}${bar('Fat', sum.f, t?.f, 'fd-bf')}
         </div></div>
-      ${t ? `<div class="row between fd-left" style="margin-top:10px"><span class="small"><b>${leftK >= 0 ? `${n0(leftK)} kcal` : `${n0(-leftK)} kcal over`}</b>${t.p ? ` · <b class="fd-p">${leftP > 0 ? `${n0(leftP)} g protein to go` : 'protein target hit'}</b>` : ''}</span>
+      ${!logged ? `<p class="small muted" style="margin-top:10px">Nothing logged in Fitatu for this day${day === today() ? ' yet' : ''}.</p>` : ''}
+      ${oldDiary ? '<p class="tiny muted" style="margin-top:10px">From the old in-app diary, before the Fitatu sync.</p>' : ''}
+      ${t && logged ? `<div class="row between fd-left" style="margin-top:10px"><span class="small"><b>${leftK >= 0 ? `${n0(leftK)} kcal left` : `${n0(-leftK)} kcal over`}</b>${t.p ? ` · <b class="fd-p">${leftP > 0 ? `${n0(leftP)} g protein to go` : 'protein target hit'}</b>` : ''}</span>
         <button class="link small" id="fd-edittargets">Targets</button></div>` : ''}
       ${!t ? `<button class="soft block" id="fd-settargets" style="margin-top:12px">${icon('fire')} Set your daily targets</button>` : ''}
     </div>
-    ${MEALS.map((m) => mealCard(m, ofMeal(m.key))).join('')}
-    ${dayEntries.length ? `<div class="center" style="margin-top:10px"><button class="link small" id="fd-copyday">${icon('copy')} Copy this whole day to another day</button></div>` : ''}
     <h3 class="section-title">This week</h3>
     <div class="card" id="fd-week"></div>`;
 
@@ -86,16 +82,11 @@ function renderDiary(box) {
   $('#fd-daypick', box).onclick = () => pickDate(box);
   $('#fd-settargets', box)?.addEventListener('click', () => openTargets());
   $('#fd-edittargets', box)?.addEventListener('click', () => openTargets());
-  $$('[data-add]', box).forEach((b) => { b.onclick = () => addTo(b.dataset.add); });
-  $('#fd-copyday', box)?.addEventListener('click', () => copyDay(day, dayEntries));
-  $$('[data-mealmenu]', box).forEach((b) => { b.onclick = () => mealMenu(day, b.dataset.mealmenu, ofMeal(b.dataset.mealmenu)); });
-  $$('[data-move]', box).forEach((b) => { b.onclick = () => moveEntry(store.get(b.dataset.move)); });
-  $$('[data-entry]', box).forEach((b) => { b.onclick = () => editEntry(store.get(b.dataset.entry)); });
   renderWeek($('#fd-week', box));
 
   // swipe left/right to change day
   let sx = null, sy = null;
-  box.ontouchstart = (e) => { if (e.target.closest('canvas,.chips,input')) return; sx = e.touches[0].clientX; sy = e.touches[0].clientY; };
+  box.ontouchstart = (e) => { if (e.target.closest('canvas,input')) return; sx = e.touches[0].clientX; sy = e.touches[0].clientY; };
   box.ontouchend = (e) => {
     if (sx == null) return;
     const dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy;
@@ -104,9 +95,9 @@ function renderDiary(box) {
   };
 }
 
-// Planning ahead is allowed up to a week (same limit as the date picker).
+// Fitatu is where food gets logged, so there is nothing to show after today.
 function shiftDay(n, box) {
-  if (n > 0 && day >= addDays(today(), 7)) { toast('You can plan up to a week ahead'); return; }
+  if (n > 0 && day >= today()) return;
   day = addDays(day, n);
   dayChosenAt = Date.now();
   renderDiary(box);
@@ -117,170 +108,11 @@ function shiftDay(n, box) {
 
 function pickDate(box) {
   push((el, s) => {
-    el.innerHTML = sheet({ title: 'Go to day', body: `<input type="date" id="fd-date" value="${day}" max="${addDays(today(), 7)}">
+    el.innerHTML = sheet({ title: 'Go to day', body: `<input type="date" id="fd-date" value="${day}" max="${today()}">
       <div class="sheet-actions" style="margin-top:14px"><button class="ghost" data-a="today">Today</button><button class="primary" data-a="ok">Go</button></div>` });
-    $('[data-a=ok]', el).onclick = () => { const v = $('#fd-date', el).value; if (v) { day = v; dayChosenAt = Date.now(); } s.close(); };
+    $('[data-a=ok]', el).onclick = () => { const v = $('#fd-date', el).value; if (v) { day = v > today() ? today() : v; dayChosenAt = Date.now(); } s.close(); };
     $('[data-a=today]', el).onclick = () => { day = today(); s.close(); };
   }, { sheet: true, onClose: () => { if (box.isConnected) renderDiary(box); } });
-}
-
-function mealCard(m, list) {
-  const s = sumEntries(list);
-  return `<div class="card fd-meal">
-    <div class="card-head" style="margin-bottom:${list.length ? 6 : 0}px"><div><h2>${esc(m.label)}</h2>
-      <p class="tiny muted">${list.length ? `${n0(s.kcal)} kcal · P ${n0(s.p)} · C ${n0(s.c)} · F ${n0(s.f)}` : 'Nothing yet'}</p></div>
-      <div class="row">${list.length ? `<button class="icon-btn fd-mv" data-mealmenu="${m.key}" aria-label="${esc(m.label)} options: copy or delete">${icon('more')}</button>` : ''}
-      <button class="icon-btn fd-addbtn" data-add="${m.key}" aria-label="Add to ${esc(m.label)}">${icon('plus')}</button></div></div>
-    ${list.length ? `<div class="list">${list.map((e) => `<div class="fd-row"><button class="list-item fd-entry" data-entry="${e.id}">
-      <div class="grow"><div class="ellipsis">${esc(e.label)}</div><div class="sub">${esc(amountTxt(e))}</div></div>
-      <div class="fd-entry-k"><b>${n0(e.kcal)}</b><span>kcal</span></div></button>
-      <button class="icon-btn fd-mv" data-move="${e.id}" aria-label="Move ${esc(e.label)} to another meal">${icon('move')}</button></div>`).join('')}</div>` : ''}
-  </div>`;
-}
-function amountTxt(e) {
-  if (e.source?.type === 'recipe' || e.source?.type === 'library') return e.servings ? `${n1(e.servings)} serving${e.servings === 1 ? '' : 's'}` : `${n0(e.grams)} g`;
-  if (e.source?.type === 'quick') return `Quick add · P ${n0(e.p)} · C ${n0(e.c)} · F ${n0(e.f)}`;
-  if (e.unit === 'ml' && e.qty) return `${n0(e.qty)} ml · ${n0(e.grams)} g`;
-  if (e.unit && e.unit !== 'g' && e.qty) return `${n1(e.qty)} ${unitWord(e.unit, e.qty)} · ${n0(e.grams)} g`;
-  return `${n0(e.grams)} g`;
-}
-// "3 pieces", "1 slice", "2 tablespoons", "1.5 large pieces"
-const UNIT_WORDS = { piece: 'piece', small: 'small piece', medium: 'medium piece', large: 'large piece', tbsp: 'tablespoon', tsp: 'teaspoon', floz: 'fl oz' };
-function unitWord(unit, qty) {
-  const w = UNIT_WORDS[unit] || unit;
-  return qty === 1 || w.endsWith('oz') ? w : w.replace(/(\w+)$/, (x) => (/(ch|sh|s|x)$/.test(x) ? `${x}es` : `${x}s`));
-}
-
-// ---------- adding ----------
-// "+" on a meal goes straight to search (the common case); recipes, quick add and copying
-// yesterday's meal are chips on that screen.
-async function addTo(meal) {
-  const d = day;
-  const y = entriesOf(addDays(d, -1), meal);
-  const shortcuts = [
-    { value: 'recipe', label: 'My recipes', icon: 'note' },
-    { value: 'quick', label: 'Quick add kcal', icon: 'fire' },
-  ];
-  if (y.length) shortcuts.push({ value: 'copy', label: `Yesterday's ${mealLabel(meal).toLowerCase()} (${y.length})`, icon: 'copy' });
-  const f = await pickFood({ title: `Add to ${mealLabel(meal)}`, shortcuts });
-  if (!f) return;
-  if (f.shortcut === 'recipe') pickRecipe(meal);
-  else if (f.shortcut === 'quick') quickAdd(meal);
-  else if (f.shortcut === 'copy') {
-    const now = new Date().toISOString();
-    const saved = await store.putMany('meal', y.map(({ id, ...e }) => ({ ...e, day: d, t: now })));
-    toast(`Copied ${y.length} item${y.length > 1 ? 's' : ''}`, 6000, saved?.length ? { label: 'Undo', run: () => undoAdd(saved) } : null);
-  } else await addPicked(meal, d, f);
-}
-
-function pickRecipe(meal) {
-  const d = day;
-  push((el, s) => {
-    const recs = store.all('recipe');
-    const last = {};
-    store.all('meal').forEach((e) => { if (e.source?.type === 'recipe') last[e.source.id] = Math.max(last[e.source.id] || 0, Date.parse(e.t || e.day) || 0); });
-    recs.sort((a, b) => (last[b.id] || 0) - (last[a.id] || 0) || a.title.localeCompare(b.title));
-    let q = '';
-    const draw = () => {
-      const list = recs.filter((r) => !q || r.title.toLowerCase().includes(q.toLowerCase()));
-      $('#fd-rlist', el).innerHTML = list.length ? list.map((r) => { const ps = recipePer(r); return `<button class="list-item" data-rid="${r.id}">${img(r.image, 'fd-thumb')}
-        <div class="grow"><div class="ellipsis"><b>${esc(r.title)}</b></div><div class="sub">${n0(ps.kcal)} kcal · P ${n0(ps.p)} g per serving</div></div></button>`; }).join('')
-        : `<div class="empty"><p>${recs.length ? 'No recipe matches.' : 'No recipes yet.'}</p><button class="primary" id="fd-imp" style="margin-top:12px">Add a recipe</button></div>`;
-      $$('[data-rid]', el).forEach((b) => { b.onclick = async () => { await logRecipe(store.get(b.dataset.rid), { day: d, meal }); s.close(); }; });
-      $('#fd-imp', el)?.addEventListener('click', () => { s.close(); setTimeout(() => editRecipe(blankDraft()), 260); });
-    };
-    el.innerHTML = page({ title: `${mealLabel(meal)} · recipe`, body: `<div class="search">${icon('search')}<input id="fd-q" type="search" placeholder="Search my recipes"></div>
-      <div class="card" style="margin-top:12px;padding-top:4px;padding-bottom:4px"><div class="list" id="fd-rlist"></div></div>` });
-    $('#fd-q', el).oninput = (e) => { q = e.target.value; draw(); };
-    draw();
-  });
-}
-
-async function addPicked(meal, d, f) {
-  const last = store.all('meal').filter((e) => e.food?.id === f.id).sort((a, b) => (b.t || '').localeCompare(a.t || ''))[0];
-  // Small countable things (egg, banana, slice…) default to pieces; everything else to 100 g.
-  const byPiece = f.u?.piece && f.u.piece <= 150;
-  const a = await amountSheet(f, { grams: last?.grams || 100, unit: last?.unit || (byPiece ? 'piece' : 'g'), qty: last?.qty ?? (byPiece ? 1 : undefined) });
-  if (!a) return;
-  const saved = await saveFoodEntry({ day: d, meal, food: f, ...a });
-  undoAdded(`Added to ${mealLabel(meal)}`, [saved]);
-}
-async function saveFoodEntry({ id, t, day: d, meal, food, grams, qty, unit }) {
-  const m = macrosFor(food, grams);
-  return store.put('meal', {
-    ...(id ? { id } : {}), t: t || new Date().toISOString(), day: d, meal, label: food.src === 'db' ? food.en : food.name,
-    source: { type: 'food', src: food.src, id: food.id }, food: snap(food), grams, qty, unit, ...m,
-  });
-}
-
-function quickAdd(meal, entry = null) {
-  const d = entry?.day || day;
-  push((el, s) => {
-    el.innerHTML = sheet({ title: entry ? 'Edit quick add' : `Quick add · ${mealLabel(meal)}`, body: `<form class="form" id="fd-qa" onsubmit="return false">
-      <label>Name<input name="label" value="${esc(entry?.label || '')}" placeholder="e.g. Coffee with milk"></label>
-      <div class="form-row"><label>Calories (kcal)<input name="kcal" inputmode="decimal" value="${entry ? Math.round(entry.kcal) : ''}"></label>
-      <label>Protein (g)<input name="p" inputmode="decimal" value="${entry ? Math.round(entry.p * 10) / 10 : ''}"></label></div>
-      <div class="form-row"><label>Carbs (g)<input name="c" inputmode="decimal" value="${entry ? Math.round(entry.c * 10) / 10 : ''}"></label>
-      <label>Fat (g)<input name="f" inputmode="decimal" value="${entry ? Math.round(entry.f * 10) / 10 : ''}"></label></div>
-      <p class="tiny muted" id="fd-qahint"></p>
-      <p class="small fd-warntext" id="fd-qaerr" hidden></p>
-      <div class="sheet-actions">${entry ? '<button type="button" class="ghost danger-text" data-a="del">Remove</button>' : '<button type="button" class="ghost" data-a="no">Cancel</button>'}<button type="button" class="primary" data-a="ok">${entry ? 'Save' : 'Add'}</button></div></form>` });
-    const fm = $('#fd-qa', el);
-    const hint = () => {
-      const p = parseNum(fm.p.value) || 0, c = parseNum(fm.c.value) || 0, f = parseNum(fm.f.value) || 0;
-      const est = p * 4 + c * 4 + f * 9;
-      $('#fd-qahint', el).textContent = est ? `Protein, carbs and fat add up to ~${n0(est)} kcal.` : 'Only calories are required.';
-    };
-    fm.oninput = hint; hint();
-    let saving = false;
-    $('[data-a=ok]', el).onclick = async () => {
-      if (saving) return;
-      let kcal = parseNum(fm.kcal.value);
-      const p = parseNum(fm.p.value) || 0, c = parseNum(fm.c.value) || 0, f = parseNum(fm.f.value) || 0;
-      if (kcal == null && (p || c || f)) kcal = p * 4 + c * 4 + f * 9;
-      const err = !(kcal > 0) ? 'Enter the calories (or protein, carbs and fat).' : [p, c, f].some((x) => x < 0) ? 'Protein, carbs and fat cannot be negative.' : kcal > 5000 ? 'That is over 5000 kcal - check the number.' : '';
-      const errEl = $('#fd-qaerr', el);
-      errEl.hidden = !err; errEl.textContent = err;
-      if (err) { fm.kcal.focus(); return; }
-      saving = true;
-      const saved = await store.put('meal', { ...(entry ? { id: entry.id, t: entry.t } : { t: new Date().toISOString() }), day: d, meal: entry?.meal || meal,
-        label: fm.label.value.trim() || 'Quick add', source: { type: 'quick' }, kcal, p, c, f });
-      if (entry) undoChanged('Saved', [entry]); else undoAdded(`Added to ${mealLabel(meal)}`, [saved]);
-      s.close();
-    };
-    $('[data-a=no]', el)?.addEventListener('click', () => s.close());
-    $('[data-a=del]', el)?.addEventListener('click', async () => { s.close(); await removeEntries([entry]); });
-    setTimeout(() => (entry ? fm.kcal : fm.label).focus(), 250);
-  }, { sheet: true });
-}
-
-async function editEntry(e) {
-  if (!e) return;
-  const type = e.source?.type;
-  if (type === 'quick') return quickAdd(e.meal, e);
-  if (type === 'library') {
-    const v = await chooseSheet(e.label, [{ value: 'edit', label: 'Change amount or meal', icon: 'edit' }, { value: 'del', label: 'Remove from diary', icon: 'trash', danger: true }]);
-    if (v === 'edit') return logRecipe({ id: e.source.id, title: e.label, lib: true, servings: 1, totals: { ...e.per } }, { entry: e });
-    if (v === 'del') await removeEntries([e]);
-    return;
-  }
-  if (type === 'recipe') {
-    const rec = store.get(e.source.id);
-    const v = await chooseSheet(rec ? e.label : `${e.label} (recipe deleted)`, [
-      ...(rec ? [{ value: 'edit', label: 'Change amount or meal', icon: 'edit' }, { value: 'open', label: 'Open recipe', icon: 'note' }] : []),
-      { value: 'del', label: 'Remove from diary', icon: 'trash', danger: true }]);
-    // Use the per-serving numbers stored on the entry, so an entry logged from a scaled recipe keeps its scale.
-    if (v === 'edit') return logRecipe(e.per ? { id: rec.id, title: e.label, servings: 1, totals: { ...e.per } } : rec, { entry: e });
-    if (v === 'open') return openRecipe(rec.id);
-    if (v === 'del') await removeEntries([e]);
-    return;
-  }
-  const food = e.food || { src: 'custom', name: e.label, k: 0, p: 0, c: 0, f: 0 };
-  const a = await amountSheet(food, { title: e.label, grams: e.grams, qty: e.qty, unit: e.unit, ok: 'Save', danger: 'Remove' });
-  if (!a) return;
-  if (a.remove) { await removeEntries([e]); return; }
-  await saveFoodEntry({ id: e.id, t: e.t, day: e.day, meal: e.meal, food, ...a });
-  undoChanged('Saved', [e]);
 }
 
 // ---------- week ----------
@@ -479,28 +311,11 @@ export const meSection = {
           <div class="fd-c"><b>${n0(t.c)}</b><span>carbs g</span></div><div class="fd-f"><b>${n0(t.f)}</b><span>fat g</span></div></div>
           ${+store.getConfig('cut', {}).liftDayBonus ? `<p class="tiny muted" style="margin-top:8px">+${n0(+store.getConfig('cut', {}).liftDayBonus)} kcal on cut-plan lifting days (from a weekly review).</p>` : ''}`
           : '<p class="small muted">Calculate how much to eat for your goal (lose, keep or gain weight).</p>'}</div>
-      <div class="card" style="margin-top:12px"><label class="switch"><span>Show cooking lessons<span class="tiny muted" style="display:block;font-weight:400">The "Learn" tab in Food</span></span><input type="checkbox" id="fd-lessons" ${settings().showLessons ? 'checked' : ''}></label></div>
-      <div id="fd-wbox" style="margin-top:12px"></div>
-      <div class="card" style="margin-top:12px"><div class="card-head" style="margin-bottom:0"><div><h2>My foods</h2><p class="tiny muted">${store.all('food').length} saved · products you added from a label</p></div>
-        <button class="link" id="fd-myfoods">Manage</button></div></div>`;
-    $('#fd-lessons', el).onchange = (e) => saveSettings({ showLessons: e.target.checked });
+      <div id="fd-wbox" style="margin-top:12px"></div>`;
     $('#fd-tedit', el).onclick = () => openTargets();
-    $('#fd-myfoods', el).onclick = openMyFoods;
     weightCard($('#fd-wbox', el));
   },
 };
-
-function openMyFoods() {
-  push((el) => {
-    const list = store.all('food').sort((a, b) => a.name.localeCompare(b.name));
-    el.innerHTML = page({ title: 'My foods', body: `${list.length ? `<div class="card"><div class="list">${list.map((f) => `<button class="list-item" data-f="${f.id}">
-      <div class="grow"><b class="ellipsis" style="display:block">${esc(f.name)}</b><div class="sub">${f.brand ? `${esc(f.brand)} · ` : ''}${n0(f.k)} kcal · P ${n1(f.p)} · C ${n1(f.c)} · F ${n1(f.f)} per 100 g</div></div></button>`).join('')}</div></div>`
-      : '<div class="card empty">No foods yet. Add products from their nutrition label.</div>'}
-      <button class="primary block" id="fd-newfood" style="margin-top:12px">${icon('plus')} New food</button>` });
-    $$('[data-f]', el).forEach((b) => { b.onclick = () => customFoodForm({ ...store.get(b.dataset.f), src: 'custom' }); });
-    $('#fd-newfood', el).onclick = () => customFoodForm();
-  });
-}
 
 // ---------- Home card ----------
 export const homeCard = {
@@ -515,7 +330,7 @@ export const homeCard = {
     const left = t ? t.kcal - s.kcal : null;
     el.innerHTML = `<div class="card fd-home">
       <div class="card-head"><h2 class="row" style="gap:8px"><span class="fd-home-ic">${icon('food')}</span>Food today</h2>
-        <button class="link" id="fd-hopen">Diary</button></div>
+        <button class="link" id="fd-hopen">Week</button></div>
       <div class="fd-home-row">${ring(s.kcal, t?.kcal, { size: 96 })}
         <div class="grow stack-sm">
           ${bar('Calories', s.kcal, t?.kcal, 'fd-bk', 'kcal')}
@@ -523,36 +338,9 @@ export const homeCard = {
         </div></div>
       ${last ? `<p class="small muted fd-home-w">${icon('scale')} Weight ${n1(last.avg)} kg (7-day avg)${wc != null ? ` · ${wc > 0 ? '+' : ''}${n1(wc)} kg/week` : ''}</p>` : ''}
       ${!t ? '<p class="small muted" style="margin-top:10px">No daily targets yet. <button class="link" id="fd-htargets">Set your targets</button></p>' : left < 0 ? `<p class="small down" style="margin-top:10px">${n0(-left)} kcal over today's target</p>` : ''}
-      <button class="${gymLeadsHome() || cutPlanOn() ? 'ghost' : 'primary'} block" id="fd-hlog" style="margin-top:12px">${icon('plus')} Log food</button>
+      <p class="tiny muted" style="margin-top:10px">${s.kcal ? 'From Fitatu' : 'Nothing logged in Fitatu yet today'}${fitatuStatus()?.last_sync_at ? ` · synced ${esc(ago(fitatuStatus().last_sync_at))}` : ''}</p>
     </div>`;
-    $('#fd-hopen', el).onclick = () => { local.set('fd-view', 'diary'); day = today(); window.showTab('food'); };
+    $('#fd-hopen', el).onclick = () => { day = today(); window.showTab('food'); };
     $('#fd-htargets', el)?.addEventListener('click', openTargets);
-    $('#fd-hlog', el).onclick = () => {
-      local.set('fd-view', 'diary');
-      day = today();
-      window.showTab('food');
-      setTimeout(() => addTo(mealNow()), 50);
-    };
   },
 };
-
-// ---------- init: Android share target ----------
-export function init() {
-  const p = new URLSearchParams(location.search);
-  const parts = ['share_title', 'share_text', 'share_url'].map((k) => p.get(k)).filter(Boolean);
-  if (parts.length) {
-    history.replaceState(history.state, '', location.pathname + location.hash);
-    const all = parts.join('\n');
-    const url = (all.match(/https?:\/\/[^\s<>"']+/) || [])[0];
-    local.set('fd-view', 'recipes');
-    setTimeout(() => {
-      window.showTab('food');
-      setTimeout(() => openManual(url ? { url } : { text: all }), 60);
-    }, 0);
-  }
-  // Warm up the food table and lesson content in the background so the first search/open is instant.
-  setTimeout(() => loadFoods().catch(() => {}), 1500);
-  setTimeout(() => loadLessons().catch(() => {}), 1800);
-}
-// The 11.5k shop products (~0.9 MB) load only once the Food tab has been opened, not on every app start.
-let productsWarm = false;

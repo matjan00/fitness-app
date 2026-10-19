@@ -3,6 +3,7 @@
 
 import { $, $$, esc, icon, toast, today, n0, n1, parseNum, addDays, local } from './util.js';
 import * as store from './store.js';
+import * as foodUi from './food-ui.js';
 import { push, sheet } from './nav.js';
 import { startWorkout } from './gym-workout.js';
 import { cutSettings, currentTargets, openCutSettings, openPlan, addCutRoutines, syncCutRoutines, startWeight, isSetUp } from './cut.js';
@@ -17,7 +18,7 @@ const STATUS = { green: ['Green day', 'up'], yellow: ['Yellow day', 'gold'], red
 const routineCut = (id) => store.get(id)?.cut || null;
 export function sources() {
   return {
-    weights: store.all('bodyweight'), dailies: store.all('daily'), meals: store.all('meal'),
+    weights: store.all('bodyweight'), dailies: store.all('daily'), meals: foodUi.allFoodEntries(),
     workouts: store.all('workout'), runs: store.all('run'), checkins: store.all('checkin'), routineCut,
   };
 }
@@ -84,11 +85,11 @@ function editItem(key, day, f) {
       await daily(handStepsPatch(cur, v.n == null ? null : Math.round(v.n)));
     }, note);
   }
-  // food: day totals from the separate food app (empty = use the Food tab diary)
+  // food: typed day totals win over the Fitatu sync (empty = use Fitatu)
   return entrySheet('Food totals', [
     { name: 'kcal', label: 'Calories (kcal)', value: f.kcal, mode: 'numeric' }, { name: 'p', label: 'Protein (g)', value: f.p, mode: 'numeric' },
     { name: 'c', label: 'Carbs (g)', value: f.c, mode: 'numeric' }, { name: 'f', label: 'Fat (g)', value: f.f, mode: 'numeric' },
-  ], async (v) => { await daily({ kcal: v.kcal, p: v.p, c: v.c, f: v.f }); }, 'Day totals from your food app. Leave empty to use the Food tab diary.');
+  ], async (v) => { await daily({ kcal: v.kcal, p: v.p, c: v.c, f: v.f }); }, 'Fitatu fills these in automatically. Type a number only to correct a day; leave empty to use Fitatu.');
 }
 
 // ---------- runs ----------
