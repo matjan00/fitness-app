@@ -1,5 +1,6 @@
 // Cut plan weekly check-in and review, in two steps:
-//  1. Check-in day (Sunday by default), in the morning: measurements and 3 photos (openCheckin). Optional nudge on Home.
+//  1. Check-in day (Sunday by default) or the day after until midnight: measurements and 3 photos (openCheckin).
+//     Optional nudge on Home.
 //  2. The day after (Monday): the weekly review of the whole Monday–Sunday week, once Sunday's training and steps
 //     are in: the numbers and grade, adjustment suggestions (Accept / Ignore, both logged) and a one-sentence
 //     reflection. Measurements / photos from step 1 are shown and can still be added. Nothing is forced: a button on
@@ -45,12 +46,13 @@ export function reviewNeeded(day = today()) {
   const r = dueCheckin(day);
   return r && day <= addDays(r, 2) && !checkinFor(r) ? r : null;
 }
-// Check-in day (Sunday) and the review days after it: measurements / photos still missing for the coming review.
-// Returns the review day they are for, or null.
+// Check-in day (Sunday) and the review day after it (Monday, until midnight): measurements / photos still missing for
+// that week, even when the review is already done. Later they can still go in with the review. Returns the review
+// day they are for, or null.
 export function measurementsDue(day = today(), c = cutSettings()) {
   if (!c.startDate) return null;
-  const isCheckinDay = new Date(`${day}T12:00`).getDay() === +c.checkinDay;
-  const r = isCheckinDay ? addDays(day, 1) : reviewNeeded(day);
+  const wd = new Date(`${day}T12:00`).getDay();
+  const r = wd === +c.checkinDay ? addDays(day, 1) : wd === reviewWeekday(c) ? day : null;
   if (!r || r < addDays(c.startDate, 7)) return null;
   const x = checkinRecord(r);
   return x && (x.waist > 0 || Object.keys(x.photos || {}).length) ? null : r;

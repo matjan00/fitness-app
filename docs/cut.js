@@ -9,7 +9,7 @@ import { push, page } from './nav.js';
 import * as foodUi from './food-ui.js';
 import { loadDb, exById } from './gym-data.js';
 import {
-  CUT_DEFAULTS, CUT_TARGETS, PROGRAM_NAME, ROUTINES_REV, EASY_PACE, routineRecords, planWeeks, weekNumber, startWeightFrom,
+  CUT_DEFAULTS, CUT_TARGETS, TARGETS_REV, PROGRAM_NAME, ROUTINES_REV, EASY_PACE, routineRecords, planWeeks, weekNumber, startWeightFrom,
   targetsChanged, daysToGoal,
 } from './cut-calc.js';
 import { adaptiveTdee } from './cut-flags.js';
@@ -75,6 +75,21 @@ export async function syncCutRoutines() {
   }));
 }
 
+// Saved targets from an older plan move to the plan's current minimums (1,900 kcal, 120 g protein): calories and
+// the calorie floor are raised, protein set, carbs filled to match; fat kept. Logged in the targets history.
+export async function syncCutTargets() {
+  const c = cutSettings();
+  if (!c.startDate || (c.targetsRev || 1) >= TARGETS_REV) return;
+  const t = { ...CUT_TARGETS, ...(foodUi.targets() || {}) };
+  const kcal = Math.max(t.kcal || 0, CUT_TARGETS.kcal);
+  const p = CUT_TARGETS.p;
+  const f = t.f || CUT_TARGETS.f;
+  const next = { kcal, p, f, c: Math.max(0, Math.round((kcal - p * 4 - f * 9) / 4)) };
+  await foodUi.saveSettings({ targets: next });
+  await saveCut({ kcalFloor: Math.max(c.kcalFloor || 0, CUT_DEFAULTS.kcalFloor), targetsRev: TARGETS_REV });
+  await recordTargets({ ...next, steps: c.steps }, `Plan minimums: ${n0(CUT_TARGETS.kcal)} kcal, ${CUT_TARGETS.p} g protein`);
+}
+
 // ---------- settings page ----------
 export function openCutSettings() {
   const c = cutSettings();
@@ -104,7 +119,7 @@ export function openCutSettings() {
         <div class="form-row">${num('steps', 'Steps', c.steps, 'numeric')}${num('sleep', 'Sleep (h)', c.sleep)}</div>
         <div class="form-row">${num('kcalFloor', 'Calorie floor', c.kcalFloor, 'numeric')}
           <label>Check-in day<select name="checkinDay">${DAYS.map((d, i) => `<option value="${i}" ${+c.checkinDay === i ? 'selected' : ''}>${d}</option>`).join('')}</select></label></div>
-        <p class="tiny muted">Calories and macros are the same targets the Food tab uses. Start: 1,750 kcal · 150 g protein · 55 g fat · 165 g carbs.</p>
+        <p class="tiny muted">Calories and macros are the same targets the Food tab uses. Plan minimums: ${n0(CUT_TARGETS.kcal)} kcal · ${CUT_TARGETS.p} g protein (${CUT_TARGETS.f} g fat · ${CUT_TARGETS.c} g carbs).</p>
       </div>
       <h3 class="section-title">Reminders</h3>
       <div class="card"><label class="switch"><span>Phone reminders<span class="tiny muted" style="display:block;font-weight:400">8:00 weigh-in, 21:00 log food, steps and sleep — only if not done yet. Works while the app is open or in the background; when you open the app you always get the same prompt.</span></span>

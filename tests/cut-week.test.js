@@ -45,12 +45,15 @@ test('week summary and grade', () => {
 
 test('adjustment rules', () => {
   const flat = days('2026-10-01', 20).map((d) => ({ day: d, kg: 73 }));
-  const base = { weights: flat, checkinDay: '2026-10-20', week: 3, targets: { kcal: 1750, steps: 10000 } };
+  const base = { weights: flat, checkinDay: '2026-10-20', week: 3, targets: { kcal: 1750, steps: 10000 }, cfg: { kcalFloor: 1550 } };
   assert.equal(suggestions({ ...base, compliance: 0.9 })[0].key, 'kcal');
   assert.deepEqual(suggestions({ ...base, compliance: 0.9 })[0].change, { kcal: 1650 });
   assert.equal(suggestions({ ...base, compliance: 0.7 })[0].key, 'compliance');
   assert.equal(suggestions({ ...base, compliance: 0.7 })[0].change, undefined);
   assert.deepEqual(suggestions({ ...base, compliance: 0.9, targets: { kcal: 1650, steps: 10000 } })[0].change, { steps: 12000 });
+  // default floor 1,900 kcal: never suggests eating less than that, steps instead
+  assert.deepEqual(suggestions({ ...base, cfg: {}, compliance: 0.9, targets: { kcal: 1900, steps: 10000 } })[0].change, { steps: 12000 });
+  assert.deepEqual(suggestions({ ...base, cfg: {}, compliance: 0.9, targets: { kcal: 2100, steps: 10000 } })[0].change, { kcal: 2000 });
   const fast = days('2026-10-01', 20).map((d, i) => ({ day: d, kg: 80 - i * 0.4 }));
   const f = suggestions({ ...base, weights: fast, compliance: 0.9 });
   assert.equal(f[0].key, 'fast');

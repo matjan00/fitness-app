@@ -6,7 +6,7 @@ import * as store from './store.js';
 import * as foodUi from './food-ui.js';
 import { push, sheet } from './nav.js';
 import { startWorkout } from './gym-workout.js';
-import { cutSettings, currentTargets, openCutSettings, openPlan, addCutRoutines, syncCutRoutines, startWeight, isSetUp } from './cut.js';
+import { cutSettings, currentTargets, openCutSettings, openPlan, addCutRoutines, syncCutRoutines, syncCutTargets, startWeight, isSetUp } from './cut.js';
 import { PLAN, PROGRAM_NAME, EASY_PACE, weekNumber, daysToGoal, daysBetween, emaTrend, trendOn, targetWeight } from './cut-calc.js';
 import { redFlags, isLogged } from './cut-flags.js';
 import { openReview, dueCheckin, checkinFor, measurementsDue, openCheckin } from './cut-review.js';
@@ -129,7 +129,7 @@ export function logRun(kind = null) {
   }, { sheet: true });
 }
 
-// Check-in day (Sunday): a nudge for measurements + photos. Review day and the 2 days after (Mon–Wed): the weekly
+// Check-in day (Sunday) and the review day (Monday, until midnight): a nudge for measurements + photos. Review day and the 2 days after (Mon–Wed): the weekly
 // review of the finished week, or "done · grade". Neither opens by itself.
 function reviewBtn() {
   const m = measurementsDue();
@@ -147,7 +147,7 @@ function dayTypeHtml(f, st, minUsed) {
   const type = f.travel ? 'travel' : f.minimum ? 'minimum' : 'normal';
   const hint = {
     normal: 'Bad day or illness? Minimum day. Away for work? Travel day.',
-    minimum: st.minimumMet ? 'Minimum met: weigh-in, protein and 6,000 steps. Counts as yellow.' : 'Minimum day: weigh-in, protein ≥ 140 g and 6,000 steps. Counts as yellow.',
+    minimum: st.minimumMet ? 'Minimum met: weigh-in, protein and 6,000 steps. Counts as yellow.' : `Minimum day: weigh-in, protein ≥ ${cutSettings().proteinMin} g and 6,000 steps. Counts as yellow.`,
     travel: 'Travel day: only the morning weigh-in counts. Calories roughly on target if you log them; steps optional; no session.',
   }[type];
   return `<div class="seg ct-daytype" style="margin-top:12px" role="group" aria-label="Day type">${['normal', 'minimum', 'travel'].map((t) => `<button type="button" data-t="${t}" class="${t === type ? 'on' : ''}" aria-pressed="${t === type}">${t[0].toUpperCase() + t.slice(1)}</button>`).join('')}</div>
@@ -234,7 +234,7 @@ function sessionBlock(sess, done, wk) {
       ${run ? `<p class="small" style="margin-top:6px">${n1((+run.distance_m || 0) / 1000)} km · ${fmtPace(pace)}/km average${vs != null ? ` · ${sess.kind === 'easy' ? (vs > 0 ? 'easy enough' : `${fmtPace(-vs)} faster than easy pace`) : `${vs <= 0 ? `${fmtPace(-vs)} faster` : `${fmtPace(vs)} slower`} than ${target}/km (whole run incl. warm-up)`}` : ''}</p>`
         : `<button class="ghost block" id="ct-logrun" style="margin-top:10px">${icon('plus')} Log run by hand</button><p class="tiny muted" style="margin-top:4px">Garmin runs appear by themselves after the next sync.</p>`}</div>`;
   }
-  const note = { steps: 'No session — hit your steps.', travel: 'Weigh in this morning. Calories and steps are optional, roughly is fine.' }[sess.kind] || 'No session today. Hit your steps; on check-in day, take measurements and photos.';
+  const note = { steps: 'No session — hit your steps.', travel: 'Weigh in this morning. Calories and steps are optional, roughly is fine.' }[sess.kind] || 'No session today. Hit your steps; on check-in day (or by Monday night), take measurements and photos.';
   return `<div class="ct-sess"><b>${SESSION_LABEL[sess.kind]}</b><p class="small muted">${note}</p></div>`;
 }
 
@@ -277,7 +277,7 @@ function render(el) {
   const inPlan = (d) => d >= c.startDate;
   const greenStreak = streak(day, (d) => { if (!inPlan(d)) return false; const s = statusOf(d, src, c, tg.kcal); return s.status === 'green' || (s.status === 'yellow' && s.facts.minimum); });
   const proteinStreak = streak(day, (d) => { if (!inPlan(d)) return false; const fx = dayFacts(d, src); return fx.travel || (fx.p ?? 0) >= c.proteinMin; });
-  const checkinStreak = weekStreak(day, src.checkins.map((x) => x.day));
+  const checkinStreak = weekStreak(day, src.checkins.map((x) => (x.forDay ? addDays(x.forDay, -1) : x.day)));
   const minUsed = minimumDaysInWeek(day, src.dailies);
   const [stLabel, stCls] = STATUS[st.status];
   const v = (x, unit = '') => (x == null ? '<span class="ct-add">Add</span>' : `${x}${unit}`);
@@ -376,6 +376,7 @@ export function init() {
     if (msg) toast(msg, 4500);
   }, 600);
   setTimeout(() => syncCutRoutines().catch(() => {}), 1500);
+  setTimeout(() => syncCutTargets().catch(() => {}), 1500);
   scheduleReminders();
 }
 

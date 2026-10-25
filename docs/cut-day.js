@@ -130,8 +130,8 @@ export function dayFacts(day, { weights = [], dailies = [], meals = [] } = {}) {
 }
 
 // Green / yellow / red per the plan.
-//  green: weighed, protein ≥ 140, kcal within target ±100, steps ≥ 10,000, sleep ≥ 7 h, session done (or none planned)
-//  yellow: everything else green but steps 8,000–9,999, or a minimum day (weigh-in + protein ≥ 140 + 6,000 steps)
+//  green: weighed, protein ≥ proteinMin (120), kcal within target ±100, steps ≥ 10,000, sleep ≥ 7 h, session done (or none planned)
+//  yellow: everything else green but steps 8,000–9,999, or a minimum day (weigh-in + protein ≥ proteinMin + 6,000 steps)
 //  red: anything else. 'open' = today, not finished yet and not green.
 // Returns { status, checks: [{ key, label, ok, warn }] , minimumMet }.
 // `week` (from weekTraining, as of the end of the day) makes the session check "still on track for the
