@@ -46,6 +46,17 @@
 .fd-next:disabled { opacity: .3; }
 .fd-sync { margin: 0 0 10px; }
 
+/* ---------- grocery list (grocery.js) ---------- */
+.fd-grocery { margin-top: 12px; }
+.fd-grocery .pill { margin-left: 4px; }
+.gr-row { min-height: 52px; }
+.gr-row b { font-weight: 650; }
+.gr-box { flex: none; width: 24px; height: 24px; border-radius: 7px; border: 2px solid var(--text-3); display: grid; place-items: center; }
+.gr-box svg { width: 15px; height: 15px; stroke-width: 3; }
+.gr-amt { flex: none; max-width: 45%; text-align: right; font-size: 14px; font-weight: 650; color: var(--text-2); }
+.gr-row.done .gr-box { background: var(--up); border-color: var(--up); color: var(--on-color); }
+.gr-row.done b { color: var(--text-3); text-decoration: line-through; }
+
 /* ---------- totals ---------- */
 .fd-big { font-size: 28px; font-weight: 800; letter-spacing: -.02em; line-height: 1.1; }
 .fd-big span { font-size: 14px; font-weight: 600; color: var(--text-2); }

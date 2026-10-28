@@ -18,7 +18,7 @@ A personal, rule-based coach built for exactly one training life: an 11-week cut
 ## Operating Context
 - Gym: live workout logger with set rows, rest timer, carried weights, routine rotation (Upper A/B/C).
 - Runs: Strava/Garmin sync, run coach notes, run plan; demo data for empty states.
-- Food: whole-day calories and macros synced from Fitatu every 2 hours (GitHub Action, FITATU-SETUP.md), targets, body weight. Food itself is logged in Fitatu, not in this app.
+- Food: whole-day calories and macros synced from Fitatu every 2 hours (GitHub Action, FITATU-SETUP.md), targets, body weight. Food itself is logged in Fitatu, not in this app. A grocery list adds up the meals planned in Fitatu for the days you pick (recipes as ingredients).
 - Cut plan: daily checklist (weigh-in, protein, kcal, steps, training), day status (green/yellow), weekly review with measurements and photos, red flags, progress charts.
 - Stats tab, Me/settings screen, backup/export, local-only mode without an account.
 

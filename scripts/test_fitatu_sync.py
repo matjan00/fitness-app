@@ -77,6 +77,53 @@ class Planning(unittest.TestCase):
         self.assertEqual(fs.sync_days({"first_sync_done": True}, date(2026, 10, 21)), ["2026-10-20", "2026-10-21"])
 
 
+def row(food_type, **over):
+    return {"foodType": food_type, "name": "x", "measureQuantity": 1, "measureId": 1, "measureName": "g", "eaten": False, **over}
+
+
+RECIPE = {"serving": 2, "measures": [{"id": 39, "weightPerUnit": 300}], "items": [
+    {"itemId": 11, "name": "Oats", "measureId": 1, "measureName": "g", "measureQuantity": "160.00", "measureWeight": "1"},
+    {"itemId": 12, "name": "Banana", "measureId": 5, "measureName": "piece", "measureQuantity": "1.00", "measureWeight": "120"},
+]}
+
+
+class GroceryLines(unittest.TestCase):
+    def test_products_listed_with_their_measure(self):
+        plan = {"dietPlan": {"breakfast": {"items": [row("PRODUCT", productId=7, name="Skyr ", measureId=3, measureName="cup", measureQuantity=2, weight=300)]}}}
+        self.assertEqual(fs.plan_lines(plan, {}), [
+            {"key": "p7:3", "name": "Skyr", "unit": "cup", "qty": 2, "g": 300, "meal": "breakfast", "recipe": None}])
+
+    def test_eaten_and_deleted_rows_are_left_out(self):
+        plan = {"dietPlan": {"lunch": {"items": [row("PRODUCT", productId=1, eaten=True), row("PRODUCT", productId=2, deletedAt="x")]}}}
+        self.assertEqual(fs.plan_lines(plan, {}), [])
+
+    def test_recipe_split_into_ingredients_for_the_portions(self):
+        plan = {"dietPlan": {"breakfast": {"items": [row("RECIPE", recipeId=99, name="Porridge", measureId=39, measureQuantity=1)]}}}
+        self.assertEqual(fs.recipe_ids(plan), {99})
+        lines = fs.plan_lines(plan, {99: RECIPE})
+        self.assertEqual([(l["key"], l["qty"], l["g"], l["recipe"]) for l in lines], [("p11:1", 80, 80, "Porridge"), ("p12:5", 0.5, 60, "Porridge")])
+
+    def test_recipe_by_weight(self):
+        plan = {"dietPlan": {"dinner": {"items": [row("RECIPE", recipeId=99, measureId=1, measureQuantity=600, weight=600)]}}}
+        self.assertEqual([l["qty"] for l in fs.plan_lines(plan, {99: RECIPE})], [160, 1])  # 600 g = 2 portions = the whole recipe
+
+    def test_unreadable_recipe_and_custom_rows_listed_as_they_are(self):
+        plan = {"dietPlan": {"dinner": {"items": [row("RECIPE", recipeId=5, name="Stew", measureName="portion", measureId=39), row("CUSTOM_ITEM", name="Kebab")]}}}
+        lines = fs.plan_lines(plan, {5: {}})
+        self.assertEqual([(l["name"], l["recipe"]) for l in lines], [("Stew", None), ("Kebab", None)])
+
+    def test_plan_change(self):
+        lines = [{"key": "p1:1"}]
+        self.assertEqual(fs.plan_change(None, "2026-11-02", lines), ("put", {"day": "2026-11-02", "lines": lines}))
+        self.assertEqual(fs.plan_change({"day": "2026-11-02", "lines": lines}, "2026-11-02", lines), (None, None))
+        self.assertEqual(fs.plan_change({"day": "2026-11-02", "lines": lines}, "2026-11-02", []), ("delete", None))
+        self.assertEqual(fs.plan_change(None, "2026-11-02", []), (None, None))
+
+    def test_plan_days_start_today(self):
+        days = fs.plan_days(date(2026, 10, 28))
+        self.assertEqual((days[0], days[-1], len(days)), ("2026-10-28", "2026-11-10", 14))
+
+
 class Ids(unittest.TestCase):
     def test_ids_are_stable_and_distinct(self):
         self.assertEqual(fs.day_record_id(USER, "2026-10-18"), fs.day_record_id(USER, "2026-10-18"))

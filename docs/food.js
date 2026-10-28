@@ -1,5 +1,5 @@
 // Food: whole-day calories and macros synced from Fitatu (scripts/fitatu_sync.py, every 2 hours), daily
-// targets calculator, body weight. No meals or ingredients are kept here, only day totals.
+// targets calculator, body weight, and a grocery list from the meals planned in Fitatu (grocery.js).
 
 import { $, $$, esc, icon, toast, n0, n1, parseNum, today, addDays, fromDay, niceDate, relDay } from './util.js';
 import * as store from './store.js';
@@ -7,6 +7,7 @@ import { push, page, sheet, chooseSheet } from './nav.js';
 import { chart, fade, cssVar } from './charts.js';
 import { sumEntries, suggestTargets, ACTIVITY, weightTrend, weeklyChange, latestWeight } from './food-calc.js';
 import { settings, targets, dayTargets, saveSettings, ring, bar, allFoodEntries } from './food-ui.js';
+import { openGrocery, plannedDays } from './grocery.js';
 
 export const tab = { id: 'food', title: 'Food', icon: 'food', render };
 
@@ -74,12 +75,14 @@ function renderDiary(box) {
         <button class="link small" id="fd-edittargets">Targets</button></div>` : ''}
       ${!t ? `<button class="soft block" id="fd-settargets" style="margin-top:12px">${icon('fire')} Set your daily targets</button>` : ''}
     </div>
+    <button class="soft block fd-grocery" id="fd-grocery">${icon('list')} Grocery list${plannedDays().length ? ` <span class="pill">${plannedDays().length} day${plannedDays().length === 1 ? '' : 's'} planned</span>` : ''}</button>
     <h3 class="section-title">This week</h3>
     <div class="card" id="fd-week"></div>`;
 
   $$('[data-d]', box).forEach((b) => { b.onclick = () => shiftDay(+b.dataset.d, box); });
   $('#fd-today', box)?.addEventListener('click', () => { day = today(); renderDiary(box); });
   $('#fd-daypick', box).onclick = () => pickDate(box);
+  $('#fd-grocery', box).onclick = openGrocery;
   $('#fd-settargets', box)?.addEventListener('click', () => openTargets());
   $('#fd-edittargets', box)?.addEventListener('click', () => openTargets());
   renderWeek($('#fd-week', box));

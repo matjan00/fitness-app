@@ -2,7 +2,13 @@
 
 The Food tab now shows what you log in **Fitatu**: calories, protein, carbs and fat for each whole
 day. A GitHub Action logs into Fitatu as you every 2 hours, reads the last week of your diary,
-adds each day up, and saves only those day totals. No meals or products are copied.
+adds each day up, and saves those day totals.
+
+It also reads today and the next 13 days for the **grocery list** (Food tab → Grocery list). For
+those days it saves what is planned and not yet ticked as eaten: product names and amounts, with
+planned recipes split into their ingredients. Pick the days you shop for and the list adds them up.
+These go to your own Supabase database like the rest of your data; the Action's log prints only
+counts. Past days drop off the list.
 
 The sync starts on **20 October 2026**. Days before that keep what you logged in the app's own
 diary; the Food tab still shows them. From 20 October on, Fitatu is used. Each run re-reads the
@@ -13,8 +19,8 @@ Fitatu has no official API, so this uses the private one that Fitatu's own websi
 means:
 - It can break without warning if Fitatu changes their website. When a sync fails, the Food tab
   says so.
-- Automated access may be against Fitatu's terms of service. It only reads your own diary, a few
-  times a day.
+- Automated access may be against Fitatu's terms of service. It only reads your own diary (and
+  the recipes you planned), a few times a day.
 
 ## Step 1: Make sure you can log into Fitatu with an email and password
 
