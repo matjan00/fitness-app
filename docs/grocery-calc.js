@@ -48,7 +48,22 @@ export function amountText(row) {
   return row.g > 0 && !parts.every((p) => p.unit === 'ml') ? `${txt} (≈ ${grams(row.g)})` : txt;
 }
 
-// The list as plain text, for copying or sharing. Ticked rows are left out.
+const PIECES = new Set(['sztuka', 'sztuki', 'sztuk', 'szt', 'szt.', 'piece', 'pieces']);
+const plNum = (x) => num(x).replace('.', ',');
+const plGrams = (g) => (g >= 1000 ? `${plNum(Math.round(g / 10) / 100)} kg` : `${Math.round(g)} g`);
+
+// Amount the way Listonic reads it in front of a name: one weight when every part has one
+// ("160 g", "1,25 kg", "500 ml"), else the counts ("2", "1 kubek").
+function listonicAmount(row) {
+  const parts = row.parts.filter((p) => p.qty > 0);
+  if (parts.length && parts.every((p) => p.unit === 'ml')) return `${Math.round(parts.reduce((a, p) => a + p.qty, 0))} ml`;
+  if (row.g > 0) return plGrams(row.g);
+  return parts.map((p) => (p.unit === 'g' ? plGrams(p.qty) : p.unit === 'ml' ? `${Math.round(p.qty)} ml`
+    : PIECES.has(p.unit.toLowerCase()) || !p.unit ? plNum(p.qty) : `${plNum(p.qty)} ${p.unit}`)).join(' + ');
+}
+
+// The list as plain text for copying or sharing, one product a line with the amount first
+// ("160 g Płatki owsiane"), which Listonic turns into an item with its quantity. Ticked rows are left out.
 export function listText(rows, ticked = {}) {
-  return rows.filter((r) => !ticked[r.key]).map((r) => `- ${r.name}: ${amountText(r)}`).join('\n');
+  return rows.filter((r) => !ticked[r.key]).map((r) => `${listonicAmount(r)} ${r.name}`.trim()).join('\n');
 }

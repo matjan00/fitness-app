@@ -46,7 +46,15 @@ test('junk is skipped and nothing chosen gives an empty list', () => {
   assert.deepEqual(groceryList(plans, []), []);
 });
 
-test('text for sharing leaves out ticked rows', () => {
+test('text for sharing puts the amount first, as Listonic reads it, and leaves out ticked rows', () => {
   const rows = groceryList(plans, ['2026-11-04', '2026-11-02']);
-  assert.equal(listText(rows, { p12: true }), '- Płatki owsiane: 80 g\n- Ryż: 200 g\n- Skyr: 1 kubek (≈ 150 g)');
+  assert.equal(listText(rows, { p12: true }), '80 g Płatki owsiane\n200 g Ryż\n150 g Skyr');
+  assert.equal(listText(groceryList(plans, ['2026-11-02', '2026-11-03'])), '160 g Banan\n1 porcja Kebab\n160 g Płatki owsiane\n150 g Skyr');
+  const misc = [{ day: 'd', lines: [
+    { key: 'p1:2', name: 'Jajko', unit: 'sztuka', qty: 3, g: null },
+    { key: 'p2:1', name: 'Mleko', unit: 'ml', qty: 300, g: 300 },
+    { key: 'p3:1', name: 'Ryż', unit: 'g', qty: 1250, g: 1250 },
+    { key: 'p4:2', name: 'Cytryna', unit: 'sztuka', qty: 0.5, g: null },
+  ] }];
+  assert.equal(listText(groceryList(misc, ['d'])), '0,5 Cytryna\n3 Jajko\n300 ml Mleko\n1,25 kg Ryż');
 });
