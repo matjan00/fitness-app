@@ -62,6 +62,21 @@ function listonicAmount(row) {
     : PIECES.has(p.unit.toLowerCase()) || !p.unit ? plNum(p.qty) : `${plNum(p.qty)} ${p.unit}`)).join(' + ');
 }
 
+// Rows as Listonic items { name, amount, unit } (the edge function supabase/functions/listonic):
+// one weight when every part has one ("160" g, "1,25" kg, "300" ml), pieces as "szt.", other counts in
+// their own unit, and mixed counts without a weight as text in amount. Ticked rows are left out.
+export function listonicItems(rows, ticked = {}) {
+  return rows.filter((r) => !ticked[r.key]).map((r) => {
+    const parts = r.parts.filter((p) => p.qty > 0);
+    let amount = '', unit = '';
+    if (parts.length && parts.every((p) => p.unit === 'ml')) { amount = String(Math.round(parts.reduce((a, p) => a + p.qty, 0))); unit = 'ml'; }
+    else if (r.g > 0) [amount, unit] = r.g >= 1000 ? [plNum(Math.round(r.g / 10) / 100), 'kg'] : [String(Math.round(r.g)), 'g'];
+    else if (parts.length === 1) { amount = plNum(parts[0].qty); unit = PIECES.has(parts[0].unit.toLowerCase()) ? 'szt.' : parts[0].unit; }
+    else amount = listonicAmount(r);
+    return { name: r.name, amount, unit };
+  });
+}
+
 // The list as plain text for copying or sharing, one product a line with the amount first
 // ("160 g Płatki owsiane"), which Listonic turns into an item with its quantity. Ticked rows are left out.
 export function listText(rows, ticked = {}) {
