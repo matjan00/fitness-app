@@ -7,13 +7,15 @@ const slotPress = { reps: '6-10', sets: 4, kind: 'main' };
 const slotIso = { reps: '12-15', sets: 3, kind: 'iso' };
 
 test('exercise verdicts', () => {
-  assert.equal(judgeExercise(S(40, 8, 8, 7), S(40, 9, 8, 8)), 'beat');      // more total reps, same weight
-  assert.equal(judgeExercise(S(40, 8, 8, 7), S(40, 8, 8, 7)), 'matched');
-  assert.equal(judgeExercise(S(40, 8, 8, 7), S(40, 8, 7, 7)), 'matched');   // −1 rep tolerance
-  assert.equal(judgeExercise(S(40, 8, 8, 8), S(40, 8, 7, 6)), 'dropped');   // fewer reps at same weight
+  assert.equal(judgeExercise(S(40, 8, 8, 7), S(40, 9, 8, 8)), 'beat');      // more volume, same weight
+  assert.equal(judgeExercise(S(40, 8, 8, 7), S(40, 8, 8, 7)), 'matched');   // same volume
+  assert.equal(judgeExercise(S(40, 8, 8, 7), S(40, 8, 7, 7)), 'dropped');   // one rep less = less volume
   assert.equal(judgeExercise(S(40, 8, 8), S(42.5, 8, 8)), 'beat');          // more weight, same reps
-  assert.equal(judgeExercise(S(40, 10, 10), S(42.5, 9, 8)), 'beat');        // heavier, e1RM up
-  assert.equal(judgeExercise(S(40, 10, 10), S(35, 10, 10)), 'dropped');     // e1RM down > 3 %
+  assert.equal(judgeExercise(S(40, 10, 10), S(42.5, 9, 8)), 'dropped');     // 800 → 722.5 kg
+  assert.equal(judgeExercise(S(40, 10, 10), S(35, 12, 12)), 'beat');        // lighter but more volume: 800 → 840 kg
+  // mixed weights: every set counts at its own weight (23×5 + 18×11 + 18×9 = 475 → 23×9 + 23×7 + 23×6 = 506)
+  assert.equal(judgeExercise([...S(23, 5), ...S(18, 11, 9)], S(23, 9, 7, 6)), 'beat');
+  assert.equal(judgeExercise(S(0, 8, 8), S(0, 9, 8)), 'beat');              // bodyweight: total reps
   assert.equal(judgeExercise([], S(40, 8)), null);
   // warm-ups ignored
   assert.equal(judgeExercise([{ type: 'w', kg: 20, reps: 10 }, ...S(40, 8)], [{ type: 'w', kg: 20, reps: 5 }, ...S(40, 8)]), 'matched');

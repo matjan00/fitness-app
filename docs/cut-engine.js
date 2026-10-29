@@ -34,23 +34,15 @@ export const isMainLift = (id) => MAIN_LIFTS.includes(id);
 export const stepFor = (kind) => (kind === 'iso' || kind === 'crunch' ? 2 : 2.5);
 
 // ⬆️ beat · ➡️ matched · ⬇️ dropped (null without a previous session to compare with).
-//  - best-set e1RM down > 3 %                                         → dropped
-//  - more weight (top working weight) at the same or more total reps   → beat
-//  - same top weight: total reps +1 or more → beat, 0/−1 → matched, −2 or worse → dropped
-//  - more weight with fewer reps, or less weight: e1RM up → beat, otherwise matched
+// Total volume (kg × reps over every working set) vs last time: more → beat, same → matched, less → dropped.
+// Bodyweight work without added weight has no volume, so it is compared on total reps instead.
+const volume = (ws) => Math.round(ws.reduce((a, s) => a + s.kg * s.reps, 0) * 100) / 100;
 export function judgeExercise(prevSets, curSets) {
   const p = work(prevSets), c = work(curSets);
   if (!p.length || !c.length) return null;
-  const pe = bestE1rm(p), ce = bestE1rm(c);
-  if (pe > 0 && ce < pe * 0.97) return 'dropped';
-  const pk = topKg(p), ck = topKg(c);
-  const pr = totalReps(p), cr = totalReps(c);
-  if (ck === pk) {
-    const d = cr - pr;
-    return d >= 1 ? 'beat' : d >= -1 ? 'matched' : 'dropped';
-  }
-  if (ck > pk && cr >= pr) return 'beat';
-  return ce > pe ? 'beat' : 'matched';
+  let pv = volume(p), cv = volume(c);
+  if (!pv && !cv) { pv = totalReps(p); cv = totalReps(c); }
+  return cv > pv ? 'beat' : cv === pv ? 'matched' : 'dropped';
 }
 
 // Mark of one set against its target: 'up' | 'on' | 'down'.

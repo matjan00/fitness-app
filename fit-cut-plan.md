@@ -114,9 +114,11 @@ Every exercise is compared with the **last time you did that same exercise**, us
 **Exercise verdict**
 | Verdict | When |
 |---|---|
-| ⬆️ Beat | More weight at the same or more reps, **or** more total reps at the same weight |
-| ➡️ Matched | Same weight, same total reps (±1) |
-| ⬇️ Dropped | Fewer total reps at the same weight, or best-set e1RM down > 3% |
+| ⬆️ Beat | More total volume (kg × reps, added up over every working set) |
+| ➡️ Matched | Exactly the same total volume |
+| ⬇️ Dropped | Less total volume |
+
+Warm-up sets don't count. Bodyweight exercises without added weight are compared on total reps.
 
 **Next session's prescription** is set from what you actually did, not from the plan:
 | What you did | Next time |
