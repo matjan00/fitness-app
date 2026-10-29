@@ -7,7 +7,9 @@
 .st-good { color: var(--up); }
 .st-warn { color: var(--gold); }
 .st-bad { color: var(--down-ink); }
-.st-lifts { display: grid; gap: 6px; margin-top: 10px; }
-.st-lift { font-size: 14px; }
-.st-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: none; }
+.st-pick { display: grid; gap: 4px; margin-top: 10px; font-size: 13px; color: var(--text-2); }
+.st-lifts { display: grid; gap: 2px; margin-top: 10px; }
+.st-lift { width: 100%; gap: 10px; min-height: 40px; padding: 6px 8px; border-radius: 9px; font-size: 14px; text-align: left; }
+.st-lift.on { background: var(--card-2); font-weight: 650; }
+.st-lift-num { flex: none; white-space: nowrap; }
 .st-range { margin: 6px 0 2px; }

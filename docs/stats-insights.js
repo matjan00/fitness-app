@@ -92,8 +92,8 @@ function entryE1rm(e, bodyKg) {
 // [{ id, sessions: [{ day, e1rm }], change (%), bw }]. bodyOn(day) → body weight (for pull-ups and dips). Bodyweight
 // lifts use the body weight of their first session throughout, so losing weight on a cut does not read as losing
 // strength - only more reps or more added kg move them.
-// Only exercises done in at least 2 sessions; at most `limit`, most-trained first.
-export function strengthKept(workouts = [], since, bodyOn = () => null, limit = 5) {
+// Only exercises done in at least `minSessions` sessions; at most `limit`, most-trained first.
+export function strengthKept(workouts = [], since, bodyOn = () => null, limit = 5, minSessions = 2) {
   const by = new Map();
   const list = workouts.filter((w) => w?.started_at && localDay(w.started_at) >= since).sort((a, b) => a.started_at.localeCompare(b.started_at));
   for (const w of list) {
@@ -107,7 +107,7 @@ export function strengthKept(workouts = [], since, bodyOn = () => null, limit = 
       by.set(e.exercise_id, row);
     }
   }
-  return [...by.values()].filter((r) => r.sessions.length >= 2)
+  return [...by.values()].filter((r) => r.sessions.length >= minSessions)
     .sort((a, b) => b.sessions.length - a.sessions.length).slice(0, limit)
     .map((r) => ({ ...r, change: r1(((r.sessions[r.sessions.length - 1].e1rm - r.sessions[0].e1rm) / r.sessions[0].e1rm) * 100) }));
 }

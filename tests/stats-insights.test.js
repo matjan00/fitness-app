@@ -47,6 +47,10 @@ test('strength kept: e1RM change per lift, bodyweight lifts use body weight, loc
   // same reps while getting lighter: pull-ups hold steady instead of "losing strength"
   const light = strengthKept([W('2026-10-01', [pull(8)]), W('2026-10-08', [pull(8)])], '2026-09-01', (d) => (d === '2026-10-01' ? 85 : 80));
   assert.equal(light[0].change, 0);
+  // every exercise, even one done once, when asked for
+  const all = strengthKept([...ws, W('2026-10-20', [{ exercise_id: 'curl', mode: 'wr', sets: [{ kg: 15, reps: 10 }] }])], '2026-09-01', () => 80, Infinity, 1);
+  assert.ok(all.find((x) => x.id === 'curl'));
+  assert.equal(strengthKept(ws, '2026-09-01', () => 80).find((x) => x.id === 'curl'), undefined);
   assert.equal(localDay('2026-10-14T00:30:00'), '2026-10-14');
 });
 
