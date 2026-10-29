@@ -5,7 +5,6 @@
 
 import { addDays, weekOf, dayList } from './stats-calc.js';
 import { emaTrend, trendOn, daysBetween } from './cut-calc.js';
-import { e1rm } from './gym-calc.js';
 
 const pad = (n) => String(n).padStart(2, '0');
 // The local calendar day of an ISO time (a workout at 00:30 belongs to that night's date, not the UTC one).
@@ -75,23 +74,32 @@ export function maintenanceWeeks(weeks, rows, tdeeOf, today) {
 }
 
 // ---------- gym ----------
-// Best estimated 1RM of an exercise entry in one session. Bodyweight exercises count body weight + added kg.
-function entryE1rm(e, bodyKg) {
+// One exercise entry in one session: best estimated 1RM (Epley, no rep cap - a 15-rep crunch set still has a
+// number, and the same formula every session keeps the trend fair), best reps and best seconds of the working sets.
+// Bodyweight exercises count body weight + added kg; without a known body weight they only have reps.
+function entryBest(e, bodyKg) {
   const mode = e.mode || 'wr';
-  if (mode === 't') return 0;
-  let best = 0;
+  const out = { e1rm: 0, reps: 0, secs: 0, done: false };
   for (const s of e.sets || []) {
-    if (!s || s.type === 'w' || !(Number(s.reps) > 0)) continue;
+    if (!s || s.type === 'w') continue;
+    const reps = Number(s.reps) || 0, secs = Number(s.secs) || 0;
+    if (!(reps > 0) && !(secs > 0)) continue;
+    out.done = true;
+    out.reps = Math.max(out.reps, reps);
+    out.secs = Math.max(out.secs, secs);
+    if (mode === 't' || !(reps > 0)) continue;
     const kg = mode === 'bw' ? (bodyKg > 0 ? bodyKg + (Number(s.kg) || 0) : 0) : Number(s.kg) || 0;
-    if (kg > 0) best = Math.max(best, e1rm(kg, Number(s.reps)) || 0);
+    if (kg > 0) out.e1rm = Math.max(out.e1rm, reps === 1 ? kg : kg * (1 + reps / 30));
   }
-  return best;
+  return out;
 }
 
-// The lifts you train most since `since`, with e1RM per session and the change from the first session:
-// [{ id, sessions: [{ day, e1rm }], change (%), bw }]. bodyOn(day) → body weight (for pull-ups and dips). Bodyweight
-// lifts use the body weight of their first session throughout, so losing weight on a cut does not read as losing
-// strength - only more reps or more added kg move them.
+// Every exercise trained since `since`, with its progress per session and the change from the first session:
+// [{ id, unit, sessions: [{ day, value }], n, change (%), bw }]. unit is 'kg' (estimated 1RM) when the exercise was
+// ever done with a load, else 'reps' or 's' (timed); sessions holds the days that have that number, n counts every
+// session trained (a 0 kg or no-weigh-in day still counts as done). bodyOn(day) → body weight (for pull-ups and dips).
+// Bodyweight lifts use the body weight of their first session throughout, so losing weight on a cut does not read
+// as losing strength - only more reps or more added kg move them.
 // Only exercises done in at least `minSessions` sessions; at most `limit`, most-trained first.
 export function strengthKept(workouts = [], since, bodyOn = () => null, limit = 5, minSessions = 2) {
   const by = new Map();
@@ -99,17 +107,24 @@ export function strengthKept(workouts = [], since, bodyOn = () => null, limit = 
   for (const w of list) {
     const day = localDay(w.started_at);
     for (const e of w.exercises || []) {
-      const row = by.get(e.exercise_id) || { id: e.exercise_id, sessions: [], bw: e.mode === 'bw', body: e.mode === 'bw' ? bodyOn(day) : null };
-      const v = entryE1rm(e, row.body);
-      if (!(v > 0)) continue;
-      const last = row.sessions[row.sessions.length - 1];
-      if (last?.day === day) last.e1rm = Math.max(last.e1rm, r1(v)); else row.sessions.push({ day, e1rm: r1(v) });
-      by.set(e.exercise_id, row);
+      let row = by.get(e.exercise_id);
+      if (!row) { row = { id: e.exercise_id, days: [], bw: e.mode === 'bw', body: null, timed: e.mode === 't' }; by.set(e.exercise_id, row); }
+      if (row.bw && !(row.body > 0)) row.body = bodyOn(day);
+      const v = entryBest(e, row.body);
+      if (!v.done) continue;
+      const last = row.days[row.days.length - 1];
+      if (last?.day === day) { last.e1rm = Math.max(last.e1rm, v.e1rm); last.reps = Math.max(last.reps, v.reps); last.secs = Math.max(last.secs, v.secs); }
+      else row.days.push({ day, e1rm: v.e1rm, reps: v.reps, secs: v.secs });
     }
   }
-  return [...by.values()].filter((r) => r.sessions.length >= minSessions)
-    .sort((a, b) => b.sessions.length - a.sessions.length).slice(0, limit)
-    .map((r) => ({ ...r, change: r1(((r.sessions[r.sessions.length - 1].e1rm - r.sessions[0].e1rm) / r.sessions[0].e1rm) * 100) }));
+  return [...by.values()].filter((r) => r.days.length >= minSessions)
+    .sort((a, b) => b.days.length - a.days.length).slice(0, limit)
+    .map(({ id, days, bw, timed }) => {
+      const [unit, key] = days.some((d) => d.e1rm > 0) ? ['kg', 'e1rm'] : timed || !days.some((d) => d.reps > 0) ? ['s', 'secs'] : ['reps', 'reps'];
+      const sessions = days.filter((d) => d[key] > 0).map((d) => ({ day: d.day, value: r1(d[key]) }));
+      const first = sessions[0]?.value, last = sessions[sessions.length - 1]?.value;
+      return { id, unit, sessions, n: days.length, bw, change: first > 0 ? r1(((last - first) / first) * 100) : null };
+    });
 }
 
 // Hard (working) sets per muscle group per week, averaged over the range: [{ group, sets }] most first.

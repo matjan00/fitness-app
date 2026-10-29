@@ -52,6 +52,17 @@ test('strength kept: e1RM change per lift, bodyweight lifts use body weight, loc
   assert.ok(all.find((x) => x.id === 'curl'));
   assert.equal(strengthKept(ws, '2026-09-01', () => 80).find((x) => x.id === 'curl'), undefined);
   assert.equal(localDay('2026-10-14T00:30:00'), '2026-10-14');
+  // high-rep sets, 0 kg sets and a bodyweight lift with no weigh-in still count as sessions
+  const abs = (kg, reps) => ({ exercise_id: 'crunch', mode: 'wr', sets: [{ kg, reps }] });
+  const c = strengthKept([W('2026-10-01', [abs(30, 20)]), W('2026-10-05', [abs(35, 15)]), W('2026-10-09', [abs(0, 25)])], '2026-09-01', () => 80, Infinity, 1)[0];
+  assert.equal(c.n, 3);
+  assert.equal(c.unit, 'kg');
+  assert.equal(c.sessions.length, 2);
+  assert.ok(c.change > 0);
+  const sit = strengthKept([1, 2, 3].map((i) => W(`2026-10-0${i}`, [{ exercise_id: 'situp', mode: 'bw', sets: [{ reps: 10 + i }] }])), '2026-09-01', () => null, Infinity, 1)[0];
+  assert.deepEqual([sit.n, sit.unit, sit.sessions.map((x) => x.value)], [3, 'reps', [11, 12, 13]]);
+  const plank = strengthKept([W('2026-10-01', [{ exercise_id: 'plank', mode: 't', sets: [{ secs: 60 }] }])], '2026-09-01', () => 80, Infinity, 1)[0];
+  assert.deepEqual([plank.unit, plank.n], ['s', 1]);
 });
 
 test('sets per muscle per week, recent PRs', () => {

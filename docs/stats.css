@@ -1,5 +1,8 @@
 /* Stats tab. All classes prefixed .st- */
-.st-range { margin-bottom: 14px; }
+/* Grids size their auto columns to content: pin every grid to the screen width so a long exercise name in the
+   dropdown or the list cannot push the page sideways. */
+.st-cards, .st-pick, .st-lifts { grid-template-columns: minmax(0, 1fr); }
+.st-cards > * { min-width: 0; }
 .st-card h2 { margin-bottom: 2px; }
 .st-chart { position: relative; height: 200px; margin-top: 10px; }
 .st-empty { padding: 18px 0 6px; text-align: center; }
@@ -8,8 +11,10 @@
 .st-warn { color: var(--gold); }
 .st-bad { color: var(--down-ink); }
 .st-pick { display: grid; gap: 4px; margin-top: 10px; font-size: 13px; color: var(--text-2); }
+.st-pick select { width: 100%; min-width: 0; }
 .st-lifts { display: grid; gap: 2px; margin-top: 10px; }
-.st-lift { width: 100%; gap: 10px; min-height: 40px; padding: 6px 8px; border-radius: 9px; font-size: 14px; text-align: left; }
+.st-lift { width: 100%; min-width: 0; gap: 10px; min-height: 40px; padding: 6px 8px; border-radius: 9px; font-size: 14px; text-align: left; }
+.st-lift > .ellipsis { min-width: 0; }
 .st-lift.on { background: var(--card-2); font-weight: 650; }
 .st-lift-num { flex: none; white-space: nowrap; }
 .st-range { margin: 6px 0 2px; }

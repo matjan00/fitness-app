@@ -99,31 +99,31 @@ function drawWeight(el, g) {
   }));
 }
 
-// Body weight on a day (for pull-ups / dips): the trend, else the last weigh-in.
-const bodyOn = (g) => { const tr = emaTrend(g.weights); return (d) => trendOn(tr, d); };
+// Body weight on a day (for pull-ups / dips): the trend, else the first weigh-in (sessions before you started weighing in).
+const bodyOn = (g) => { const tr = emaTrend(g.weights); return (d) => trendOn(tr, d) ?? tr[0]?.trend ?? null; };
 
-// Every exercise trained since `since` (most-trained first); the picked one is charted. The pick is kept on the device.
+// Every exercise trained in the range (most-trained first); the picked one is charted. The pick is kept on the device.
 let pickedLift = local.get('statsLift', null);
 function drawStrength(el, g) {
-  const since = g.cut?.startDate && g.cut.startDate <= g.t ? g.cut.startDate : g.from;
-  const lifts = strengthKept(g.workouts, since, bodyOn(g), Infinity, 1);
+  const lifts = strengthKept(g.workouts, g.from, bodyOn(g), Infinity, 1);
   const box = $('#st-strength', el);
-  if (!lifts.length) { box.innerHTML = `<div class="card"><h2>Strength</h2><p class="small muted" style="margin-top:6px">Exercises you train ${g.cut ? 'since the cut started' : 'in this period'} show here with their estimated 1-rep max.</p></div>`; return; }
+  if (!lifts.length) { box.innerHTML = `<div class="card"><h2>Strength</h2><p class="small muted" style="margin-top:6px">Exercises you train in this period show here with their estimated 1-rep max.</p></div>`; return; }
+  const unit = (l) => (l.unit === 'kg' ? 'kg' : l.unit === 's' ? 's' : 'reps');
   const cur = lifts.find((l) => l.id === pickedLift) || lifts[0];
   const name = (l) => exName(l.id, l.id);
-  const change = (l) => (l.sessions.length < 2 ? '<em class="muted">1 session</em>' : `<em class="${l.change < -5 ? 'st-bad' : l.change < 0 ? 'st-warn' : 'st-good'}">${signed(l.change, 1)}%</em>`);
-  box.innerHTML = `<div class="card st-card"><h2>Strength ${g.cut ? 'kept on the cut' : ''}</h2>
-    <p class="small muted">Estimated 1-rep max, change since ${g.cut ? 'the cut started' : esc(shortDay(since))}. Down more than 5% is a sign to eat a bit more.</p>
+  const change = (l) => (l.sessions.length < 2 || l.change == null ? `<em class="muted">${l.n} session${l.n === 1 ? '' : 's'}</em>` : `<em class="${l.change < -5 ? 'st-bad' : l.change < 0 ? 'st-warn' : 'st-good'}">${signed(l.change, 1)}%</em>`);
+  box.innerHTML = `<div class="card st-card"><h2>Strength</h2>
+    <p class="small muted">Estimated 1-rep max (best reps for exercises without weight), change from your first session in this period.${g.cut ? ' Down more than 5% on the cut is a sign to eat a bit more.' : ''}</p>
     <label class="st-pick">Exercise<select id="st-lift-pick">${lifts.map((l) => `<option value="${esc(l.id)}" ${l === cur ? 'selected' : ''}>${esc(name(l))}</option>`).join('')}</select></label>
     <div class="st-chart"><canvas id="st-lifts"></canvas></div>
     <div class="st-lifts">${lifts.map((l) => `<button class="row between st-lift ${l === cur ? 'on' : ''}" data-lift="${esc(l.id)}"><span class="ellipsis">${esc(name(l))}${l.bw ? ' <span class="tiny muted">(+ body)</span>' : ''}</span>
-      <span class="st-lift-num"><b>${n1(l.sessions[l.sessions.length - 1].e1rm)} kg</b> ${change(l)}</span></button>`).join('')}</div></div>`;
+      <span class="st-lift-num"><b>${l.sessions.length ? `${n1(l.sessions[l.sessions.length - 1].value)} ${unit(l)}` : '–'}</b> ${change(l)}</span></button>`).join('')}</div></div>`;
   const pick = (id) => { pickedLift = id; local.set('statsLift', id); drawStrength(el, g); };
   $('#st-lift-pick', box).onchange = (e) => pick(e.target.value);
   $$('[data-lift]', box).forEach((b) => { b.onclick = () => pick(b.dataset.lift); });
   chart('st-lifts', base(cur.sessions.map((s) => shortDay(s.day)), [
-    line(name(cur), cur.sessions.map((s) => s.e1rm), seriesColor(0), { pointRadius: cur.sessions.length > 24 ? 1.5 : 3, tension: 0.25 }),
-  ], { scales: { y: { beginAtZero: false, grace: '10%' } }, tooltip: { label: (c) => `${c.dataset.label}: ${n1(c.parsed.y)} kg` } }));
+    line(name(cur), cur.sessions.map((s) => s.value), seriesColor(0), { pointRadius: cur.sessions.length > 24 ? 1.5 : 3, tension: 0.25 }),
+  ], { scales: { y: { beginAtZero: false, grace: '10%' } }, tooltip: { label: (c) => `${c.dataset.label}: ${n1(c.parsed.y)} ${unit(cur)}` } }));
 }
 
 function drawPRs(el, g) {
