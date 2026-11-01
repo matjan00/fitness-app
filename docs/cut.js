@@ -90,6 +90,13 @@ export async function syncCutTargets() {
   await recordTargets({ ...next, steps: c.steps }, `Plan minimums: ${n0(CUT_TARGETS.kcal)} kcal, ${CUT_TARGETS.p} g protein`);
 }
 
+// Holding weight at ~70 kg (1 Nov 2026): a saved goal from the cut (65 kg) moves to 70 kg, once.
+export async function syncCutGoal() {
+  const c = cutSettings();
+  if (!c.startDate || (c.goalRev || 0) >= 1) return;
+  await saveCut({ goalWeight: CUT_DEFAULTS.goalWeight, goalRev: 1 });
+}
+
 // ---------- settings page ----------
 export function openCutSettings() {
   const c = cutSettings();

@@ -36,7 +36,7 @@ test('plan has 11 weeks + 2 buffer, deloads in 5 and 10, checkpoints in 4 and 8'
 });
 
 test('target trend weights from 73 kg match the Part 1 table', () => {
-  const w = planWeeks({ startDate: '2026-10-12' }, 73);
+  const w = planWeeks({ startDate: '2026-10-12', goalWeight: 65 }, 73);
   assert.deepEqual(w.slice(0, 11).map((x) => x.target), [72.3, 71.5, 70.8, 70, 69.3, 68.5, 67.8, 67, 66.3, 65.5, 65]);
   assert.equal(w[11].target, null);
   assert.equal(w[0].from, '2026-10-12');
@@ -46,7 +46,7 @@ test('target trend weights from 73 kg match the Part 1 table', () => {
 });
 
 test('changing the start date re-dates the whole plan', () => {
-  const a = planWeeks({ startDate: '2026-10-12' }, 73);
+  const a = planWeeks({ startDate: '2026-10-12', goalWeight: 65 }, 73);
   const b = planWeeks({ startDate: '2026-10-19' }, 73);
   assert.equal(b[0].from, '2026-10-19');
   assert.equal(b[12].from, '2027-01-11');

@@ -6,7 +6,7 @@ import * as store from './store.js';
 import * as foodUi from './food-ui.js';
 import { push, sheet } from './nav.js';
 import { startWorkout } from './gym-workout.js';
-import { cutSettings, currentTargets, openCutSettings, openPlan, addCutRoutines, syncCutRoutines, syncCutTargets, startWeight, isSetUp } from './cut.js';
+import { cutSettings, currentTargets, openCutSettings, openPlan, addCutRoutines, syncCutRoutines, syncCutTargets, syncCutGoal, startWeight, isSetUp } from './cut.js';
 import { PLAN, PROGRAM_NAME, EASY_PACE, weekNumber, daysToGoal, daysBetween, emaTrend, trendOn, targetWeight } from './cut-calc.js';
 import { redFlags, isLogged } from './cut-flags.js';
 import { openReview, dueCheckin, checkinFor, measurementsDue, openCheckin } from './cut-review.js';
@@ -390,6 +390,7 @@ export function init() {
   }, 600);
   setTimeout(() => syncCutRoutines().catch(() => {}), 1500);
   setTimeout(() => syncCutTargets().catch(() => {}), 1500);
+  setTimeout(() => syncCutGoal().catch(() => {}), 1500);
   scheduleReminders();
 }
 

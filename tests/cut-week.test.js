@@ -78,7 +78,7 @@ test('lift change over 2 weeks and the check-in day', () => {
 
 test('progress chart data', async () => {
   const { weightChart, liftSeries } = await import('../docs/cut-week.js');
-  const rows = weightChart([{ day: '2026-10-12', kg: 73 }, { day: '2026-10-13', kg: 72 }], { startDate: '2026-10-12' }, 73, '2026-10-14');
+  const rows = weightChart([{ day: '2026-10-12', kg: 73 }, { day: '2026-10-13', kg: 72 }], { startDate: '2026-10-12', goalWeight: 65 }, 73, '2026-10-14');
   assert.equal(rows[0].day, '2026-10-05');
   assert.equal(rows.length, 7 + 91);
   assert.equal(rows[7].kg, 73);

@@ -12,7 +12,7 @@ const r1 = (x) => Math.round(x * 10) / 10;
 export const CUT_DEFAULTS = {
   startDate: null,      // first day of week 1
   startWeight: null,    // manual override; otherwise the average of the first 3 weigh-ins from startDate
-  goalWeight: 65,
+  goalWeight: 70,
   rate: 0.75,           // kg of trend weight per week
   kcalFloor: 1900,     // the weekly review never suggests eating less than this
   steps: 10000,
