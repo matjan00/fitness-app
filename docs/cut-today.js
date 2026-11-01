@@ -145,10 +145,13 @@ function reviewBtn() {
 // ---------- day type: normal / minimum / travel ----------
 function dayTypeHtml(f, st, minUsed) {
   const type = f.travel ? 'travel' : f.minimum ? 'minimum' : 'normal';
+  const c = cutSettings();
   const hint = {
     normal: 'Bad day or illness? Minimum day. Away for work? Travel day.',
-    minimum: st.minimumMet ? 'Minimum met: weigh-in, protein and 6,000 steps. Counts as yellow.' : `Minimum day: weigh-in, protein ≥ ${cutSettings().proteinMin} g and 6,000 steps. Counts as yellow.`,
-    travel: 'Travel day: only the morning weigh-in counts. Calories roughly on target if you log them; steps optional; no session.',
+    minimum: c.trackFood
+      ? (st.minimumMet ? 'Minimum met: weigh-in, protein and 6,000 steps. Counts as yellow.' : `Minimum day: weigh-in, protein ≥ ${c.proteinMin} g and 6,000 steps. Counts as yellow.`)
+      : (st.minimumMet ? 'Minimum met: weigh-in and 6,000 steps. Counts as yellow.' : 'Minimum day: weigh-in and 6,000 steps. Counts as yellow.'),
+    travel: c.trackFood ? 'Travel day: only the morning weigh-in counts. Calories roughly on target if you log them; steps optional; no session.' : 'Travel day: only the morning weigh-in counts. Steps optional; no session.',
   }[type];
   return `<div class="seg ct-daytype" style="margin-top:12px" role="group" aria-label="Day type">${['normal', 'minimum', 'travel'].map((t) => `<button type="button" data-t="${t}" class="${t === type ? 'on' : ''}" aria-pressed="${t === type}">${t[0].toUpperCase() + t.slice(1)}</button>`).join('')}</div>
     <p class="tiny ${minUsed > 1 && type === 'minimum' ? 'down' : 'muted'}" style="margin-top:6px">${esc(hint)}${minUsed > 1 && type === 'minimum' ? ` ${minUsed} minimum days this week — more than 1 is flagged.` : ''}</p>`;
@@ -234,19 +237,28 @@ function sessionBlock(sess, done, wk) {
       ${run ? `<p class="small" style="margin-top:6px">${n1((+run.distance_m || 0) / 1000)} km · ${fmtPace(pace)}/km average${vs != null ? ` · ${sess.kind === 'easy' ? (vs > 0 ? 'easy enough' : `${fmtPace(-vs)} faster than easy pace`) : `${vs <= 0 ? `${fmtPace(-vs)} faster` : `${fmtPace(vs)} slower`} than ${target}/km (whole run incl. warm-up)`}` : ''}</p>`
         : `<button class="ghost block" id="ct-logrun" style="margin-top:10px">${icon('plus')} Log run by hand</button><p class="tiny muted" style="margin-top:4px">Garmin runs appear by themselves after the next sync.</p>`}</div>`;
   }
-  const note = { steps: 'No session — hit your steps.', travel: 'Weigh in this morning. Calories and steps are optional, roughly is fine.' }[sess.kind] || 'No session today. Hit your steps; on check-in day (or by Monday night), take measurements and photos.';
+  const note = { steps: 'No session — hit your steps.', travel: cutSettings().trackFood ? 'Weigh in this morning. Calories and steps are optional, roughly is fine.' : 'Weigh in this morning. Steps are optional.' }[sess.kind] || 'No session today. Hit your steps; on check-in day (or by Monday night), take measurements and photos.';
   return `<div class="ct-sess"><b>${SESSION_LABEL[sess.kind]}</b><p class="small muted">${note}</p></div>`;
 }
 
-// The day at a glance, right under the title: calories and protein still to eat, and the weight trend.
-function headStats(f, tg, trend) {
+// The day at a glance, right under the title: calories and protein still to eat (steps and sleep when food
+// isn't counted), and the weight trend.
+function headStats(f, tg, trend, trackFood) {
+  const kg = trend ?? f.weight;
+  const weight = `<div class="stat"><b>${kg == null ? '–' : `${n1(kg)}<small> kg</small>`}</b><span>${trend != null ? 'trend weight' : 'weight'}</span></div>`;
+  if (!trackFood) {
+    return `<div class="stats ct-headstats">
+    <div class="stat"><b>${f.steps == null ? '–' : n0(f.steps)}</b><span>steps</span></div>
+    <div class="stat"><b>${f.sleep == null ? '–' : `${n1(f.sleep)}<small> h</small>`}</b><span>sleep</span></div>
+    ${weight}
+  </div>`;
+  }
   const kcalLeft = tg.kcal ? tg.kcal - (f.kcal || 0) : null;
   const pLeft = tg.p ? Math.max(0, tg.p - (f.p || 0)) : null;
-  const kg = trend ?? f.weight;
   return `<div class="stats ct-headstats">
     <div class="stat"><b class="${kcalLeft != null && kcalLeft < 0 ? 'warn' : ''}">${kcalLeft == null ? '–' : n0(Math.abs(kcalLeft))}</b><span>${kcalLeft != null && kcalLeft < 0 ? 'kcal over' : 'kcal left'}</span></div>
     <div class="stat"><b>${pLeft == null ? '–' : `${n0(pLeft)}<small> g</small>`}</b><span>protein left</span></div>
-    <div class="stat"><b>${kg == null ? '–' : `${n1(kg)}<small> kg</small>`}</b><span>${trend != null ? 'trend weight' : 'weight'}</span></div>
+    ${weight}
   </div>`;
 }
 
@@ -277,6 +289,7 @@ function render(el) {
   const inPlan = (d) => d >= c.startDate;
   const greenStreak = streak(day, (d) => { if (!inPlan(d)) return false; const s = statusOf(d, src, c, tg.kcal); return s.status === 'green' || (s.status === 'yellow' && s.facts.minimum); });
   const proteinStreak = streak(day, (d) => { if (!inPlan(d)) return false; const fx = dayFacts(d, src); return fx.travel || (fx.p ?? 0) >= c.proteinMin; });
+  const weighStreak = streak(day, (d) => inPlan(d) && src.weights.some((e) => e && e.day === d));
   const checkinStreak = weekStreak(day, src.checkins.map((x) => (x.forDay ? addDays(x.forDay, -1) : x.day)));
   const minUsed = minimumDaysInWeek(day, src.dailies);
   const [stLabel, stCls] = STATUS[st.status];
@@ -295,7 +308,7 @@ function render(el) {
   el.innerHTML = `<div class="card ct-today">
     <div class="card-head"><div><h2>${head}</h2><p class="tiny muted">${wk > 0 && left != null ? `${left} day${left === 1 ? '' : 's'} to goal · ` : ''}goal ${n1(c.goalWeight)} kg</p></div>
       <button class="link" id="ct-plan">Plan</button></div>
-    ${headStats(f, tg, trend)}
+    ${headStats(f, tg, trend, c.trackFood)}
     ${flags.length ? `<details class="ct-flags"><summary>${icon('flag')} ${flags.length === 1 ? esc(flags[0].text) : `${flags.length} things to fix`}</summary>
       ${flags.length > 1 ? flags.map((x) => `<p>${esc(x.text)}</p>`).join('') : ''}</details>` : ''}
     ${reviewBtn()}
@@ -306,13 +319,13 @@ function render(el) {
       ${row('weight', 'Weight', v(f.weight == null ? null : n1(f.weight), ' kg'), trend != null ? `trend ${n1(trend)} kg${plan && !plan.buffer && start ? ` · target ${n1(targetWeight(start, c.goalWeight, c.rate, wk))} by ${new Date(`${addDays(c.startDate, wk * 7 - 1)}T12:00`).toLocaleDateString('en-GB', { weekday: 'short' })}` : ''}` : '', f.weight != null)}
       ${row('sleep', 'Sleep', v(f.sleep == null ? null : n1(f.sleep), ' h'), '', f.sleep != null)}
       ${row('steps', 'Steps', v(f.steps == null ? null : n0(f.steps)), f.stepsPhone != null && f.stepsExtra ? `phone ${n0(f.stepsPhone)} + ${n0(f.stepsExtra)} by hand` : '', f.steps != null)}
-      ${row(f.travel ? 'kcal' : 'protein', 'Food', food, '', f.kcal != null || f.p != null)}
+      ${c.trackFood ? row(f.travel ? 'kcal' : 'protein', 'Food', food, '', f.kcal != null || f.p != null) : ''}
     </div>
     ${dayTypeHtml(f, st, minUsed)}
     <div class="row between ct-links"><button class="link small" id="ct-yday">Edit yesterday</button><button class="link small" id="ct-trip">Plan travel days</button></div>
     <div class="stats" style="margin-top:12px">
       <div class="stat"><b>${greenStreak}</b><span>green days</span></div>
-      <div class="stat"><b>${proteinStreak}</b><span>protein days</span></div>
+      ${c.trackFood ? `<div class="stat"><b>${proteinStreak}</b><span>protein days</span></div>` : `<div class="stat"><b>${weighStreak}</b><span>weigh-ins</span></div>`}
       <div class="stat"><b>${checkinStreak}</b><span>check-ins</span></div>
     </div></div>`;
 
@@ -347,7 +360,7 @@ export function openDay(day) {
           <button class="ghost" data-k="weight">Weight${f.weight != null ? ` ${n1(f.weight)}` : ''}</button>
           <button class="ghost" data-k="sleep">Sleep${f.sleep != null ? ` ${n1(f.sleep)} h` : ''}</button>
           <button class="ghost" data-k="steps">Steps${f.steps != null ? ` ${n0(f.steps)}` : ''}</button>
-          <button class="ghost" data-k="food">Food${f.kcal != null ? ` ${n0(f.kcal)}` : ''}</button>
+          ${cutSettings().trackFood ? `<button class="ghost" data-k="food">Food${f.kcal != null ? ` ${n0(f.kcal)}` : ''}</button>` : ''}
         </div>
         ${dayTypeHtml(f, st, minimumDaysInWeek(day, store.all('daily')))}` });
       $$('[data-k]', el).forEach((b) => { b.onclick = () => editItem(b.dataset.k, day, f); });
@@ -389,7 +402,7 @@ function reminderText(day = today(), hour = new Date().getHours()) {
   const f = dayFacts(day, sources());
   if (hour >= 5 && hour < 12 && f.weight == null) return 'Morning weigh-in: after the bathroom, before food.';
   if (hour >= 19) {
-    const miss = [f.kcal == null && 'food', f.steps == null && 'steps', f.sleep == null && 'sleep'].filter(Boolean);
+    const miss = [cutSettings().trackFood && f.kcal == null && 'food', f.steps == null && 'steps', f.sleep == null && 'sleep'].filter(Boolean);
     if (miss.length) return `Evening log: ${miss.join(', ')} still missing for today.`;
   }
   return '';

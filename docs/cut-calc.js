@@ -19,6 +19,7 @@ export const CUT_DEFAULTS = {
   stepsMin: 8000,       // yellow, not failed
   sleep: 7,
   proteinMin: 120,
+  trackFood: false,     // count calories and protein in the daily checks (off while holding weight)
   kcalBand: 100,        // calories within target ±100
   travelKcalBand: 300,  // travel day: calories roughly on target (±300), only if entered
   checkinDay: 0,        // 0 = Sunday … 6 = Saturday (Date.getDay)

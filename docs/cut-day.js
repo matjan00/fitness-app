@@ -133,6 +133,7 @@ export function dayFacts(day, { weights = [], dailies = [], meals = [] } = {}) {
 //  green: weighed, protein ≥ proteinMin (120), kcal within target ±100, steps ≥ 10,000, sleep ≥ 7 h, session done (or none planned)
 //  yellow: everything else green but steps 8,000–9,999, or a minimum day (weigh-in + protein ≥ proteinMin + 6,000 steps)
 //  red: anything else. 'open' = today, not finished yet and not green.
+//  With trackFood off, calories and protein are left out of every rule (minimum day: weigh-in + 6,000 steps).
 // Returns { status, checks: [{ key, label, ok, warn }] , minimumMet }.
 // `week` (from weekTraining, as of the end of the day) makes the session check "still on track for the
 // week's 3 gym + 2 runs" rather than "did the planned session".
@@ -145,13 +146,15 @@ export function dayStatus(f, { kcalTarget = null, cfg = {}, session = { kind: 'r
     : { key: 'session', label: planned ? `${SESSION_LABEL[session.kind]} done` : 'No session planned', ok: !planned || done };
   const checks = [
     { key: 'weight', label: 'Weighed in', ok: f.weight != null },
-    { key: 'protein', label: `At least ${c.proteinMin} g protein`, ok: f.p != null && f.p >= c.proteinMin },
-    { key: 'kcal', label: kcalTarget ? `Calories ${kcalTarget - c.kcalBand}–${kcalTarget + c.kcalBand}` : 'Calories logged', ok: f.kcal != null && (!kcalTarget || Math.abs(f.kcal - kcalTarget) <= c.kcalBand) },
+    ...(c.trackFood ? [
+      { key: 'protein', label: `At least ${c.proteinMin} g protein`, ok: f.p != null && f.p >= c.proteinMin },
+      { key: 'kcal', label: kcalTarget ? `Calories ${kcalTarget - c.kcalBand}–${kcalTarget + c.kcalBand}` : 'Calories logged', ok: f.kcal != null && (!kcalTarget || Math.abs(f.kcal - kcalTarget) <= c.kcalBand) },
+    ] : []),
     { key: 'steps', label: `Steps ≥ ${c.steps.toLocaleString('en-GB')}`, ok: f.steps != null && f.steps >= c.steps, warn: f.steps != null && f.steps >= c.stepsMin && f.steps < c.steps },
     { key: 'sleep', label: `Sleep ≥ ${c.sleep} h`, ok: f.sleep != null && f.sleep >= c.sleep },
     sessionCheck,
   ];
-  const minimumMet = f.weight != null && f.p != null && f.p >= c.proteinMin && f.steps != null && f.steps >= 6000;
+  const minimumMet = f.weight != null && (!c.trackFood || (f.p != null && f.p >= c.proteinMin)) && f.steps != null && f.steps >= 6000;
   let status;
   if (checks.every((x) => x.ok)) status = 'green';
   else if (checks.every((x) => x.ok || x.warn)) status = 'yellow';
@@ -163,13 +166,13 @@ export function dayStatus(f, { kcalTarget = null, cfg = {}, session = { kind: 'r
 // Travel day: only the morning weigh-in is required. Calories, when entered, should be roughly on target
 // (±300 kcal, else yellow); steps are optional and never count against the day. No session is expected.
 function travelStatus(f, { kcalTarget, c, isToday }) {
-  const kcalOk = f.kcal == null || !kcalTarget || Math.abs(f.kcal - kcalTarget) <= c.travelKcalBand;
+  const kcalOk = !c.trackFood || f.kcal == null || !kcalTarget || Math.abs(f.kcal - kcalTarget) <= c.travelKcalBand;
   const checks = [
     { key: 'weight', label: 'Weighed in', ok: f.weight != null },
-    { key: 'kcal', label: kcalTarget ? `Calories roughly ${kcalTarget - c.travelKcalBand}–${kcalTarget + c.travelKcalBand} (optional)` : 'Calories (optional)', ok: kcalOk, warn: !kcalOk },
+    c.trackFood && { key: 'kcal', label: kcalTarget ? `Calories roughly ${kcalTarget - c.travelKcalBand}–${kcalTarget + c.travelKcalBand} (optional)` : 'Calories (optional)', ok: kcalOk, warn: !kcalOk },
     { key: 'steps', label: 'Steps (optional)', ok: true },
     { key: 'session', label: 'Travel day — no session', ok: true },
-  ];
+  ].filter(Boolean);
   const status = f.weight == null ? (isToday ? 'open' : 'red') : kcalOk ? 'green' : 'yellow';
   return { status, checks, minimumMet: false };
 }

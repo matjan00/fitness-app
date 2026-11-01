@@ -44,6 +44,8 @@ A day is **green** if all of these are hit:
 5. Sleep ≥ 7 h
 6. Scheduled session done (or none scheduled)
 
+**Holding weight (from 1 Nov 2026, ~70 kg):** calories and protein are not counted (setting *Count calories and protein* off). Green = weighed in, steps, sleep, week's training on track; minimum day = weigh-in + 6,000 steps; the weekly review suggests no calorie changes.
+
 **Minimum day** (for bad days, travel, illness): weigh-in + protein ≥ 140 + 6,000 steps. A minimum day keeps your streak alive but is graded yellow. Max 1 per week without a flag.
 
 **Travel day** (work trips; mark on the day or plan ahead): only the morning weigh-in is required. Calories, if logged, roughly on target (±300 kcal, else yellow); steps optional; no session expected. Travel days don't count as missed sessions, don't break the protein streak and don't trigger the protein flag; the A → B → C rotation simply continues afterwards.

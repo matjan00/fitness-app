@@ -97,7 +97,9 @@ export function suggestions({ weights = [], checkinDay, week, compliance, target
   } else {
     const loss = (a - b) / 2;
     const lossTxt = `Losing ${loss.toFixed(2)} kg/week (2-week trend)`;
-    if (loss < 0.5) {
+    if (!c.trackFood) {
+      out.push({ key: 'ok', text: `${lossTxt}. Calories are not counted — no change to targets.` });
+    } else if (loss < 0.5) {
       if (compliance < 0.85) out.push({ key: 'compliance', text: `${lossTxt} with ${Math.round(compliance * 100)}% compliance — no change to targets. Fix compliance first.` });
       else if ((targets.kcal || 0) <= 1650 || (targets.kcal || 0) - 100 < c.kcalFloor) out.push({ key: 'steps', text: `${lossTxt} at ${Math.round(compliance * 100)}% compliance: +2,000 steps a day (calories are already low).`, change: { steps: (targets.steps || c.steps) + 2000 } });
       else out.push({ key: 'kcal', text: `${lossTxt} at ${Math.round(compliance * 100)}% compliance: −100 kcal a day.`, change: { kcal: targets.kcal - 100 } });
@@ -107,7 +109,8 @@ export function suggestions({ weights = [], checkinDay, week, compliance, target
       out.push({ key: 'ok', text: `${lossTxt} — on pace. No change.` });
     }
   }
-  if (liftDrop != null && liftDrop > 5) out.push({ key: 'lifts', text: `A main lift is down ${liftDrop}% over 2 weeks: +150 kcal on lifting days, and check your sleep.`, change: { liftDayBonus: 150 } });
+  if (liftDrop != null && liftDrop > 5 && !c.trackFood) out.push({ key: 'lifts', text: `A main lift is down ${liftDrop}% over 2 weeks: eat a bit more on lifting days, and check your sleep.` });
+  else if (liftDrop != null && liftDrop > 5) out.push({ key: 'lifts', text: `A main lift is down ${liftDrop}% over 2 weeks: +150 kcal on lifting days, and check your sleep.`, change: { liftDayBonus: 150 } });
   if (sleep != null && sleep < 6.5) out.push({ key: 'sleep', text: `Average sleep ${sleep.toFixed(1)} h — sleep is this week's #1 fix.` });
   return out;
 }

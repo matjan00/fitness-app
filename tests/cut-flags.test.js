@@ -26,9 +26,10 @@ test('logged day', () => {
 const base = (over = {}) => ({ weights: [], dailies: [], meals: [], workouts: [], runs: [], checkins: [], ...over });
 
 test('red flags: protein, weigh-ins, missed sessions, minimum days, sleep', () => {
-  const cfg = { startDate: '2026-10-12', checkinDay: 0 };
+  const cfg = { startDate: '2026-10-12', checkinDay: 0, trackFood: true };
   // Thursday 15th: Mon/Tue/Wed sessions missed, nothing logged
   const f = redFlags('2026-10-15', base(), cfg, 73).map((x) => x.key);
+  assert.ok(!redFlags('2026-10-15', base(), { ...cfg, trackFood: false }, 73).some((x) => x.key === 'protein')); // food not counted
   assert.ok(f.includes('missed')); // 5 sessions left, 4 days (Thu–Sun)
   assert.ok(f.includes('protein'));
   assert.ok(f.includes('weighin'));

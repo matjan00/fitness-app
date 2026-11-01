@@ -59,12 +59,14 @@ test('weekly goal: 3 gym + 2 runs on any days, judged by whether it still fits',
   assert.equal(suggestTraining('2026-10-17', full), 'none');
 });
 
+const food = { trackFood: true };
+
 test('day status: the session check is "week on track", not "today\'s planned session"', () => {
   const f = { weight: 73, p: 150, kcal: 1750, steps: 10000, sleep: 7.5 };
   const onTrack = { lift: 1, run: 0, goal: { lift: 3, run: 2 }, onTrack: true };
-  assert.equal(dayStatus(f, { kcalTarget: 1750, session: { kind: 'rest' }, week: onTrack }).status, 'green');
-  assert.equal(dayStatus(f, { kcalTarget: 1750, session: { kind: 'lift' }, done: false, week: onTrack }).status, 'green'); // skipped, still fine
-  assert.equal(dayStatus(f, { kcalTarget: 1750, week: { ...onTrack, onTrack: false } }).status, 'red');
+  assert.equal(dayStatus(f, { kcalTarget: 1750, cfg: food, session: { kind: 'rest' }, week: onTrack }).status, 'green');
+  assert.equal(dayStatus(f, { kcalTarget: 1750, cfg: food, session: { kind: 'lift' }, done: false, week: onTrack }).status, 'green'); // skipped, still fine
+  assert.equal(dayStatus(f, { kcalTarget: 1750, cfg: food, week: { ...onTrack, onTrack: false } }).status, 'red');
 });
 
 test('sessionDone', () => {
@@ -89,7 +91,7 @@ test('dayFacts: typed totals win over the food diary', () => {
 });
 
 const good = { weight: 73, p: 150, kcal: 1750, steps: 10500, sleep: 7.5, minimum: false };
-const opt = { kcalTarget: 1750, session: { kind: 'lift' }, done: true };
+const opt = { kcalTarget: 1750, cfg: food, session: { kind: 'lift' }, done: true };
 
 test('green / yellow / red', () => {
   assert.equal(dayStatus(good, opt).status, 'green');
@@ -106,6 +108,22 @@ test('green / yellow / red', () => {
   assert.equal(dayStatus({ ...min, steps: 5000 }, opt).status, 'red');
   assert.equal(dayStatus({ ...min, minimum: false }, opt).status, 'red');
   assert.equal(dayStatus(good, opt).checks.length, 6);
+});
+
+test('food not counted: calories and protein drop out of every rule', () => {
+  const off = { ...opt, cfg: {} };
+  const noFood = { ...good, p: null, kcal: null };
+  assert.equal(dayStatus(noFood, off).status, 'green');
+  assert.equal(dayStatus({ ...good, kcal: 3000, p: 20 }, off).status, 'green');
+  assert.deepEqual(dayStatus(noFood, off).checks.map((x) => x.key), ['weight', 'steps', 'sleep', 'session']);
+  assert.equal(dayStatus({ ...noFood, steps: 8500 }, off).status, 'yellow');
+  assert.equal(dayStatus({ ...noFood, sleep: 6 }, off).status, 'red');
+  // minimum day: weigh-in + 6,000 steps
+  assert.equal(dayStatus({ weight: 70, steps: 6200, sleep: 5, minimum: true }, off).status, 'yellow');
+  // travel: weigh-in only, calories never judged
+  const t = { weight: 70, kcal: 3000, travel: true };
+  assert.equal(dayStatus(t, { kcalTarget: 1750 }).status, 'green');
+  assert.ok(!dayStatus(t, { kcalTarget: 1750 }).checks.some((x) => x.key === 'kcal'));
 });
 
 test('streaks', () => {
@@ -132,11 +150,11 @@ test('lifting-day calorie bonus', async () => {
 
 test('travel days: only the weigh-in counts', () => {
   const t = { weight: 73, p: 60, kcal: null, steps: 2000, sleep: 5, travel: true };
-  assert.equal(dayStatus(t, { kcalTarget: 1750, session: { kind: 'lift' } }).status, 'green');
-  assert.equal(dayStatus({ ...t, kcal: 2000 }, { kcalTarget: 1750 }).status, 'green'); // within ±300
-  assert.equal(dayStatus({ ...t, kcal: 2200 }, { kcalTarget: 1750 }).status, 'yellow');
-  assert.equal(dayStatus({ ...t, weight: null }, { kcalTarget: 1750 }).status, 'red');
-  assert.equal(dayStatus({ ...t, weight: null }, { kcalTarget: 1750, isToday: true }).status, 'open');
+  assert.equal(dayStatus(t, { kcalTarget: 1750, cfg: food, session: { kind: 'lift' } }).status, 'green');
+  assert.equal(dayStatus({ ...t, kcal: 2000 }, { kcalTarget: 1750, cfg: food }).status, 'green'); // within ±300
+  assert.equal(dayStatus({ ...t, kcal: 2200 }, { kcalTarget: 1750, cfg: food }).status, 'yellow');
+  assert.equal(dayStatus({ ...t, weight: null }, { kcalTarget: 1750, cfg: food }).status, 'red');
+  assert.equal(dayStatus({ ...t, weight: null }, { kcalTarget: 1750, cfg: food, isToday: true }).status, 'open');
   // no session expected; the rotation is unaffected
   assert.equal(sessionFor('2026-10-12', { dailies: [{ day: '2026-10-12', travel: true }] }).kind, 'travel');
   assert.equal(sessionFor('2026-10-14', { dailies: [{ day: '2026-10-12', travel: true }] }).letter, 'A');

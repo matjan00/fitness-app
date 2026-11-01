@@ -119,6 +119,8 @@ export function openCutSettings() {
         <div class="form-row">${num('steps', 'Steps', c.steps, 'numeric')}${num('sleep', 'Sleep (h)', c.sleep)}</div>
         <div class="form-row">${num('kcalFloor', 'Calorie floor', c.kcalFloor, 'numeric')}
           <label>Check-in day<select name="checkinDay">${DAYS.map((d, i) => `<option value="${i}" ${+c.checkinDay === i ? 'selected' : ''}>${d}</option>`).join('')}</select></label></div>
+        <label class="switch" style="margin-top:8px"><span>Count calories and protein<span class="tiny muted" style="display:block;font-weight:400">Off: the daily checks are weigh-in, steps, sleep and training only. The Food tab keeps working.</span></span>
+          <input type="checkbox" name="trackFood" ${c.trackFood ? 'checked' : ''}></label>
         <p class="tiny muted">Calories and macros are the same targets the Food tab uses. Plan minimums: ${n0(CUT_TARGETS.kcal)} kcal · ${CUT_TARGETS.p} g protein (${CUT_TARGETS.f} g fat · ${CUT_TARGETS.c} g carbs).</p>
       </div>
       <h3 class="section-title">Reminders</h3>
@@ -147,6 +149,7 @@ export function openCutSettings() {
         steps: Math.round(nv('steps') || CUT_DEFAULTS.steps), sleep: nv('sleep') || CUT_DEFAULTS.sleep,
         kcalFloor: Math.round(nv('kcalFloor') || CUT_DEFAULTS.kcalFloor), checkinDay: +v('checkinDay'),
         runsFromCut: $('[name=runsFromCut]', el).checked,
+        trackFood: $('[name=trackFood]', el).checked,
         reminders: $('[name=reminders]', el).checked,
       };
       if (cut.reminders && typeof Notification !== 'undefined' && Notification.permission === 'default') await Notification.requestPermission().catch(() => {});
@@ -200,7 +203,7 @@ export const meSection = {
     el.innerHTML = `<h3 class="section-title" style="margin-top:4px">Cut plan</h3>
       <div class="card"><div class="card-head" style="margin-bottom:6px"><h2>${c.startDate ? (wk ? `Week ${wk} of 11` : `Starts ${esc(niceDate(fromDay(c.startDate)))}`) : 'Not set up'}</h2>
         <button class="link" id="ct-edit">${c.startDate ? 'Edit' : 'Set up'}</button></div>
-        <p class="small muted">Goal ${n1(c.goalWeight)} kg at ${n2(c.rate)} kg/week${c.startDate && wk ? ` · ${n0(left)} days to go` : ''}${t.kcal ? ` · ${n0(t.kcal)} kcal, ${n0(t.p || 0)} g protein, ${n0(t.steps)} steps` : ''}</p>
+        <p class="small muted">Goal ${n1(c.goalWeight)} kg at ${n2(c.rate)} kg/week${c.startDate && wk ? ` · ${n0(left)} days to go` : ''}${c.trackFood ? (t.kcal ? ` · ${n0(t.kcal)} kcal, ${n0(t.p || 0)} g protein, ${n0(t.steps)} steps` : '') : ` · ${n0(c.steps)} steps, ${n1(c.sleep)} h sleep`}</p>
         <div style="margin-top:8px">${maintenanceHtml(c)}</div>
         <button class="ghost block" id="ct-plan" style="margin-top:12px">${icon('list')} View the plan</button></div>`;
     $('#ct-edit', el).onclick = openCutSettings;

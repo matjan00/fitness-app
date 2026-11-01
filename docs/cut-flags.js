@@ -66,7 +66,7 @@ export function redFlags(day, src, cfg = {}, start = null) {
   // protein under the minimum 3 days in a row (unlogged days count as missed)
   const last3 = [1, 2, 3].map((n) => addDays(day, -n));
   // (travel days don't count)
-  if (last3.every(inPlan) && last3.every((d) => !facts(d).travel && (facts(d).p ?? 0) < c.proteinMin)) {
+  if (c.trackFood && last3.every(inPlan) && last3.every((d) => !facts(d).travel && (facts(d).p ?? 0) < c.proteinMin)) {
     flags.push({ key: 'protein', text: `Protein under ${c.proteinMin} g for 3 days in a row` });
   }
 

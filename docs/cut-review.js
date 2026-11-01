@@ -118,8 +118,8 @@ export function openReview(ci = dueCheckin()) {
       <div class="card stack-sm" style="margin-top:12px">
         <div class="row between"><span>Trend</span><b>${s.trendFrom != null && s.trendTo != null ? `${n1(s.trendFrom)} → ${n1(s.trendTo)} kg (${s.change > 0 ? '+' : ''}${n1(s.change)})` : '–'}</b></div>
         <div class="row between"><span>Week ${s.week} target</span><b>${s.target ? `${n1(s.target)} kg${s.trendTo != null ? ` <span class="${s.trendTo - s.target > 1 ? 'down' : 'muted'}">(${s.trendTo - s.target > 0 ? '+' : ''}${n1(s.trendTo - s.target)})</span>` : ''}` : '–'}</b></div>
-        ${s.kcal != null ? `<div class="row between"><span>Calories (avg)</span><b>${vs(s.kcal, tg.kcal)}</b></div>` : ''}
-        ${s.protein != null ? `<div class="row between"><span>Protein (avg)</span><b>${vs(s.protein, tg.p, ' g')}</b></div>` : ''}
+        ${c.trackFood && s.kcal != null ? `<div class="row between"><span>Calories (avg)</span><b>${vs(s.kcal, tg.kcal)}</b></div>` : ''}
+        ${c.trackFood && s.protein != null ? `<div class="row between"><span>Protein (avg)</span><b>${vs(s.protein, tg.p, ' g')}</b></div>` : ''}
         ${s.steps != null ? `<div class="row between"><span>Steps (avg)</span><b>${vs(s.steps, c.steps)}</b></div>` : ''}
         ${s.sleep != null ? `<div class="row between"><span>Sleep (avg)</span><b>${vs(s.sleep, c.sleep, ' h', 1)}</b></div>` : ''}
         <div class="row between"><span>Training</span><b>gym ${s.gymDone}/${s.goal.lift} · runs ${s.runsDone}/${s.goal.run}</b></div>
