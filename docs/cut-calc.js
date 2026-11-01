@@ -14,7 +14,7 @@ export const CUT_DEFAULTS = {
   startWeight: null,    // manual override; otherwise the average of the first 3 weigh-ins from startDate
   goalWeight: 70,
   rate: 0.75,           // kg of trend weight per week
-  kcalFloor: 1900,     // the weekly review never suggests eating less than this
+  kcalFloor: 1900,     // lowest calorie target the plan works with
   steps: 10000,
   stepsMin: 8000,       // yellow, not failed
   sleep: 7,
@@ -22,8 +22,7 @@ export const CUT_DEFAULTS = {
   trackFood: false,     // count calories and protein in the daily checks (off while holding weight)
   kcalBand: 100,        // calories within target ±100
   travelKcalBand: 300,  // travel day: calories roughly on target (±300), only if entered
-  checkinDay: 0,        // 0 = Sunday … 6 = Saturday (Date.getDay)
-  liftDayBonus: 0,      // extra kcal on lifting days (weekly review: main lift down > 5 %)
+  liftDayBonus: 0,      // extra kcal on lifting days (set by hand; was a weekly review suggestion)
   maintenance: 2500,    // initial maintenance estimate (kcal); the app learns the real one from data
 };
 export const CUT_TARGETS = { kcal: 1900, p: 120, f: 55, c: 231 };

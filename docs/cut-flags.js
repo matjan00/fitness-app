@@ -7,7 +7,6 @@ import { weekTraining, dayFacts, minimumDaysInWeek, sessionDone, SESSION_LABEL }
 import { e1rmOf, workingSets } from './cut-engine.js';
 import { MAIN_LIFTS } from './cut-calc.js';
 
-const weekday = (s) => new Date(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10)).getDay();
 const pad = (n) => String(n).padStart(2, '0');
 const localDay = (iso) => { const d = new Date(iso); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
 const range = (from, to) => { const out = []; for (let d = from; d <= to; d = addDays(d, 1)) out.push(d); return out; };
@@ -37,7 +36,7 @@ export function adaptiveTdee(day, { weights = [], kcalOf = () => null, window = 
 export const isLogged = (day, src) => dayFacts(day, src).logged;
 
 // ---------- red flags ----------
-// src: { weights, dailies, meals, workouts, runs, checkins, routineCut }, cfg: cut settings, start: start weight.
+// src: { weights, dailies, meals, workouts, runs, routineCut }, cfg: cut settings, start: start weight.
 // Returns [{ key, text }] (empty when all is well). `day` is today; today itself is never held against you.
 export function redFlags(day, src, cfg = {}, start = null) {
   const c = { ...CUT_DEFAULTS, ...cfg };
@@ -74,15 +73,6 @@ export function redFlags(day, src, cfg = {}, start = null) {
   const weighed = (d) => src.weights.some((e) => e && e.day === d);
   if (last3.every(inPlan) && !weighed(day) && last3.every((d) => !weighed(d))) {
     flags.push({ key: 'weighin', text: 'No weigh-in for 3 days' });
-  }
-
-  // weekly review skipped: the review day (the day after the check-in day) and the 2 days after it have passed
-  // with nothing done for that week (neither the Sunday check-in nor the Monday review).
-  let r = addDays(day, -3);
-  while (weekday(r) !== (+c.checkinDay + 1) % 7) r = addDays(r, -1);
-  if (inPlan(addDays(r, -1)) && daysBetween(c.startDate, r) >= 7
-    && !(src.checkins || []).some((x) => x && (x.forDay === r || x.forDay === addDays(r, -1) || (x.day >= addDays(r, -1) && x.day <= addDays(r, 2))))) {
-    flags.push({ key: 'checkin', text: 'Weekly review skipped' });
   }
 
   // trend weight behind the last finished week's target by more than 1 kg

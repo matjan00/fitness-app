@@ -186,23 +186,13 @@ export function streak(day, ok, max = 400) {
   return n;
 }
 
-// Weeks in a row (Monday-based) with a check-in, counting back from this week (an open week doesn't break it).
-export function weekStreak(day, checkinDays = []) {
-  const weeks = new Set(checkinDays.filter(Boolean).map((d) => weekOf(d)));
-  let n = 0;
-  let w = weekOf(day);
-  if (!weeks.has(w)) w = addDays(w, -7);
-  while (n < 60 && weeks.has(w)) { n++; w = addDays(w, -7); }
-  return n;
-}
-
 // Minimum days used in the week of `day`.
 export const minimumDaysInWeek = (day, dailies = []) => {
   const w = weekOf(day);
   return dailies.filter((d) => d && d.minimum === true && weekOf(d.day) === w).length;
 };
 
-// Extra kcal on a cut-plan lifting day (weekly review: "+150 kcal on lifting days"). A lifting day is a day you
+// Extra kcal on a cut-plan lifting day (liftDayBonus). A lifting day is a day you
 // chose Gym for or any day with a finished workout. 0 when there is no bonus or the plan hasn't started.
 export function liftDayExtra(day, { cfg = {}, workouts = [], dailies = [] } = {}) {
   const bonus = +cfg.liftDayBonus || 0;

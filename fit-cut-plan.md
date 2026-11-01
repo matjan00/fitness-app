@@ -8,7 +8,7 @@
 2. ✅ Today screen: daily checklist, day status, streaks, minimum day
 3. ✅ Workout logger: prefilled sets, rest timer, verdicts, progression engine
 4. ✅ Trend weight, adaptive TDEE, red flags, "Log yesterday"
-5. ✅ Weekly review: measurements, photos, grading, adjustment suggestions
+5. ~~Weekly review: measurements, photos, grading, adjustment suggestions~~ — removed 1 Nov 2026 (v68)
 6. ✅ Progress charts, photo comparison, reminders
 
 Implementation notes: weight stays in the existing `bodyweight` records; kcal/macros targets are the Food tab's targets
@@ -44,7 +44,7 @@ A day is **green** if all of these are hit:
 5. Sleep ≥ 7 h
 6. Scheduled session done (or none scheduled)
 
-**Holding weight (from 1 Nov 2026, ~70 kg):** calories and protein are not counted (setting *Count calories and protein* off). Green = weighed in, steps, sleep, week's training on track; minimum day = weigh-in + 6,000 steps; the weekly review suggests no calorie changes.
+**Holding weight (from 1 Nov 2026, ~70 kg):** calories and protein are not counted (setting *Count calories and protein* off). Green = weighed in, steps, sleep, week's training on track; minimum day = weigh-in + 6,000 steps. Goal weight 70 kg. The weekly check-in (measurements, photos) and weekly review are removed; old check-in records stay in the data but are not shown.
 
 **Minimum day** (for bad days, travel, illness): weigh-in + protein ≥ 140 + 6,000 steps. A minimum day keeps your streak alive but is graded yellow. Max 1 per week without a flag.
 

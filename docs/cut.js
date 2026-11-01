@@ -1,7 +1,7 @@
 // Cut plan (fit-cut-plan.md): settings, the dated 11(+2)-week plan and the Upper A/B/C routines.
 // Plan maths lives in cut-calc.js. Calories and macros are the food targets, shared with the Food tab.
 //
-// Records: 'daily' (daily log), 'checkin' (weekly check-in), 'targets' (targets history), config 'cut'.
+// Records: 'daily' (daily log), 'checkin' (old weekly check-ins, no longer shown), 'targets' (targets history), config 'cut'.
 
 import { $, $$, esc, icon, toast, today, n0, n1, n2, parseNum, niceDate, fromDay } from './util.js';
 import * as store from './store.js';
@@ -16,7 +16,6 @@ import { adaptiveTdee } from './cut-flags.js';
 import { useCutPlan, stopCutPlan } from './run-plan-ui.js';
 import { dayFacts } from './cut-day.js';
 
-const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 // ---------- data ----------
 export function cutSettings() {
@@ -124,8 +123,7 @@ export function openCutSettings() {
         <div class="form-row">${num('kcal', 'Calories (kcal)', tg.kcal, 'numeric')}${num('p', 'Protein (g)', tg.p, 'numeric')}</div>
         <div class="form-row">${num('f', 'Fat (g)', tg.f, 'numeric')}${num('c', 'Carbs (g)', tg.c, 'numeric')}</div>
         <div class="form-row">${num('steps', 'Steps', c.steps, 'numeric')}${num('sleep', 'Sleep (h)', c.sleep)}</div>
-        <div class="form-row">${num('kcalFloor', 'Calorie floor', c.kcalFloor, 'numeric')}
-          <label>Check-in day<select name="checkinDay">${DAYS.map((d, i) => `<option value="${i}" ${+c.checkinDay === i ? 'selected' : ''}>${d}</option>`).join('')}</select></label></div>
+        <div class="form-row">${num('kcalFloor', 'Calorie floor', c.kcalFloor, 'numeric')}</div>
         <label class="switch" style="margin-top:8px"><span>Count calories and protein<span class="tiny muted" style="display:block;font-weight:400">Off: the daily checks are weigh-in, steps, sleep and training only. The Food tab keeps working.</span></span>
           <input type="checkbox" name="trackFood" ${c.trackFood ? 'checked' : ''}></label>
         <p class="tiny muted">Calories and macros are the same targets the Food tab uses. Plan minimums: ${n0(CUT_TARGETS.kcal)} kcal · ${CUT_TARGETS.p} g protein (${CUT_TARGETS.f} g fat · ${CUT_TARGETS.c} g carbs).</p>
@@ -154,7 +152,7 @@ export function openCutSettings() {
         startDate, goalWeight: goal, rate: +v('rate'),
         startWeight: nv('startWeight') > 30 ? nv('startWeight') : null,
         steps: Math.round(nv('steps') || CUT_DEFAULTS.steps), sleep: nv('sleep') || CUT_DEFAULTS.sleep,
-        kcalFloor: Math.round(nv('kcalFloor') || CUT_DEFAULTS.kcalFloor), checkinDay: +v('checkinDay'),
+        kcalFloor: Math.round(nv('kcalFloor') || CUT_DEFAULTS.kcalFloor),
         runsFromCut: $('[name=runsFromCut]', el).checked,
         trackFood: $('[name=trackFood]', el).checked,
         reminders: $('[name=reminders]', el).checked,

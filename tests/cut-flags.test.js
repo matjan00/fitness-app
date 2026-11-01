@@ -23,10 +23,10 @@ test('logged day', () => {
   assert.equal(isLogged('2026-10-12', { weights: [], dailies: [{ day: '2026-10-12', minimum: true }], meals: [] }), false);
 });
 
-const base = (over = {}) => ({ weights: [], dailies: [], meals: [], workouts: [], runs: [], checkins: [], ...over });
+const base = (over = {}) => ({ weights: [], dailies: [], meals: [], workouts: [], runs: [], ...over });
 
 test('red flags: protein, weigh-ins, missed sessions, minimum days, sleep', () => {
-  const cfg = { startDate: '2026-10-12', checkinDay: 0, trackFood: true };
+  const cfg = { startDate: '2026-10-12', trackFood: true };
   // Thursday 15th: Mon/Tue/Wed sessions missed, nothing logged
   const f = redFlags('2026-10-15', base(), cfg, 73).map((x) => x.key);
   assert.ok(!redFlags('2026-10-15', base(), { ...cfg, trackFood: false }, 73).some((x) => x.key === 'protein')); // food not counted
@@ -47,18 +47,13 @@ test('red flags: protein, weigh-ins, missed sessions, minimum days, sleep', () =
   assert.ok(redFlags('2026-10-19', sleepy, cfg, 73).some((x) => x.key === 'sleep'));
 });
 
-test('red flags: check-in skipped, behind the checkpoint, strength down', () => {
-  const cfg = { startDate: '2026-10-12', checkinDay: 0 };
+test('red flags: behind the checkpoint, strength down', () => {
+  const cfg = { startDate: '2026-10-12' };
   const weights = days('2026-10-12', 9).map((d) => ({ day: d, kg: 73 }));
   const f = redFlags('2026-10-20', base({ weights }), cfg, 73).map((x) => x.key);
-  assert.ok(!f.includes('checkin')); // Monday's review can still be done until Wednesday
-  const w12 = days('2026-10-12', 11).map((d) => ({ day: d, kg: 73 }));
-  assert.ok(redFlags('2026-10-22', base({ weights: w12 }), cfg, 73).some((x) => x.key === 'checkin')); // Thursday: skipped
-  assert.ok(!redFlags('2026-10-22', base({ weights: w12, checkins: [{ day: '2026-10-18', forDay: '2026-10-19' }] }), cfg, 73).some((x) => x.key === 'checkin'));
   assert.ok(!f.includes('behind')); // 73 vs 72.3 target: 0.7 kg behind
   assert.ok(redFlags('2026-10-20', base({ weights: weights.map((w) => ({ ...w, kg: 74 })) }), cfg, 74.5).every((x) => x.key !== 'behind'));
   assert.ok(redFlags('2026-10-20', base({ weights: weights.map((w) => ({ ...w, kg: 74 })) }), cfg, 73).some((x) => x.key === 'behind'));
-  assert.ok(!redFlags('2026-10-22', base({ weights, checkins: [{ day: '2026-10-18' }] }), cfg, 73).some((x) => x.key === 'checkin'));
   const S = (kg, ...r) => r.map((x) => ({ type: 'n', kg, reps: x }));
   const press = (day, kg) => W(day, 'Upper A', { exercises: [{ exercise_id: 'Leverage_Chest_Press', sets: S(kg, 8, 8) }] });
   const st = redFlags('2026-10-20', base({ weights, workouts: [press('2026-10-12', 60), press('2026-10-19', 52.5)] }), cfg, 73);
@@ -68,17 +63,17 @@ test('red flags: check-in skipped, behind the checkpoint, strength down', () => 
 });
 
 test('travel days are not held against you', () => {
-  const cfg = { startDate: '2026-10-12', checkinDay: 0 };
+  const cfg = { startDate: '2026-10-12' };
   const dailies = ['2026-10-12', '2026-10-13', '2026-10-14'].map((d) => ({ day: d, travel: true }));
   const weights = ['2026-10-12', '2026-10-13', '2026-10-14'].map((d) => ({ day: d, kg: 73 }));
-  const f = redFlags('2026-10-15', { weights, dailies, meals: [], workouts: [], runs: [], checkins: [] }, cfg, 73).map((x) => x.key);
+  const f = redFlags('2026-10-15', { weights, dailies, meals: [], workouts: [], runs: [] }, cfg, 73).map((x) => x.key);
   assert.ok(!f.includes('protein'));
   // the goal stays 3 + 2, so 5 sessions in the 4 days left (Thu–Sun) is behind
   assert.ok(f.includes('missed'));
 });
 
 test('red flags: training is judged on the week, not on fixed days', () => {
-  const cfg = { startDate: '2026-10-12', checkinDay: 0 };
+  const cfg = { startDate: '2026-10-12' };
   const R = (day) => ({ start: `${day}T07:00:00`, distance_m: 5000 });
   const weights = days('2026-10-12', 12).map((d) => ({ day: d, kg: 73 }));
   // Mon–Wed off, Thursday morning: 5 sessions fit in Thu–Sun? No (4 days) → behind
@@ -92,7 +87,7 @@ test('red flags: training is judged on the week, not on fixed days', () => {
 });
 
 test('red flags: a session done today counts, like on the Today card', () => {
-  const cfg = { startDate: '2026-10-12', checkinDay: 0 };
+  const cfg = { startDate: '2026-10-12' };
   const weights = days('2026-10-12', 12).map((d) => ({ day: d, kg: 73 }));
   // Thursday, gym done this morning: 1/3 gym, 4 to go in Fri–Sun (3 days) → behind, counted with today's session
   const one = base({ weights, workouts: [W('2026-10-15', 'Upper A')] });

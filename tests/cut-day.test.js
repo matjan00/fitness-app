@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { nextLift, sessionFor, sessionDone, dayFacts, dayStatus, streak, weekStreak, minimumDaysInWeek, liftLetter, handStepsPatch } from '../docs/cut-day.js';
+import { nextLift, sessionFor, sessionDone, dayFacts, dayStatus, streak, minimumDaysInWeek, liftLetter, handStepsPatch } from '../docs/cut-day.js';
 
 const W = (day, name, extra = {}) => ({ name, started_at: `${day}T10:00:00`, ended_at: `${day}T11:00:00`, ...extra });
 
@@ -132,9 +132,6 @@ test('streaks', () => {
   assert.equal(streak('2026-10-12', ok), 3);
   assert.equal(streak('2026-10-13', ok), 3); // today not done yet doesn't break it
   assert.equal(streak('2026-10-14', ok), 0);
-  assert.equal(weekStreak('2026-10-18', ['2026-10-18', '2026-10-11', '2026-10-04', '2026-09-20']), 3);
-  assert.equal(weekStreak('2026-10-20', ['2026-10-18', '2026-10-11']), 2);
-  assert.equal(weekStreak('2026-10-27', ['2026-10-18']), 0);
   assert.equal(minimumDaysInWeek('2026-10-14', [{ day: '2026-10-12', minimum: true }, { day: '2026-10-11', minimum: true }, { day: '2026-10-13' }]), 1);
 });
 

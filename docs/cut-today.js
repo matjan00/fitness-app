@@ -9,8 +9,7 @@ import { startWorkout } from './gym-workout.js';
 import { cutSettings, currentTargets, openCutSettings, openPlan, addCutRoutines, syncCutRoutines, syncCutTargets, syncCutGoal, startWeight, isSetUp } from './cut.js';
 import { PLAN, PROGRAM_NAME, EASY_PACE, weekNumber, daysToGoal, daysBetween, emaTrend, trendOn, targetWeight } from './cut-calc.js';
 import { redFlags, isLogged } from './cut-flags.js';
-import { openReview, dueCheckin, checkinFor, measurementsDue, openCheckin } from './cut-review.js';
-import { liftDayExtra, sessionFor, sessionDone, dayFacts, dayStatus, handStepsPatch, streak, weekStreak, minimumDaysInWeek, weekTraining, TRAIN_CHOICES, SESSION_LABEL } from './cut-day.js';
+import { liftDayExtra, sessionFor, sessionDone, dayFacts, dayStatus, handStepsPatch, streak, minimumDaysInWeek, weekTraining, TRAIN_CHOICES, SESSION_LABEL } from './cut-day.js';
 
 const STATUS = { green: ['Green day', 'up'], yellow: ['Yellow day', 'gold'], red: ['Red day', 'down'], open: ['In progress', ''] };
 
@@ -19,7 +18,7 @@ const routineCut = (id) => store.get(id)?.cut || null;
 export function sources() {
   return {
     weights: store.all('bodyweight'), dailies: store.all('daily'), meals: foodUi.allFoodEntries(),
-    workouts: store.all('workout'), runs: store.all('run'), checkins: store.all('checkin'), routineCut,
+    workouts: store.all('workout'), runs: store.all('run'), routineCut,
   };
 }
 export async function saveDaily(day, patch) {
@@ -31,7 +30,7 @@ async function saveWeight(day, kg) {
   await store.put('bodyweight', { ...(cur ? { id: cur.id } : {}), day, kg: Math.round(kg * 100) / 100 });
 }
 
-// Status of any day (shared with streaks and, later, the weekly review).
+// Status of any day (shared with the streaks).
 export function statusOf(day, src = sources(), cfg = cutSettings(), kcalTarget = currentTargets(cfg).kcal) {
   const f = dayFacts(day, src);
   const session = sessionFor(day, { workouts: src.workouts, runs: src.runs, routineCut, dailies: src.dailies });
@@ -129,19 +128,6 @@ export function logRun(kind = null) {
   }, { sheet: true });
 }
 
-// Check-in day (Sunday) and the review day (Monday, until midnight): a nudge for measurements + photos. Review day and the 2 days after (Mon–Wed): the weekly
-// review of the finished week, or "done · grade". Neither opens by itself.
-function reviewBtn() {
-  const m = measurementsDue();
-  const r = dueCheckin();
-  const due = r && today() <= addDays(r, 2);
-  const done = due && checkinFor(r);
-  const ci = m ? `<button class="${due && !done ? 'ghost' : 'soft'} block" id="ct-checkin" style="margin-bottom:8px">${icon('scale')} Check-in: measurements &amp; photos</button>` : '';
-  if (!due) return ci;
-  return ci + (done ? `<button class="link small ct-revdone" id="ct-review">Weekly review done · grade ${esc(done.grade || '–')} ›</button>`
-    : `<button class="primary block" id="ct-review" style="margin-bottom:12px">${icon('flag')} Weekly review of last week</button>`);
-}
-
 // ---------- day type: normal / minimum / travel ----------
 function dayTypeHtml(f, st, minUsed) {
   const type = f.travel ? 'travel' : f.minimum ? 'minimum' : 'normal';
@@ -237,7 +223,7 @@ function sessionBlock(sess, done, wk) {
       ${run ? `<p class="small" style="margin-top:6px">${n1((+run.distance_m || 0) / 1000)} km · ${fmtPace(pace)}/km average${vs != null ? ` · ${sess.kind === 'easy' ? (vs > 0 ? 'easy enough' : `${fmtPace(-vs)} faster than easy pace`) : `${vs <= 0 ? `${fmtPace(-vs)} faster` : `${fmtPace(vs)} slower`} than ${target}/km (whole run incl. warm-up)`}` : ''}</p>`
         : `<button class="ghost block" id="ct-logrun" style="margin-top:10px">${icon('plus')} Log run by hand</button><p class="tiny muted" style="margin-top:4px">Garmin runs appear by themselves after the next sync.</p>`}</div>`;
   }
-  const note = { steps: 'No session — hit your steps.', travel: cutSettings().trackFood ? 'Weigh in this morning. Calories and steps are optional, roughly is fine.' : 'Weigh in this morning. Steps are optional.' }[sess.kind] || 'No session today. Hit your steps; on check-in day (or by Monday night), take measurements and photos.';
+  const note = { steps: 'No session — hit your steps.', travel: cutSettings().trackFood ? 'Weigh in this morning. Calories and steps are optional, roughly is fine.' : 'Weigh in this morning. Steps are optional.' }[sess.kind] || 'No session today. Hit your steps.';
   return `<div class="ct-sess"><b>${SESSION_LABEL[sess.kind]}</b><p class="small muted">${note}</p></div>`;
 }
 
@@ -266,7 +252,7 @@ function render(el) {
   const c = cutSettings();
   if (!c.startDate) {
     el.innerHTML = `<div class="card ct-today"><div class="card-head"><h2>Cut plan</h2></div>
-      <p class="small muted">A daily checklist, workouts that progress from what you actually lift, and weekly check-ins toward your goal weight.</p>
+      <p class="small muted">A daily checklist, workouts that progress from what you actually lift, and a weekly training goal.</p>
       <button class="ghost block" id="ct-setup" style="margin-top:12px">Set up the plan</button></div>`;
     $('#ct-setup', el).onclick = openCutSettings;
     return;
@@ -290,7 +276,6 @@ function render(el) {
   const greenStreak = streak(day, (d) => { if (!inPlan(d)) return false; const s = statusOf(d, src, c, tg.kcal); return s.status === 'green' || (s.status === 'yellow' && s.facts.minimum); });
   const proteinStreak = streak(day, (d) => { if (!inPlan(d)) return false; const fx = dayFacts(d, src); return fx.travel || (fx.p ?? 0) >= c.proteinMin; });
   const weighStreak = streak(day, (d) => inPlan(d) && src.weights.some((e) => e && e.day === d));
-  const checkinStreak = weekStreak(day, src.checkins.map((x) => (x.forDay ? addDays(x.forDay, -1) : x.day)));
   const minUsed = minimumDaysInWeek(day, src.dailies);
   const [stLabel, stCls] = STATUS[st.status];
   const v = (x, unit = '') => (x == null ? '<span class="ct-add">Add</span>' : `${x}${unit}`);
@@ -311,7 +296,6 @@ function render(el) {
     ${headStats(f, tg, trend, c.trackFood)}
     ${flags.length ? `<details class="ct-flags"><summary>${icon('flag')} ${flags.length === 1 ? esc(flags[0].text) : `${flags.length} things to fix`}</summary>
       ${flags.length > 1 ? flags.map((x) => `<p>${esc(x.text)}</p>`).join('') : ''}</details>` : ''}
-    ${reviewBtn()}
     ${wk > 0 && !f.travel ? trainingHtml(st, day, src) : ''}
     ${wk > 0 ? sessionBlock(st.session, st.done, wk) : ''}
     <div class="row between" style="margin:14px 0 4px"><h3 class="ct-sub">Today</h3><span class="pill ${stCls}">${stLabel}</span></div>
@@ -325,8 +309,8 @@ function render(el) {
     <div class="row between ct-links"><button class="link small" id="ct-yday">Edit yesterday</button><button class="link small" id="ct-trip">Plan travel days</button></div>
     <div class="stats" style="margin-top:12px">
       <div class="stat"><b>${greenStreak}</b><span>green days</span></div>
-      ${c.trackFood ? `<div class="stat"><b>${proteinStreak}</b><span>protein days</span></div>` : `<div class="stat"><b>${weighStreak}</b><span>weigh-ins</span></div>`}
-      <div class="stat"><b>${checkinStreak}</b><span>check-ins</span></div>
+      ${c.trackFood ? `<div class="stat"><b>${proteinStreak}</b><span>protein days</span></div>` : ''}
+      <div class="stat"><b>${weighStreak}</b><span>weigh-ins</span></div>
     </div></div>`;
 
   $('#ct-plan', el).onclick = openPlan;
@@ -334,8 +318,6 @@ function render(el) {
   bindDayType(el, day, f, minUsed);
   $$('.ct-train button', el).forEach((b) => { b.onclick = () => saveDaily(day, { train: b.dataset.v }); });
   $('#ct-trip', el).onclick = planTravel;
-  $('#ct-review', el)?.addEventListener('click', () => openReview());
-  $('#ct-checkin', el)?.addEventListener('click', () => openCheckin());
   $('#ct-yday', el).onclick = () => openDay(addDays(day, -1));
   $('#ct-logrun', el)?.addEventListener('click', () => logRun(st.session.kind));
   $('#ct-start', el)?.addEventListener('click', async () => {
