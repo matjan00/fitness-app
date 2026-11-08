@@ -15,10 +15,14 @@ export const CUT_DEFAULTS = {
   goalWeight: 70,
   rate: 0.75,           // kg of trend weight per week
   kcalFloor: 1900,     // lowest calorie target the plan works with
-  steps: 10000,
-  stepsMin: 8000,       // yellow, not failed
-  sleep: 7,
+  steps: 10000,         // no longer a daily check: steps count towards activeKm (1 km per 1,000)
+  activeKm: 15,         // daily distance goal: bike km typed in + steps / 1000
+  activeKmMin: 12,      // yellow, not failed
+  minKm: 6,             // minimum day
+  stepsMin: 8000,
+  sleep: 7.5,
   proteinMin: 120,
+  runsFromCut: false,   // no running in the plan
   trackFood: false,     // count calories and protein in the daily checks (off while holding weight)
   kcalBand: 100,        // calories within target ±100
   travelKcalBand: 300,  // travel day: calories roughly on target (±300), only if entered

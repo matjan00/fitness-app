@@ -9,15 +9,15 @@ const pad = (n) => String(n).padStart(2, '0');
 const localDay = (iso) => { const d = new Date(iso); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
 const num = (x) => (x == null || x === '' ? null : Number.isFinite(+x) ? +x : null);
 
-// Training is chosen day by day (Gym / Run / No training). What counts is the week (Monday–Sunday):
-// 3 gym sessions and 2 runs, on whichever days suit you.
-export const WEEK_GOAL = { lift: 3, run: 2 };
-export const TRAIN_CHOICES = [['lift', 'Gym'], ['run', 'Run'], ['none', 'No training']];
+// Training is chosen day by day (Gym / No training). What counts is the week (Monday–Sunday):
+// 3 gym sessions, on whichever days suit you. No running (WEEK_GOAL.run stays 0).
+export const WEEK_GOAL = { lift: 3, run: 0 };
+export const TRAIN_CHOICES = [['lift', 'Gym'], ['none', 'No training']];
 export const SESSION_LABEL = { lift: 'Upper body', easy: 'Easy run', quality: 'Quality run', steps: 'Steps only', rest: 'No training', travel: 'Travel day' };
 export const isScheduled = (kind) => kind === 'lift' || kind === 'easy' || kind === 'quality';
 const range = (from, to) => { const out = []; for (let d = from; d <= to; d = addDays(d, 1)) out.push(d); return out; };
 const isTravel = (d, dailies) => dailies.some((x) => x && x.day === d && x.travel === true);
-const choiceOn = (d, dailies) => dailies.find((x) => x && x.day === d)?.train || null;
+const choiceOn = (d, dailies) => { const t = dailies.find((x) => x && x.day === d)?.train; return t === 'lift' || t === 'none' ? t : null; }; // old 'run' picks are ignored
 
 // The week's training so far (days up to and including `through`) and whether the goal can still be met:
 // one session a day on the days left after `through`. The goal is always the full 3 gym + 2 runs; travel days
@@ -65,18 +65,14 @@ export function nextLift(workouts = [], day, routineCut) {
 
 // The session for a day: { kind, choice, chosen, letter?, routine? }.
 // `choice` is what you picked (Gym / Run / No training); without a pick, what you actually did that day,
-// else the suggestion. A run is the week's easy run first, then the quality run.
+// else the suggestion.
 export function sessionFor(day, { workouts = [], runs = [], routineCut, dailies = [] } = {}) {
   if (isTravel(day, dailies)) return { kind: 'travel', choice: 'none', chosen: false };
   const picked = choiceOn(day, dailies);
   const choice = picked
-    || (sessionDone('lift', day, { workouts }) ? 'lift' : sessionDone('easy', day, { runs }) ? 'run' : suggestTraining(day, { workouts, runs, dailies }));
+    || (sessionDone('lift', day, { workouts }) ? 'lift' : suggestTraining(day, { workouts, runs, dailies }));
   const base = { choice, chosen: Boolean(picked) };
   if (choice === 'none') return { kind: 'rest', ...base };
-  if (choice === 'run') {
-    const before = weekTraining(day, { workouts, runs, dailies, through: addDays(day, -1) }).run;
-    return { kind: before >= 1 ? 'quality' : 'easy', ...base };
-  }
   const letter = nextLift(workouts, day, routineCut);
   // The workout actually finished that day, if any: it may be another routine than the rotation's next one.
   const w = workouts.filter((x) => x && x.ended_at && x.started_at && localDay(x.started_at) === day).pop();
@@ -108,6 +104,12 @@ export function handStepsPatch(d, extra) {
   return { steps: phone == null && add == null ? null : (phone || 0) + (add || 0), stepsExtra: add };
 }
 
+// Distance of a day: km on the home bike (typed in) plus 1 km per 1,000 steps. null when neither is entered.
+export function activeKm({ bikeKm, steps } = {}) {
+  const b = num(bikeKm), s = num(steps);
+  return b == null && s == null ? null : Math.round(((b || 0) + (s || 0) / 1000) * 10) / 10;
+}
+
 export function dayFacts(day, { weights = [], dailies = [], meals = [] } = {}) {
   const w = weights.find((e) => e && e.day === day);
   const d = dailies.find((e) => e && e.day === day) || null;
@@ -121,19 +123,21 @@ export function dayFacts(day, { weights = [], dailies = [], meals = [] } = {}) {
     steps: num(d?.steps),
     stepsPhone: phoneSteps(d),
     stepsExtra: num(d?.stepsExtra),
+    bikeKm: num(d?.bikeKm),
+    km: activeKm({ bikeKm: d?.bikeKm, steps: d?.steps }),
     kcal: pick('kcal'), p: pick('p'), c: pick('c'), f: pick('f'),
     minimum: d?.minimum === true,
     travel: d?.travel === true,
     note: d?.note || '',
-    logged: Boolean(w || m.length || (d && ['sleepHours', 'steps', 'kcal', 'p'].some((k) => num(d[k]) != null))),
+    logged: Boolean(w || m.length || (d && ['sleepHours', 'steps', 'bikeKm', 'kcal', 'p'].some((k) => num(d[k]) != null))),
   };
 }
 
 // Green / yellow / red per the plan.
-//  green: weighed, protein ≥ proteinMin (120), kcal within target ±100, steps ≥ 10,000, sleep ≥ 7 h, session done (or none planned)
-//  yellow: everything else green but steps 8,000–9,999, or a minimum day (weigh-in + protein ≥ proteinMin + 6,000 steps)
+//  green: weighed, protein ≥ proteinMin (120), kcal within target ±100, distance ≥ 15 km (bike km + steps/1000), sleep ≥ 7.5 h, session done (or none planned)
+//  yellow: everything else green but distance 12–15 km, or a minimum day (weigh-in + 6 km)
 //  red: anything else. 'open' = today, not finished yet and not green.
-//  With trackFood off, calories and protein are left out of every rule (minimum day: weigh-in + 6,000 steps).
+//  With trackFood off, calories and protein are left out of every rule (minimum day: weigh-in + 6 km).
 // Returns { status, checks: [{ key, label, ok, warn }] , minimumMet }.
 // `week` (from weekTraining, as of the end of the day) makes the session check "still on track for the
 // week's 3 gym + 2 runs" rather than "did the planned session".
@@ -141,8 +145,9 @@ export function dayStatus(f, { kcalTarget = null, cfg = {}, session = { kind: 'r
   const c = { ...CUT_DEFAULTS, ...cfg };
   if (f.travel) return travelStatus(f, { kcalTarget, c, isToday });
   const planned = isScheduled(session.kind);
+  const km = f.km !== undefined ? f.km : activeKm(f);
   const sessionCheck = week
-    ? { key: 'session', label: `Week on track: gym ${week.lift}/${week.goal.lift} · runs ${week.run}/${week.goal.run}`, ok: week.onTrack }
+    ? { key: 'session', label: `Week on track: gym ${week.lift}/${week.goal.lift}${week.goal.run ? ` · runs ${week.run}/${week.goal.run}` : ''}`, ok: week.onTrack }
     : { key: 'session', label: planned ? `${SESSION_LABEL[session.kind]} done` : 'No session planned', ok: !planned || done };
   const checks = [
     { key: 'weight', label: 'Weighed in', ok: f.weight != null },
@@ -150,11 +155,11 @@ export function dayStatus(f, { kcalTarget = null, cfg = {}, session = { kind: 'r
       { key: 'protein', label: `At least ${c.proteinMin} g protein`, ok: f.p != null && f.p >= c.proteinMin },
       { key: 'kcal', label: kcalTarget ? `Calories ${kcalTarget - c.kcalBand}–${kcalTarget + c.kcalBand}` : 'Calories logged', ok: f.kcal != null && (!kcalTarget || Math.abs(f.kcal - kcalTarget) <= c.kcalBand) },
     ] : []),
-    { key: 'steps', label: `Steps ≥ ${c.steps.toLocaleString('en-GB')}`, ok: f.steps != null && f.steps >= c.steps, warn: f.steps != null && f.steps >= c.stepsMin && f.steps < c.steps },
+    { key: 'km', label: `Distance ≥ ${c.activeKm} km (bike + steps ÷ 1000)`, ok: km != null && km >= c.activeKm, warn: km != null && km >= c.activeKmMin && km < c.activeKm },
     { key: 'sleep', label: `Sleep ≥ ${c.sleep} h`, ok: f.sleep != null && f.sleep >= c.sleep },
     sessionCheck,
   ];
-  const minimumMet = f.weight != null && (!c.trackFood || (f.p != null && f.p >= c.proteinMin)) && f.steps != null && f.steps >= 6000;
+  const minimumMet = f.weight != null && (!c.trackFood || (f.p != null && f.p >= c.proteinMin)) && km != null && km >= c.minKm;
   let status;
   if (checks.every((x) => x.ok)) status = 'green';
   else if (checks.every((x) => x.ok || x.warn)) status = 'yellow';
@@ -170,7 +175,7 @@ function travelStatus(f, { kcalTarget, c, isToday }) {
   const checks = [
     { key: 'weight', label: 'Weighed in', ok: f.weight != null },
     c.trackFood && { key: 'kcal', label: kcalTarget ? `Calories roughly ${kcalTarget - c.travelKcalBand}–${kcalTarget + c.travelKcalBand} (optional)` : 'Calories (optional)', ok: kcalOk, warn: !kcalOk },
-    { key: 'steps', label: 'Steps (optional)', ok: true },
+    { key: 'km', label: 'Distance (optional)', ok: true },
     { key: 'session', label: 'Travel day — no session', ok: true },
   ].filter(Boolean);
   const status = f.weight == null ? (isToday ? 'open' : 'red') : kcalOk ? 'green' : 'yellow';

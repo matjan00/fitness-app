@@ -9,11 +9,11 @@ import { push, page } from './nav.js';
 import * as foodUi from './food-ui.js';
 import { loadDb, exById } from './gym-data.js';
 import {
-  CUT_DEFAULTS, CUT_TARGETS, TARGETS_REV, PROGRAM_NAME, ROUTINES_REV, EASY_PACE, routineRecords, planWeeks, weekNumber, startWeightFrom,
+  CUT_DEFAULTS, CUT_TARGETS, TARGETS_REV, PROGRAM_NAME, ROUTINES_REV, routineRecords, planWeeks, weekNumber, startWeightFrom,
   targetsChanged, daysToGoal,
 } from './cut-calc.js';
 import { adaptiveTdee } from './cut-flags.js';
-import { useCutPlan, stopCutPlan } from './run-plan-ui.js';
+import { stopCutPlan } from './run-plan-ui.js';
 import { dayFacts } from './cut-day.js';
 
 
@@ -78,7 +78,7 @@ export async function syncCutRoutines() {
 // the calorie floor are raised, protein set, carbs filled to match; fat kept. Logged in the targets history.
 export async function syncCutTargets() {
   const c = cutSettings();
-  if (!c.startDate || (c.targetsRev || 1) >= TARGETS_REV) return;
+  if (!c.startDate || !c.trackFood || (c.targetsRev || 1) >= TARGETS_REV) return;
   const t = { ...CUT_TARGETS, ...(foodUi.targets() || {}) };
   const kcal = Math.max(t.kcal || 0, CUT_TARGETS.kcal);
   const p = CUT_TARGETS.p;
@@ -94,6 +94,15 @@ export async function syncCutGoal() {
   const c = cutSettings();
   if (!c.startDate || (c.goalRev || 0) >= 1) return;
   await saveCut({ goalWeight: CUT_DEFAULTS.goalWeight, goalRev: 1 });
+}
+
+// The no-running regime (8 Nov 2026): sleep 7.5 h, 15 km a day (bike + steps ÷ 1000), 3 gym sessions, no running,
+// no calories and macros. Moves a saved plan to it, once.
+export async function syncCutRegime() {
+  const c = cutSettings();
+  if (!c.startDate || (c.regimeRev || 0) >= 1) return;
+  await saveCut({ sleep: CUT_DEFAULTS.sleep, activeKm: CUT_DEFAULTS.activeKm, trackFood: false, runsFromCut: false, regimeRev: 1 });
+  await stopCutPlan();
 }
 
 // ---------- settings page ----------
@@ -122,19 +131,17 @@ export function openCutSettings() {
       <div class="card form">
         <div class="form-row">${num('kcal', 'Calories (kcal)', tg.kcal, 'numeric')}${num('p', 'Protein (g)', tg.p, 'numeric')}</div>
         <div class="form-row">${num('f', 'Fat (g)', tg.f, 'numeric')}${num('c', 'Carbs (g)', tg.c, 'numeric')}</div>
-        <div class="form-row">${num('steps', 'Steps', c.steps, 'numeric')}${num('sleep', 'Sleep (h)', c.sleep)}</div>
+        <div class="form-row">${num('activeKm', 'Distance (km)', c.activeKm)}${num('sleep', 'Sleep (h)', c.sleep)}</div>
+        <p class="tiny muted">Distance = km on the bike (you type it in) + steps ÷ 1,000. The phone's steps arrive by themselves.</p>
         <div class="form-row">${num('kcalFloor', 'Calorie floor', c.kcalFloor, 'numeric')}</div>
-        <label class="switch" style="margin-top:8px"><span>Count calories and protein<span class="tiny muted" style="display:block;font-weight:400">Off: the daily checks are weigh-in, steps, sleep and training only. The Food tab keeps working.</span></span>
+        <label class="switch" style="margin-top:8px"><span>Count calories and protein<span class="tiny muted" style="display:block;font-weight:400">Off: the daily checks are weigh-in, distance, sleep and gym only. The Food tab keeps working.</span></span>
           <input type="checkbox" name="trackFood" ${c.trackFood ? 'checked' : ''}></label>
         <p class="tiny muted">Calories and macros are the same targets the Food tab uses. Plan minimums: ${n0(CUT_TARGETS.kcal)} kcal · ${CUT_TARGETS.p} g protein (${CUT_TARGETS.f} g fat · ${CUT_TARGETS.c} g carbs).</p>
       </div>
       <h3 class="section-title">Reminders</h3>
-      <div class="card"><label class="switch"><span>Phone reminders<span class="tiny muted" style="display:block;font-weight:400">8:00 weigh-in, 21:00 log food, steps and sleep — only if not done yet. Works while the app is open or in the background; when you open the app you always get the same prompt.</span></span>
+      <div class="card"><label class="switch"><span>Phone reminders<span class="tiny muted" style="display:block;font-weight:400">8:00 weigh-in, 21:00 log bike km and sleep — only if not done yet. Works while the app is open or in the background; when you open the app you always get the same prompt.</span></span>
         <input type="checkbox" name="reminders" ${c.reminders ? 'checked' : ''}></label></div>
-      <h3 class="section-title">Running</h3>
-      <div class="card"><label class="switch"><span>Running coach follows the cut plan<span class="tiny muted" style="display:block;font-weight:400">Easy + quality run each week. Your current goal plan is kept and comes back when this is off. Garmin sync and Send to watch work the same.</span></span>
-        <input type="checkbox" name="runsFromCut" ${c.runsFromCut !== false ? 'checked' : ''}></label></div>
-      <h3 class="section-title">Gym</h3>
+            <h3 class="section-title">Gym</h3>
       <div class="card row between"><div class="grow"><b>Upper A / B / C</b><p class="small muted">3 upper-body routines, rotated A → B → C</p></div>
         <button class="ghost" id="ct-routines">${icon('plus')} Add</button></div>` });
     let sex = prof.sex;
@@ -147,23 +154,24 @@ export function openCutSettings() {
       const goal = nv('goalWeight');
       if (!(goal > 30 && goal < 300)) { toast('Enter a goal weight in kg'); return; }
       const kcal = nv('kcal');
-      if (!(kcal > 800)) { toast('Enter a calorie target'); return; }
+      if ($('[name=trackFood]', el).checked && !(kcal > 800)) { toast('Enter a calorie target'); return; }
       const cut = {
         startDate, goalWeight: goal, rate: +v('rate'),
         startWeight: nv('startWeight') > 30 ? nv('startWeight') : null,
-        steps: Math.round(nv('steps') || CUT_DEFAULTS.steps), sleep: nv('sleep') || CUT_DEFAULTS.sleep,
+        sleep: nv('sleep') || CUT_DEFAULTS.sleep,
         kcalFloor: Math.round(nv('kcalFloor') || CUT_DEFAULTS.kcalFloor),
-        runsFromCut: $('[name=runsFromCut]', el).checked,
+        runsFromCut: false,
+        activeKm: nv('activeKm') > 0 ? nv('activeKm') : CUT_DEFAULTS.activeKm,
         trackFood: $('[name=trackFood]', el).checked,
         reminders: $('[name=reminders]', el).checked,
       };
       if (cut.reminders && typeof Notification !== 'undefined' && Notification.permission === 'default') await Notification.requestPermission().catch(() => {});
       if (cut.reminders && (typeof Notification === 'undefined' || Notification.permission !== 'granted')) toast('Notifications are blocked on this phone — you will get the reminder when you open the app');
-      const targets = { kcal: Math.round(kcal), p: Math.round(nv('p') || 0), c: Math.round(nv('c') || 0), f: Math.round(nv('f') || 0) };
+      const targets = cut.trackFood ? { kcal: Math.round(kcal), p: Math.round(nv('p') || 0), c: Math.round(nv('c') || 0), f: Math.round(nv('f') || 0) } : fs.targets;
       await saveCut(cut);
-      await foodUi.saveSettings({ targets, profile: { ...(fs.profile || {}), sex, age: Math.round(nv('age')) || null, height: Math.round(nv('height')) || null } });
-      await recordTargets({ ...targets, steps: cut.steps }, 'Edited in settings');
-      if (cut.runsFromCut && startDate) await useCutPlan(startDate); else await stopCutPlan();
+      await foodUi.saveSettings({ ...(targets ? { targets } : {}), profile: { ...(fs.profile || {}), sex, age: Math.round(nv('age')) || null, height: Math.round(nv('height')) || null } });
+      if (cut.trackFood && targets) await recordTargets({ ...targets, steps: c.steps }, 'Edited in settings');
+      await stopCutPlan();
       toast('Cut plan saved');
       s.close();
     };
@@ -191,9 +199,8 @@ export function openPlan() {
           <b>${w.target ? `${n1(w.target)} kg` : '—'}</b></div>
         ${w.from ? `<p class="tiny muted">${esc(niceDate(fromDay(w.from)))} – ${esc(niceDate(fromDay(w.to)))}</p>` : ''}
         <p class="small">${esc(w.focus)}${w.checkpoint ? ` <b>Checkpoint ${w.checkpoint}.</b>` : ''}</p>
-        <p class="small muted">Quality: ${esc(w.quality.text)} · Easy: ${w.easyMin} min @ ${EASY_PACE}</p>
       </div>`).join('')}</div>
-      <p class="tiny muted" style="margin:14px 2px">Target = trend weight at the end of the week. After the goal: +150 kcal per week for 3–4 weeks toward maintenance, keeping 65–66 kg.</p>` });
+      <p class="tiny muted" style="margin:14px 2px">Target = trend weight at the end of the week. Once you are at ${n1(c.goalWeight)} kg, the job is to hold it and get stronger: 3 gym sessions a week, 15 km a day, 7.5 h sleep.</p>` });
   });
 }
 
@@ -208,7 +215,7 @@ export const meSection = {
     el.innerHTML = `<h3 class="section-title" style="margin-top:4px">Cut plan</h3>
       <div class="card"><div class="card-head" style="margin-bottom:6px"><h2>${c.startDate ? (wk ? `Week ${wk} of 11` : `Starts ${esc(niceDate(fromDay(c.startDate)))}`) : 'Not set up'}</h2>
         <button class="link" id="ct-edit">${c.startDate ? 'Edit' : 'Set up'}</button></div>
-        <p class="small muted">Goal ${n1(c.goalWeight)} kg at ${n2(c.rate)} kg/week${c.startDate && wk ? ` · ${n0(left)} days to go` : ''}${c.trackFood ? (t.kcal ? ` · ${n0(t.kcal)} kcal, ${n0(t.p || 0)} g protein, ${n0(t.steps)} steps` : '') : ` · ${n0(c.steps)} steps, ${n1(c.sleep)} h sleep`}</p>
+        <p class="small muted">Goal ${n1(c.goalWeight)} kg at ${n2(c.rate)} kg/week${c.startDate && wk ? ` · ${n0(left)} days to go` : ''}${c.trackFood ? (t.kcal ? ` · ${n0(t.kcal)} kcal, ${n0(t.p || 0)} g protein, ${n0(c.activeKm)} km` : '') : ` · ${n0(c.activeKm)} km a day, ${n1(c.sleep)} h sleep, 3 gym sessions a week`}</p>
         <div style="margin-top:8px">${maintenanceHtml(c)}</div>
         <button class="ghost block" id="ct-plan" style="margin-top:12px">${icon('list')} View the plan</button></div>`;
     $('#ct-edit', el).onclick = openCutSettings;

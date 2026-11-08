@@ -45,7 +45,7 @@ export function redFlags(day, src, cfg = {}, start = null) {
   const inPlan = (d) => d >= c.startDate && d < day;
   const facts = (d) => dayFacts(d, src);
 
-  // Training: 3 gym + 2 runs a week on any days. Flag this week once the goal no longer fits in the days left
+  // Training: 3 gym a week on any days. Flag this week once the goal no longer fits in the days left
   // (today still counts as a day left), else last week if it ended short. Weeks that began before the plan don't count.
   const wsrc = { workouts: src.workouts || [], runs: src.runs || [], dailies: src.dailies || [] };
   // Same basis as the Today card: sessions done today count, and today is still a free day until one is done.
@@ -55,7 +55,7 @@ export function redFlags(day, src, cfg = {}, start = null) {
   const daysLeft = sofar.daysLeft + (freeToday ? 1 : 0);
   const now = { ...sofar, daysLeft, onTrack: sofar.liftLeft + sofar.runLeft <= daysLeft };
   const last = weekTraining(addDays(weekOf(day), -7), { ...wsrc, through: addDays(weekOf(day), -1) });
-  const short = (w) => `gym ${w.lift}/${w.goal.lift}, runs ${w.run}/${w.goal.run}`;
+  const short = (w) => `gym ${w.lift}/${w.goal.lift}${w.goal.run ? `, runs ${w.run}/${w.goal.run}` : ''}`;
   if (weekOf(day) >= c.startDate && !now.onTrack) {
     flags.push({ key: 'missed', text: `Behind on training: ${short(now)} with ${now.daysLeft} day${now.daysLeft === 1 ? '' : 's'} left this week` });
   } else if (addDays(weekOf(day), -7) >= c.startDate && !last.complete) {

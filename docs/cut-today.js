@@ -6,7 +6,7 @@ import * as store from './store.js';
 import * as foodUi from './food-ui.js';
 import { push, sheet } from './nav.js';
 import { startWorkout } from './gym-workout.js';
-import { cutSettings, currentTargets, openCutSettings, openPlan, addCutRoutines, syncCutRoutines, syncCutTargets, syncCutGoal, startWeight, isSetUp } from './cut.js';
+import { cutSettings, currentTargets, openCutSettings, openPlan, addCutRoutines, syncCutRoutines, syncCutTargets, syncCutGoal, syncCutRegime, startWeight, isSetUp } from './cut.js';
 import { PLAN, PROGRAM_NAME, EASY_PACE, weekNumber, daysToGoal, daysBetween, emaTrend, trendOn, targetWeight } from './cut-calc.js';
 import { redFlags, isLogged } from './cut-flags.js';
 import { liftDayExtra, sessionFor, sessionDone, dayFacts, dayStatus, handStepsPatch, streak, minimumDaysInWeek, weekTraining, TRAIN_CHOICES, SESSION_LABEL } from './cut-day.js';
@@ -74,6 +74,13 @@ function editItem(key, day, f) {
       await daily({ sleepHours: v.h, sleepSource: null }); // typed by hand: the Garmin sync leaves it alone
     });
   }
+  if (key === 'km') {
+    const note = `Km on the home bike. Steps add 1 km per 1,000 by themselves${f.steps != null ? ` (${n0(f.steps)} steps = ${n1(f.steps / 1000)} km)` : ''}. Goal ${n0(cutSettings().activeKm)} km a day.`;
+    return entrySheet('Bike today', [{ name: 'km', label: 'Bike (km)', value: f.bikeKm }], async (v) => {
+      if (v.km != null && !(v.km >= 0 && v.km <= 500)) { toast('Enter km, e.g. 12.5'); return false; }
+      await daily({ bikeKm: v.km });
+    }, note);
+  }
   if (key === 'steps') {
     const note = f.stepsPhone != null
       ? `Your phone counted ${n0(f.stepsPhone)}. Steps you add here go on top.`
@@ -135,9 +142,9 @@ function dayTypeHtml(f, st, minUsed) {
   const hint = {
     normal: 'Bad day or illness? Minimum day. Away for work? Travel day.',
     minimum: c.trackFood
-      ? (st.minimumMet ? 'Minimum met: weigh-in, protein and 6,000 steps. Counts as yellow.' : `Minimum day: weigh-in, protein ≥ ${c.proteinMin} g and 6,000 steps. Counts as yellow.`)
-      : (st.minimumMet ? 'Minimum met: weigh-in and 6,000 steps. Counts as yellow.' : 'Minimum day: weigh-in and 6,000 steps. Counts as yellow.'),
-    travel: c.trackFood ? 'Travel day: only the morning weigh-in counts. Calories roughly on target if you log them; steps optional; no session.' : 'Travel day: only the morning weigh-in counts. Steps optional; no session.',
+      ? (st.minimumMet ? 'Minimum met: weigh-in, protein and 6 km. Counts as yellow.' : `Minimum day: weigh-in, protein ≥ ${c.proteinMin} g and 6 km. Counts as yellow.`)
+      : (st.minimumMet ? 'Minimum met: weigh-in and 6 km. Counts as yellow.' : 'Minimum day: weigh-in and 6 km (bike + steps). Counts as yellow.'),
+    travel: c.trackFood ? 'Travel day: only the morning weigh-in counts. Calories roughly on target if you log them; distance optional; no session.' : 'Travel day: only the morning weigh-in counts. Distance optional; no session.',
   }[type];
   return `<div class="seg ct-daytype" style="margin-top:12px" role="group" aria-label="Day type">${['normal', 'minimum', 'travel'].map((t) => `<button type="button" data-t="${t}" class="${t === type ? 'on' : ''}" aria-pressed="${t === type}">${t[0].toUpperCase() + t.slice(1)}</button>`).join('')}</div>
     <p class="tiny ${minUsed > 1 && type === 'minimum' ? 'down' : 'muted'}" style="margin-top:6px">${esc(hint)}${minUsed > 1 && type === 'minimum' ? ` ${minUsed} minimum days this week — more than 1 is flagged.` : ''}</p>`;
@@ -180,13 +187,13 @@ function planTravel() {
 }
 
 // ---------- the card ----------
-// Today's pick (Gym / Run / No training) and the week's 3 gym + 2 runs: done so far and whether it still fits.
+// Today's pick (Gym / No training) and the week's 3 gym sessions: done so far and whether it still fits.
 function trainingHtml(st, day, src) {
   const w = st.week; // counts include today
-  const freeToday = !st.done && !sessionDone('lift', day, src) && !sessionDone('easy', day, src);
+  const freeToday = !st.done && !sessionDone('lift', day, src);
   const need = w.liftLeft + w.runLeft;
   const days = w.daysLeft + (freeToday ? 1 : 0);
-  const sum = `Gym ${w.lift}/${w.goal.lift} · runs ${w.run}/${w.goal.run}`;
+  const sum = `Gym ${w.lift}/${w.goal.lift}${w.goal.run ? ` · runs ${w.run}/${w.goal.run}` : ''}`;
   const line = w.complete ? `${sum} · week done`
     : need <= days ? `${sum} · ${need} to go in ${days} day${days === 1 ? '' : 's'}, on track`
       : `${sum} · ${need} to go but only ${days} day${days === 1 ? '' : 's'} left`;
@@ -223,7 +230,7 @@ function sessionBlock(sess, done, wk) {
       ${run ? `<p class="small" style="margin-top:6px">${n1((+run.distance_m || 0) / 1000)} km · ${fmtPace(pace)}/km average${vs != null ? ` · ${sess.kind === 'easy' ? (vs > 0 ? 'easy enough' : `${fmtPace(-vs)} faster than easy pace`) : `${vs <= 0 ? `${fmtPace(-vs)} faster` : `${fmtPace(vs)} slower`} than ${target}/km (whole run incl. warm-up)`}` : ''}</p>`
         : `<button class="ghost block" id="ct-logrun" style="margin-top:10px">${icon('plus')} Log run by hand</button><p class="tiny muted" style="margin-top:4px">Garmin runs appear by themselves after the next sync.</p>`}</div>`;
   }
-  const note = { steps: 'No session — hit your steps.', travel: cutSettings().trackFood ? 'Weigh in this morning. Calories and steps are optional, roughly is fine.' : 'Weigh in this morning. Steps are optional.' }[sess.kind] || 'No session today. Hit your steps.';
+  const note = { steps: 'No session — hit your steps.', travel: cutSettings().trackFood ? 'Weigh in this morning. Calories and distance are optional, roughly is fine.' : 'Weigh in this morning. Distance is optional.' }[sess.kind] || 'No session today. Hit your steps.';
   return `<div class="ct-sess"><b>${SESSION_LABEL[sess.kind]}</b><p class="small muted">${note}</p></div>`;
 }
 
@@ -234,7 +241,7 @@ function headStats(f, tg, trend, trackFood) {
   const weight = `<div class="stat"><b>${kg == null ? '–' : `${n1(kg)}<small> kg</small>`}</b><span>${trend != null ? 'trend weight' : 'weight'}</span></div>`;
   if (!trackFood) {
     return `<div class="stats ct-headstats">
-    <div class="stat"><b>${f.steps == null ? '–' : n0(f.steps)}</b><span>steps</span></div>
+    <div class="stat"><b class="${f.km != null && f.km >= cutSettings().activeKm ? 'up' : ''}">${f.km == null ? '–' : `${n1(f.km)}<small> km</small>`}</b><span>of ${n0(cutSettings().activeKm)} km</span></div>
     <div class="stat"><b>${f.sleep == null ? '–' : `${n1(f.sleep)}<small> h</small>`}</b><span>sleep</span></div>
     ${weight}
   </div>`;
@@ -284,7 +291,7 @@ function render(el) {
   // the target (green), is close or short (amber).
   const row = (key, label, value, extra = '', has = false) => {
     const chk = ok(key);
-    const cls = !has ? '' : chk?.ok ? 'ok' : 'warn';
+    const cls = !has ? '' : !chk || chk.ok ? 'ok' : 'warn';
     return `<button class="list-item ct-item" data-k="${key}"><span class="ct-tick ${cls}">${icon(has ? 'check' : 'plus')}</span>
       <div class="grow"><b>${label}</b><div class="sub">${esc(extra || (key === 'weight' && !chk?.ok ? 'Morning, before food' : chk?.label) || '')}</div></div><span class="ct-val">${value}</span></button>`;
   };
@@ -302,7 +309,8 @@ function render(el) {
     <div class="list">
       ${row('weight', 'Weight', v(f.weight == null ? null : n1(f.weight), ' kg'), trend != null ? `trend ${n1(trend)} kg${plan && !plan.buffer && start ? ` · target ${n1(targetWeight(start, c.goalWeight, c.rate, wk))} by ${new Date(`${addDays(c.startDate, wk * 7 - 1)}T12:00`).toLocaleDateString('en-GB', { weekday: 'short' })}` : ''}` : '', f.weight != null)}
       ${row('sleep', 'Sleep', v(f.sleep == null ? null : n1(f.sleep), ' h'), '', f.sleep != null)}
-      ${row('steps', 'Steps', v(f.steps == null ? null : n0(f.steps)), f.stepsPhone != null && f.stepsExtra ? `phone ${n0(f.stepsPhone)} + ${n0(f.stepsExtra)} by hand` : '', f.steps != null)}
+      ${row('km', 'Distance', v(f.km == null ? null : n1(f.km), ' km'), `${f.bikeKm == null ? 'Tap to add your bike km' : `bike ${n1(f.bikeKm)} km`} + steps ${n1((f.steps || 0) / 1000)} km`, f.km != null)}
+      ${row('steps', 'Steps', v(f.steps == null ? null : n0(f.steps)), f.stepsPhone != null && f.stepsExtra ? `phone ${n0(f.stepsPhone)} + ${n0(f.stepsExtra)} by hand` : 'Counted by your phone, 1 km per 1,000', f.steps != null)}
       ${c.trackFood ? row(f.travel ? 'kcal' : 'protein', 'Food', food, '', f.kcal != null || f.p != null) : ''}
     </div>
     ${dayTypeHtml(f, st, minUsed)}
@@ -341,6 +349,7 @@ export function openDay(day) {
         <div class="fab-row" style="margin-top:12px;flex-wrap:wrap">
           <button class="ghost" data-k="weight">Weight${f.weight != null ? ` ${n1(f.weight)}` : ''}</button>
           <button class="ghost" data-k="sleep">Sleep${f.sleep != null ? ` ${n1(f.sleep)} h` : ''}</button>
+          <button class="ghost" data-k="km">Bike${f.bikeKm != null ? ` ${n1(f.bikeKm)} km` : ''}</button>
           <button class="ghost" data-k="steps">Steps${f.steps != null ? ` ${n0(f.steps)}` : ''}</button>
           ${cutSettings().trackFood ? `<button class="ghost" data-k="food">Food${f.kcal != null ? ` ${n0(f.kcal)}` : ''}</button>` : ''}
         </div>
@@ -373,11 +382,12 @@ export function init() {
   setTimeout(() => syncCutRoutines().catch(() => {}), 1500);
   setTimeout(() => syncCutTargets().catch(() => {}), 1500);
   setTimeout(() => syncCutGoal().catch(() => {}), 1500);
+  setTimeout(() => syncCutRegime().catch(() => {}), 1500);
   scheduleReminders();
 }
 
 // ---------- reminders ----------
-// Morning: weigh-in. Evening: food, steps and sleep. Shown as a prompt when the app opens; as a phone
+// Morning: weigh-in. Evening: bike km and sleep. Shown as a prompt when the app opens; as a phone
 // notification at 8:00 and 21:00 when switched on (only while the app is open or in the background —
 // a web app can't wake itself up once the phone has closed it).
 function reminderText(day = today(), hour = new Date().getHours()) {
@@ -385,7 +395,7 @@ function reminderText(day = today(), hour = new Date().getHours()) {
   const f = dayFacts(day, sources());
   if (hour >= 5 && hour < 12 && f.weight == null) return 'Morning weigh-in: after the bathroom, before food.';
   if (hour >= 19) {
-    const miss = [cutSettings().trackFood && f.kcal == null && 'food', f.steps == null && 'steps', f.sleep == null && 'sleep'].filter(Boolean);
+    const miss = [cutSettings().trackFood && f.kcal == null && 'food', f.bikeKm == null && 'bike km', f.sleep == null && 'sleep'].filter(Boolean);
     if (miss.length) return `Evening log: ${miss.join(', ')} still missing for today.`;
   }
   return '';

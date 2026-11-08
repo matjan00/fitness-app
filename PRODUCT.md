@@ -7,7 +7,7 @@
 web
 
 ## Users
-One person: the owner and developer (Polish, reads the UI in English). He lifts in the gym, runs (Garmin watch, synced via Strava/Garmin), and tracks food. Since October 2026 he is on an 11-week fat-loss cut (goal 65 kg, ~0.75 kg/week of trend weight). He uses the app on an Android phone as an installed PWA: one-handed between sets, on runs, in the kitchen, and each morning for the weigh-in.
+One person: the owner and developer (Polish, reads the UI in English). He lifts in the gym, runs (Garmin watch, synced via Strava/Garmin), and tracks food. Since 8 Nov 2026 the goal is to hold 70 kg and get stronger in the gym: 3 gym sessions a week, no running, no calorie or macro counting, 7.5 h sleep, and 15 km a day (km on the bike at home, typed in, plus 1 km per 1,000 phone steps). He uses the app on an Android phone as an installed PWA: one-handed between sets, on runs, in the kitchen, and each morning for the weigh-in.
 
 ## Product Purpose
 "Fit" puts gym, runs, food and the cut plan in one place so the daily routine is logged quickly and judged honestly. Success: every day is logged in seconds, the app tells the truth about whether the cut is on track, and the gym session can be run entirely from the phone.
@@ -19,7 +19,7 @@ A personal, rule-based coach built for exactly one training life: an 11-week cut
 - Gym: live workout logger with set rows, rest timer, carried weights, routine rotation (Upper A/B/C).
 - Runs: Strava/Garmin sync, run coach notes, run plan; demo data for empty states.
 - Food: whole-day calories and macros synced from Fitatu every 2 hours (GitHub Action, FITATU-SETUP.md), targets, body weight. Food itself is logged in Fitatu, not in this app. A grocery list adds up the meals planned in Fitatu for the days you pick (recipes as ingredients).
-- Cut plan: daily checklist (weigh-in, protein, kcal, steps, training), day status (green/yellow), weekly review with measurements and photos, red flags, progress charts.
+- Cut plan: daily checklist (weigh-in, distance = bike km + steps/1000, sleep, weekly gym count; calories/protein only if switched on), day status (green/yellow), weekly review with measurements and photos, red flags, progress charts.
 - Stats tab, Me/settings screen, backup/export, local-only mode without an account.
 
 ## Capabilities and Constraints

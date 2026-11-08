@@ -30,7 +30,7 @@ test('red flags: protein, weigh-ins, missed sessions, minimum days, sleep', () =
   // Thursday 15th: Mon/Tue/Wed sessions missed, nothing logged
   const f = redFlags('2026-10-15', base(), cfg, 73).map((x) => x.key);
   assert.ok(!redFlags('2026-10-15', base(), { ...cfg, trackFood: false }, 73).some((x) => x.key === 'protein')); // food not counted
-  assert.ok(f.includes('missed')); // 5 sessions left, 4 days (Thu–Sun)
+  assert.ok(!f.includes('missed')); // 3 gym sessions still fit in Thu–Sun
   assert.ok(f.includes('protein'));
   assert.ok(f.includes('weighin'));
   const good = base({
@@ -68,31 +68,32 @@ test('travel days are not held against you', () => {
   const weights = ['2026-10-12', '2026-10-13', '2026-10-14'].map((d) => ({ day: d, kg: 73 }));
   const f = redFlags('2026-10-15', { weights, dailies, meals: [], workouts: [], runs: [] }, cfg, 73).map((x) => x.key);
   assert.ok(!f.includes('protein'));
-  // the goal stays 3 + 2, so 5 sessions in the 4 days left (Thu–Sun) is behind
-  assert.ok(f.includes('missed'));
+  // the goal stays 3 gym, so by Saturday with Mon–Wed away and nothing done, 3 sessions in 2 days is behind
+  assert.ok(redFlags('2026-10-17', { weights, dailies, meals: [], workouts: [], runs: [] }, cfg, 73).some((x) => x.key === 'missed'));
 });
 
 test('red flags: training is judged on the week, not on fixed days', () => {
   const cfg = { startDate: '2026-10-12' };
-  const R = (day) => ({ start: `${day}T07:00:00`, distance_m: 5000 });
   const weights = days('2026-10-12', 12).map((d) => ({ day: d, kg: 73 }));
-  // Mon–Wed off, Thursday morning: 5 sessions fit in Thu–Sun? No (4 days) → behind
-  assert.ok(redFlags('2026-10-15', base({ weights }), cfg, 73).some((x) => x.key === 'missed'));
-  // two done on Mon/Tue: 3 left for Thu–Sun → fine, whichever days they were
-  const two = base({ weights, workouts: [W('2026-10-13', 'Upper A')], runs: [R('2026-10-12')] });
+  // Saturday with nothing done: 3 sessions in Sat–Sun? No → behind
+  assert.ok(redFlags('2026-10-17', base({ weights }), cfg, 73).some((x) => x.key === 'missed'));
+  // Thursday with nothing done: 3 fit in Thu–Sun → fine
+  assert.ok(!redFlags('2026-10-15', base({ weights }), cfg, 73).some((x) => x.key === 'missed'));
+  // two done on Mon/Tue: one left for Thu–Sun → fine, whichever days they were
+  const two = base({ weights, workouts: [W('2026-10-13', 'Upper A'), W('2026-10-12', 'Upper B')] });
   assert.ok(!redFlags('2026-10-15', two, cfg, 73).some((x) => x.key === 'missed'));
-  // next week: last week ended at 1 gym + 1 run → flagged as short
+  // next week: last week ended at 2 gym → flagged as short, no runs mentioned
   const f = redFlags('2026-10-20', two, cfg, 73).find((x) => x.key === 'missed');
-  assert.match(f.text, /Last week.*gym 1\/3, runs 1\/2/);
+  assert.match(f.text, /Last week.*gym 2\/3$/);
 });
 
 test('red flags: a session done today counts, like on the Today card', () => {
   const cfg = { startDate: '2026-10-12' };
   const weights = days('2026-10-12', 12).map((d) => ({ day: d, kg: 73 }));
-  // Thursday, gym done this morning: 1/3 gym, 4 to go in Fri–Sun (3 days) → behind, counted with today's session
-  const one = base({ weights, workouts: [W('2026-10-15', 'Upper A')] });
-  const f = redFlags('2026-10-15', one, cfg, 73).find((x) => x.key === 'missed');
-  assert.match(f.text, /gym 1\/3, runs 0\/2 with 3 days left/);
+  // Saturday, gym done this morning: 1/3 gym, 2 to go in Sun (1 day) → behind, counted with today's session
+  const one = base({ weights, workouts: [W('2026-10-17', 'Upper A')] });
+  const f = redFlags('2026-10-17', one, cfg, 73).find((x) => x.key === 'missed');
+  assert.match(f.text, /gym 1\/3 with 1 day left/);
 });
 
 test('maintenance is right early in a cut (slope of the weigh-ins, not the lagging trend)', () => {

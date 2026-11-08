@@ -26,44 +26,41 @@ test('sessionFor: your pick wins, else what you did, else the suggestion', () =>
   assert.equal(s.chosen, false);
   assert.equal(s.routine.name, 'Upper A');
   // picks
-  assert.equal(sessionFor('2026-10-12', { dailies: [{ day: '2026-10-12', train: 'run' }] }).kind, 'easy');
+  assert.equal(sessionFor('2026-10-12', { dailies: [{ day: '2026-10-12', train: 'run' }] }).kind, 'lift'); // old run picks are ignored: no running
   assert.equal(sessionFor('2026-10-12', { dailies: [{ day: '2026-10-12', train: 'none' }] }).kind, 'rest');
   assert.equal(sessionFor('2026-10-12', { dailies: [{ day: '2026-10-12', train: 'lift' }] }).chosen, true);
-  // the week's second run is the quality run
-  assert.equal(sessionFor('2026-10-15', { runs: [R('2026-10-13')], dailies: [{ day: '2026-10-15', train: 'run' }] }).kind, 'quality');
-  // a run done today without a pick shows as today's session
-  assert.equal(sessionFor('2026-10-14', { runs: [R('2026-10-14')] }).choice, 'run');
+  // a run (e.g. a Garmin walk recorded as a run) never becomes the day's session
+  assert.equal(sessionFor('2026-10-14', { runs: [R('2026-10-14')] }).choice, 'lift');
   assert.equal(sessionFor('2026-10-14', { workouts: [W('2026-10-12', 'Upper A')], dailies: [{ day: '2026-10-14', train: 'lift' }] }).letter, 'B');
 });
 
-test('weekly goal: 3 gym + 2 runs on any days, judged by whether it still fits', async () => {
+test('weekly goal: 3 gym on any days, judged by whether it still fits', async () => {
   const { weekTraining, suggestTraining } = await import('../docs/cut-day.js');
-  // Mon 12 – Sun 18. Gym Mon, run Tue; as of Wed evening 3 sessions are left for Thu–Sun.
-  const src = { workouts: [W('2026-10-12', 'Upper A')], runs: [R('2026-10-13')] };
+  // Mon 12 – Sun 18. Gym Mon; as of Wed evening 2 sessions are left for Thu–Sun.
+  const src = { workouts: [W('2026-10-12', 'Upper A')] };
   const w = weekTraining('2026-10-14', src);
-  assert.deepEqual([w.lift, w.run, w.liftLeft, w.runLeft, w.daysLeft, w.onTrack], [1, 1, 2, 1, 4, true]);
-  // nothing until Friday evening: 5 left, 2 days → behind
+  assert.deepEqual([w.lift, w.liftLeft, w.runLeft, w.daysLeft, w.onTrack, w.goal.run], [1, 2, 0, 4, true, 0]);
+  // nothing until Friday evening: 3 left, 2 days → behind
   assert.equal(weekTraining('2026-10-16').onTrack, false);
   // exactly enough days still counts as on track; a complete week is complete
-  assert.equal(weekTraining('2026-10-13', { workouts: [W('2026-10-12', 'Upper A')] }).onTrack, true);
-  const full = { workouts: ['12', '14', '16'].map((d) => W(`2026-10-${d}`, 'Upper A')), runs: [R('2026-10-13'), R('2026-10-15')] };
+  assert.equal(weekTraining('2026-10-15', { workouts: [W('2026-10-12', 'Upper A')] }).onTrack, true);
+  const full = { workouts: ['12', '14', '16'].map((d) => W(`2026-10-${d}`, 'Upper A')) };
   assert.equal(weekTraining('2026-10-16', full).complete, true);
-  // two sessions on one day count once each kind
+  // two sessions on one day count once
   assert.equal(weekTraining('2026-10-12', { workouts: [W('2026-10-12', 'Upper A'), W('2026-10-12', 'Arms')] }).lift, 1);
-  // travel days keep the full 3 + 2 goal, but they aren't days left
+  // travel days keep the full goal, but they aren't days left
   const away = weekTraining('2026-10-14', { dailies: ['2026-10-16', '2026-10-17', '2026-10-18'].map((day) => ({ day, travel: true })) });
-  assert.deepEqual([away.goal.lift, away.goal.run, away.daysLeft, away.onTrack], [3, 2, 1, false]);
-  // suggestions: no gym two days in a row while a run is due; nothing once the week is done
-  assert.equal(suggestTraining('2026-10-13', { workouts: [W('2026-10-12', 'Upper A')] }), 'run');
-  assert.equal(suggestTraining('2026-10-14', src), 'lift');
+  assert.deepEqual([away.goal.lift, away.daysLeft, away.onTrack], [3, 1, false]);
+  // suggestions: gym while it is due, nothing once the week is done
+  assert.equal(suggestTraining('2026-10-13', src), 'lift');
   assert.equal(suggestTraining('2026-10-17', full), 'none');
 });
 
 const food = { trackFood: true };
 
 test('day status: the session check is "week on track", not "today\'s planned session"', () => {
-  const f = { weight: 73, p: 150, kcal: 1750, steps: 10000, sleep: 7.5 };
-  const onTrack = { lift: 1, run: 0, goal: { lift: 3, run: 2 }, onTrack: true };
+  const f = { weight: 73, p: 150, kcal: 1750, steps: 10000, bikeKm: 5, sleep: 7.5 };
+  const onTrack = { lift: 1, run: 0, goal: { lift: 3, run: 0 }, onTrack: true };
   assert.equal(dayStatus(f, { kcalTarget: 1750, cfg: food, session: { kind: 'rest' }, week: onTrack }).status, 'green');
   assert.equal(dayStatus(f, { kcalTarget: 1750, cfg: food, session: { kind: 'lift' }, done: false, week: onTrack }).status, 'green'); // skipped, still fine
   assert.equal(dayStatus(f, { kcalTarget: 1750, cfg: food, week: { ...onTrack, onTrack: false } }).status, 'red');
@@ -90,19 +87,21 @@ test('dayFacts: typed totals win over the food diary', () => {
   assert.equal(dayFacts('2026-10-13', {}).logged, false);
 });
 
-const good = { weight: 73, p: 150, kcal: 1750, steps: 10500, sleep: 7.5, minimum: false };
+const good = { weight: 73, p: 150, kcal: 1750, steps: 10500, bikeKm: 5, sleep: 7.5, minimum: false };
 const opt = { kcalTarget: 1750, cfg: food, session: { kind: 'lift' }, done: true };
 
 test('green / yellow / red', () => {
   assert.equal(dayStatus(good, opt).status, 'green');
   assert.equal(dayStatus({ ...good, steps: 8500 }, opt).status, 'yellow');
-  assert.equal(dayStatus({ ...good, steps: 7000 }, opt).status, 'red');
+  assert.equal(dayStatus({ ...good, steps: 6000 }, opt).status, 'red'); // 11 km
+  assert.equal(dayStatus({ ...good, steps: 10000, sleep: 7.2 }, opt).status, 'red'); // sleep goal is 7.5 h
+  assert.equal(dayStatus({ ...good, steps: null, bikeKm: 15 }, opt).status, 'green'); // all on the bike
   assert.equal(dayStatus({ ...good, kcal: 1900 }, opt).status, 'red');
   assert.equal(dayStatus({ ...good, kcal: 1850 }, opt).status, 'green');
   assert.equal(dayStatus(good, { ...opt, done: false }).status, 'red');
   assert.equal(dayStatus(good, { ...opt, session: { kind: 'rest' }, done: false }).status, 'green');
   assert.equal(dayStatus({ ...good, sleep: null }, { ...opt, isToday: true }).status, 'open');
-  // minimum day: weigh-in + protein + 6,000 steps
+  // minimum day: weigh-in + protein + 6 km
   const min = { weight: 73, p: 145, kcal: 2400, steps: 6200, sleep: 5, minimum: true };
   assert.equal(dayStatus(min, opt).status, 'yellow');
   assert.equal(dayStatus({ ...min, steps: 5000 }, opt).status, 'red');
@@ -115,10 +114,10 @@ test('food not counted: calories and protein drop out of every rule', () => {
   const noFood = { ...good, p: null, kcal: null };
   assert.equal(dayStatus(noFood, off).status, 'green');
   assert.equal(dayStatus({ ...good, kcal: 3000, p: 20 }, off).status, 'green');
-  assert.deepEqual(dayStatus(noFood, off).checks.map((x) => x.key), ['weight', 'steps', 'sleep', 'session']);
+  assert.deepEqual(dayStatus(noFood, off).checks.map((x) => x.key), ['weight', 'km', 'sleep', 'session']);
   assert.equal(dayStatus({ ...noFood, steps: 8500 }, off).status, 'yellow');
   assert.equal(dayStatus({ ...noFood, sleep: 6 }, off).status, 'red');
-  // minimum day: weigh-in + 6,000 steps
+  // minimum day: weigh-in + 6 km
   assert.equal(dayStatus({ weight: 70, steps: 6200, sleep: 5, minimum: true }, off).status, 'yellow');
   // travel: weigh-in only, calories never judged
   const t = { weight: 70, kcal: 3000, travel: true };
@@ -155,6 +154,15 @@ test('travel days: only the weigh-in counts', () => {
   // no session expected; the rotation is unaffected
   assert.equal(sessionFor('2026-10-12', { dailies: [{ day: '2026-10-12', travel: true }] }).kind, 'travel');
   assert.equal(sessionFor('2026-10-14', { dailies: [{ day: '2026-10-12', travel: true }] }).letter, 'A');
+});
+
+test('distance: bike km + steps / 1000', () => {
+  const d = (k) => dayFacts('2026-10-12', { dailies: [{ day: '2026-10-12', ...k }] }).km;
+  assert.equal(d({ bikeKm: 10, steps: 6400 }), 16.4);
+  assert.equal(d({ steps: 9000 }), 9);
+  assert.equal(d({ bikeKm: 12.5 }), 12.5);
+  assert.equal(d({}), null);
+  assert.equal(dayFacts('2026-10-12', { dailies: [{ day: '2026-10-12', bikeKm: 3 }] }).logged, true);
 });
 
 test('handStepsPatch adds hand steps on top of the phone count', () => {
