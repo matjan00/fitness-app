@@ -141,6 +141,8 @@ Main lifts: Machine Chest Press, Overhead Press, Chest-Supported T-Bar Row, Lat 
 
 **No deload weeks** (restart of 9 Nov 2026, goal 70 kg): every week is normal sessions, each judged Progressed / Held / Dropped against the last time. Gym history carries over the restart.
 
+**Plan length (10 Nov 2026):** no fixed 11 weeks. The plan lasts (start weight − goal) ÷ weekly pace, rounded up, e.g. 71.3 → 70 kg at 0.75 kg/week = 2 weeks. The week table above is the original 73 → 65 kg plan.
+
 ## Running (2x/week, on non-lifting days)
 **Easy run**, at a conversational pace (6:30–6:45/km):
 - Weeks 1–4: 30–35 min

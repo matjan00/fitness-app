@@ -1,4 +1,4 @@
-// 11-week cut plan (fit-cut-plan.md): plan data and pure calculations (no DOM, no store).
+// Cut plan (fit-cut-plan.md): plan data and pure calculations (no DOM, no store).
 // Covered by tests/cut-calc.test.js. Days are local 'YYYY-MM-DD' strings.
 
 import { addDays } from './stats-calc.js';
@@ -31,11 +31,12 @@ export const CUT_DEFAULTS = {
 };
 export const CUT_TARGETS = { kcal: 1900, p: 120, f: 55, c: 231 };
 export const TARGETS_REV = 2; // bumped when saved targets should move to new CUT_TARGETS / proteinMin / kcalFloor
-export const PLAN_WEEKS_TOTAL = 11;
 // The plan was restarted from week 1 on this day (a Monday, so plan weeks match training weeks).
 export const RESTART_DATE = '2026-11-09';
 
 // ---------- the plan ----------
+// The plan is as long as it takes to reach the goal (planLength). PLAN below is only the old 13-week run schedule
+// (cut-run.js); the gym and weight side no longer reads it.
 // phase, checkpoint, easy-run minutes and the quality-run session per week (13 = 11 + 2 buffer weeks).
 const Q = (text, reps = null, metres = null, pace = null) => ({ text, reps, metres, pace });
 export const PLAN = [
@@ -118,15 +119,28 @@ export function startWeightFrom(entries = [], startDate, manual = null) {
 // Target trend weight at the end of week n: start − rate × n, never below the goal.
 export const targetWeight = (start, goal, rate, n) => (start > 0 ? r1(Math.max(goal, start - rate * n)) : null);
 
-// The whole plan dated from the start: [{ ...PLAN row, from, to, target }]. Buffer weeks have no target.
+// Weeks the plan takes: the weight to lose ÷ the weekly pace, rounded up (at least 1). null without a start weight.
+export function planLength(start, goal = CUT_DEFAULTS.goalWeight, rate = CUT_DEFAULTS.rate) {
+  if (!(start > 0) || !(rate > 0)) return null;
+  return Math.max(1, Math.ceil((start - goal) / rate - 1e-9));
+}
+
+// The whole plan dated from the start: [{ week, phase, focus, from, to, target }], one row per week until the goal
+// (the last week's target is the goal). Empty until there is a start weight.
 export function planWeeks(cfg = {}, start = null) {
   const c = { ...CUT_DEFAULTS, ...cfg };
-  return PLAN.map((w) => ({
-    ...w,
-    from: c.startDate ? addDays(c.startDate, (w.week - 1) * 7) : null,
-    to: c.startDate ? addDays(c.startDate, w.week * 7 - 1) : null,
-    target: w.buffer ? null : targetWeight(start, c.goalWeight, c.rate, w.week),
-  }));
+  const n = planLength(start, c.goalWeight, c.rate);
+  return Array.from({ length: n || 0 }, (_, i) => {
+    const week = i + 1;
+    return {
+      week,
+      phase: week === n ? 'Goal week' : 'Cut',
+      focus: week === n ? `Reach ${c.goalWeight} kg. After that: hold it and keep getting stronger.` : 'Beat last time on every exercise.',
+      from: c.startDate ? addDays(c.startDate, i * 7) : null,
+      to: c.startDate ? addDays(c.startDate, week * 7 - 1) : null,
+      target: targetWeight(start, c.goalWeight, c.rate, week),
+    };
+  });
 }
 
 // Projected weight on a day: the straight line start − rate × weeks elapsed, flattening at the goal.
@@ -137,10 +151,10 @@ export function projectedWeight(cfg, start, day) {
   return Math.round(Math.max(c.goalWeight, start - c.rate * weeks) * 100) / 100;
 }
 
-// Days until the planned goal date (end of week 11), not below 0.
-export function daysToGoal(startDate, day) {
-  if (!startDate) return null;
-  return Math.max(0, daysBetween(day, addDays(startDate, PLAN_WEEKS_TOTAL * 7 - 1)));
+// Days until the planned goal date (end of the plan's last week), not below 0. null until the length is known.
+export function daysToGoal(startDate, day, weeks) {
+  if (!startDate || !(weeks > 0)) return null;
+  return Math.max(0, daysBetween(day, addDays(startDate, weeks * 7 - 1)));
 }
 
 // ---------- trend weight ----------

@@ -7,7 +7,7 @@ import * as foodUi from './food-ui.js';
 import { push, sheet } from './nav.js';
 import { startWorkout } from './gym-workout.js';
 import { cutSettings, currentTargets, openCutSettings, openPlan, addCutRoutines, syncCutRoutines, syncCutTargets, syncCutGoal, syncCutRegime, syncCutRestart, startWeight, isSetUp } from './cut.js';
-import { PLAN, PROGRAM_NAME, EASY_PACE, weekNumber, daysToGoal, daysBetween, emaTrend, trendOn, targetWeight } from './cut-calc.js';
+import { PLAN, PROGRAM_NAME, EASY_PACE, weekNumber, daysToGoal, planLength, daysBetween, emaTrend, trendOn, targetWeight } from './cut-calc.js';
 import { redFlags, isLogged } from './cut-flags.js';
 import { liftDayExtra, sessionFor, sessionDone, dayFacts, dayStatus, handStepsPatch, streak, minimumDaysInWeek, weekTraining, TRAIN_CHOICES, SESSION_LABEL } from './cut-day.js';
 
@@ -272,10 +272,11 @@ function render(el) {
   const start = startWeight(c);
   const trend = trendOn(emaTrend(src.weights), day);
   const wk = weekNumber(c.startDate, day);
-  const plan = PLAN[wk - 1];
-  const left = daysToGoal(c.startDate, day);
+  const len = planLength(start, c.goalWeight, c.rate);
+  const inWeeks = wk >= 1 && (!len || wk <= len); // inside the plan's weeks (length unknown until the first weigh-in)
+  const left = inWeeks ? daysToGoal(c.startDate, day, len) : null;
   const head = wk === 0 ? `Starts in ${daysBetween(day, c.startDate)} day${daysBetween(day, c.startDate) === 1 ? '' : 's'}`
-    : plan ? `Week ${wk} of 11 · ${esc(plan.phase)}` : `Week ${wk} · plan finished`;
+    : inWeeks ? `Week ${wk}${len ? ` of ${len}` : ''}` : `Week ${wk} · plan finished`;
 
   // streaks (only days since the start count)
   const inPlan = (d) => d >= c.startDate;
@@ -306,7 +307,7 @@ function render(el) {
     ${wk > 0 ? sessionBlock(st.session, st.done, wk) : ''}
     <div class="row between" style="margin:14px 0 4px"><h3 class="ct-sub">Today</h3><span class="pill ${stCls}">${stLabel}</span></div>
     <div class="list">
-      ${row('weight', 'Weight', v(f.weight == null ? null : n1(f.weight), ' kg'), trend != null ? `trend ${n1(trend)} kg${plan && !plan.buffer && start ? ` · target ${n1(targetWeight(start, c.goalWeight, c.rate, wk))} by ${new Date(`${addDays(c.startDate, wk * 7 - 1)}T12:00`).toLocaleDateString('en-GB', { weekday: 'short' })}` : ''}` : '', f.weight != null)}
+      ${row('weight', 'Weight', v(f.weight == null ? null : n1(f.weight), ' kg'), trend != null ? `trend ${n1(trend)} kg${inWeeks && start ? ` · target ${n1(targetWeight(start, c.goalWeight, c.rate, wk))} by ${new Date(`${addDays(c.startDate, wk * 7 - 1)}T12:00`).toLocaleDateString('en-GB', { weekday: 'short' })}` : ''}` : '', f.weight != null)}
       ${row('sleep', 'Sleep', v(f.sleep == null ? null : n1(f.sleep), ' h'), '', f.sleep != null)}
       ${row('km', 'Distance', v(f.km == null ? null : n1(f.km), ' km'), `${f.bikeKm == null ? 'Tap to add your bike km' : `bike ${n1(f.bikeKm)} km`} + steps ${n1((f.steps || 0) / 1000)} km`, f.km != null)}
       ${row('steps', 'Steps', v(f.steps == null ? null : n0(f.steps)), f.stepsPhone != null && f.stepsExtra ? `phone ${n0(f.stepsPhone)} + ${n0(f.stepsExtra)} by hand` : 'Counted by your phone, 1 km per 1,000', f.steps != null)}

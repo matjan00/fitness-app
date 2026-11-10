@@ -1,4 +1,4 @@
-// Cut plan (fit-cut-plan.md): settings, the dated 11(+2)-week plan and the Upper A/B/C routines.
+// Cut plan (fit-cut-plan.md): settings, the dated plan (as many weeks as the goal takes) and the Upper A/B/C routines.
 // Plan maths lives in cut-calc.js. Calories and macros are the food targets, shared with the Food tab.
 //
 // Records: 'daily' (daily log), 'checkin' (old weekly check-ins, no longer shown), 'targets' (targets history), config 'cut'.
@@ -10,7 +10,7 @@ import * as foodUi from './food-ui.js';
 import { loadDb, exById } from './gym-data.js';
 import {
   CUT_DEFAULTS, CUT_TARGETS, TARGETS_REV, PROGRAM_NAME, ROUTINES_REV, routineRecords, planWeeks, weekNumber, startWeightFrom,
-  targetsChanged, daysToGoal, RESTART_DATE,
+  targetsChanged, daysToGoal, planLength, RESTART_DATE,
 } from './cut-calc.js';
 import { adaptiveTdee } from './cut-flags.js';
 import { stopCutPlan } from './run-plan-ui.js';
@@ -124,7 +124,7 @@ export function openCutSettings() {
     const sw = startWeightFrom(store.all('bodyweight'), c.startDate, null);
     const num = (name, label, value, mode = 'decimal') => `<label>${label}<input name="${name}" inputmode="${mode}" value="${esc(value ?? '')}"></label>`;
     el.innerHTML = page({ title: 'Cut plan', right: '<button class="primary" id="ct-save">Save</button>', body: `
-      <p class="small muted" style="margin:0 2px 14px">11 weeks of cutting at a steady pace, keeping muscle and strength. Changing the start date moves the whole plan.</p>
+      <p class="small muted" style="margin:0 2px 14px">Cutting at a steady pace, keeping muscle and strength. The plan is as long as it takes to reach your goal at the pace you pick. Changing the start date moves the whole plan.</p>
       <div class="card form">
         <div class="form-row"><label>Start date<input type="date" name="startDate" value="${esc(c.startDate || '')}"></label>
           ${num('goalWeight', 'Goal (kg)', c.goalWeight)}</div>
@@ -202,11 +202,11 @@ export function openPlan() {
         <div class="stat"><b>${n2(c.rate)}</b><span>kg / week</span></div>
       </div>
       <div class="card" style="margin-bottom:12px">${maintenanceHtml(c)}</div>
-      <div class="stack-sm">${weeks.map((w) => `<div class="card ct-week${w.week === cur ? ' on' : ''}${w.buffer ? ' buffer' : ''}">
+      <div class="stack-sm">${weeks.map((w) => `<div class="card ct-week${w.week === cur ? ' on' : ''}">
         <div class="row between"><b>Week ${w.week} · ${esc(w.phase)}${w.week === cur ? ' <span class="pill accent">Now</span>' : ''}</b>
           <b>${w.target ? `${n1(w.target)} kg` : '—'}</b></div>
         ${w.from ? `<p class="tiny muted">${esc(niceDate(fromDay(w.from)))} – ${esc(niceDate(fromDay(w.to)))}</p>` : ''}
-        <p class="small">${esc(w.focus)}${w.checkpoint ? ` <b>Checkpoint ${w.checkpoint}.</b>` : ''}</p>
+        <p class="small">${esc(w.focus)}</p>
       </div>`).join('')}</div>
       <p class="tiny muted" style="margin:14px 2px">Target = trend weight at the end of the week. Once you are at ${n1(c.goalWeight)} kg, the job is to hold it and get stronger: 3 gym sessions a week, 15 km a day, 7.5 h sleep.</p>` });
   });
@@ -218,12 +218,13 @@ export const meSection = {
   render(el) {
     const c = cutSettings();
     const wk = weekNumber(c.startDate, today());
-    const left = daysToGoal(c.startDate, today());
+    const len = planLength(startWeight(c), c.goalWeight, c.rate);
+    const left = daysToGoal(c.startDate, today(), len);
     const t = currentTargets(c);
     el.innerHTML = `<h3 class="section-title" style="margin-top:4px">Cut plan</h3>
-      <div class="card"><div class="card-head" style="margin-bottom:6px"><h2>${c.startDate ? (wk ? `Week ${wk} of 11` : `Starts ${esc(niceDate(fromDay(c.startDate)))}`) : 'Not set up'}</h2>
+      <div class="card"><div class="card-head" style="margin-bottom:6px"><h2>${c.startDate ? (wk ? (len && wk > len ? `Week ${wk} · plan finished` : `Week ${wk}${len ? ` of ${len}` : ''}`) : `Starts ${esc(niceDate(fromDay(c.startDate)))}`) : 'Not set up'}</h2>
         <button class="link" id="ct-edit">${c.startDate ? 'Edit' : 'Set up'}</button></div>
-        <p class="small muted">Goal ${n1(c.goalWeight)} kg at ${n2(c.rate)} kg/week${c.startDate && wk ? ` · ${n0(left)} days to go` : ''}${c.trackFood ? (t.kcal ? ` · ${n0(t.kcal)} kcal, ${n0(t.p || 0)} g protein, ${n0(c.activeKm)} km` : '') : ` · ${n0(c.activeKm)} km a day, ${n1(c.sleep)} h sleep, 3 gym sessions a week`}</p>
+        <p class="small muted">Goal ${n1(c.goalWeight)} kg at ${n2(c.rate)} kg/week${c.startDate && wk && left != null && wk <= len ? ` · ${n0(left)} days to go` : ''}${c.trackFood ? (t.kcal ? ` · ${n0(t.kcal)} kcal, ${n0(t.p || 0)} g protein, ${n0(c.activeKm)} km` : '') : ` · ${n0(c.activeKm)} km a day, ${n1(c.sleep)} h sleep, 3 gym sessions a week`}</p>
         <div style="margin-top:8px">${maintenanceHtml(c)}</div>
         <button class="ghost block" id="ct-plan" style="margin-top:12px">${icon('list')} View the plan</button></div>`;
     $('#ct-edit', el).onclick = openCutSettings;

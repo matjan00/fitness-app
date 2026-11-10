@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   PLAN, ROUTINES, ROUTINES_REV, MAIN_LIFTS, routineRecords, weekNumber, startWeightFrom, targetWeight, planWeeks,
-  projectedWeight, daysToGoal, emaTrend, trendOn, targetsChanged,
+  projectedWeight, daysToGoal, planLength, emaTrend, trendOn, targetsChanged,
 } from '../docs/cut-calc.js';
 
 const exercises = JSON.parse(readFileSync(new URL('../docs/data/exercises.json', import.meta.url), 'utf8'));
@@ -28,17 +28,28 @@ test('routines match Part 1 (A/B/C, sets × reps, rest)', () => {
   assert.equal(recs[0].rev, ROUTINES_REV);
 });
 
-test('plan has 11 weeks + 2 buffer, no deload weeks, checkpoints in 4 and 8', () => {
+test('run schedule has 13 weeks and no deload weeks', () => {
   assert.equal(PLAN.length, 13);
   assert.equal(PLAN.some((w) => w.deload || /deload/i.test(`${w.phase} ${w.focus} ${w.quality.text}`)), false);
-  assert.deepEqual(PLAN.filter((w) => w.checkpoint).map((w) => w.week), [4, 8]);
-  assert.deepEqual(PLAN.filter((w) => w.buffer).map((w) => w.week), [12, 13]);
+});
+
+test('the plan is as long as the goal takes', () => {
+  assert.equal(planLength(71.3, 70, 0.75), 2);
+  assert.equal(planLength(73, 70, 0.75), 4);  // exactly 4 weeks, not 5
+  assert.equal(planLength(73, 65, 0.75), 11);
+  assert.equal(planLength(73, 70, 0.5), 6);
+  assert.equal(planLength(70, 70, 0.75), 1);  // already there: one week
+  assert.equal(planLength(69, 70, 0.75), 1);
+  assert.equal(planLength(null, 70, 0.75), null);
+  const w = planWeeks({ startDate: '2026-11-09', goalWeight: 70 }, 71.3);
+  assert.deepEqual(w.map((x) => [x.week, x.phase, x.target]), [[1, 'Cut', 70.6], [2, 'Goal week', 70]]);
+  assert.equal(w[1].to, '2026-11-22');
+  assert.deepEqual(planWeeks({ startDate: '2026-11-09' }, null), []);
 });
 
 test('target trend weights from 73 kg match the Part 1 table', () => {
   const w = planWeeks({ startDate: '2026-10-12', goalWeight: 65 }, 73);
-  assert.deepEqual(w.slice(0, 11).map((x) => x.target), [72.3, 71.5, 70.8, 70, 69.3, 68.5, 67.8, 67, 66.3, 65.5, 65]);
-  assert.equal(w[11].target, null);
+  assert.deepEqual(w.map((x) => x.target), [72.3, 71.5, 70.8, 70, 69.3, 68.5, 67.8, 67, 66.3, 65.5, 65]);
   assert.equal(w[0].from, '2026-10-12');
   assert.equal(w[0].to, '2026-10-18');
   assert.equal(w[10].to, '2026-12-27');
@@ -49,8 +60,8 @@ test('changing the start date re-dates the whole plan', () => {
   const a = planWeeks({ startDate: '2026-10-12', goalWeight: 65 }, 73);
   const b = planWeeks({ startDate: '2026-10-19' }, 73);
   assert.equal(b[0].from, '2026-10-19');
-  assert.equal(b[12].from, '2027-01-11');
-  assert.notEqual(a[12].from, b[12].from);
+  assert.equal(b[3].from, '2026-11-09');
+  assert.notEqual(a[3].from, b[3].from);
   assert.equal(planWeeks({}, 73)[0].from, null);
 });
 
@@ -78,8 +89,10 @@ test('projected weight flattens at the goal; days to goal', () => {
   assert.equal(projectedWeight(cfg, 73, '2027-03-01'), 65);
   assert.equal(projectedWeight(cfg, 73, '2026-10-01'), 73);
   assert.equal(projectedWeight({}, 73, '2026-10-19'), null);
-  assert.equal(daysToGoal('2026-10-12', '2026-10-12'), 76);
-  assert.equal(daysToGoal('2026-10-12', '2027-01-30'), 0);
+  assert.equal(daysToGoal('2026-10-12', '2026-10-12', 11), 76);
+  assert.equal(daysToGoal('2026-10-12', '2027-01-30', 11), 0);
+  assert.equal(daysToGoal('2026-11-09', '2026-11-10', 2), 12);
+  assert.equal(daysToGoal('2026-11-09', '2026-11-10', null), null);
 });
 
 test('EMA trend (α = 0.1) in day order, ignoring bad rows', () => {

@@ -2,7 +2,7 @@
 // Pure (no DOM, no store); covered by tests/cut-flags.test.js. Days are local 'YYYY-MM-DD' strings.
 
 import { addDays, weekOf } from './stats-calc.js';
-import { CUT_DEFAULTS, PLAN, emaTrend, trendOn, targetWeight, weekNumber, daysBetween } from './cut-calc.js';
+import { CUT_DEFAULTS, emaTrend, trendOn, targetWeight, weekNumber, daysBetween } from './cut-calc.js';
 import { weekTraining, dayFacts, minimumDaysInWeek, sessionDone, SESSION_LABEL } from './cut-day.js';
 import { e1rmOf, workingSets } from './cut-engine.js';
 import { MAIN_LIFTS } from './cut-calc.js';
@@ -77,7 +77,7 @@ export function redFlags(day, src, cfg = {}, start = null) {
 
   // trend weight behind the last finished week's target by more than 1 kg
   const wk = weekNumber(c.startDate, day) - 1;
-  if (wk >= 1 && start > 0 && !PLAN[wk - 1]?.buffer) {
+  if (wk >= 1 && start > 0) {
     const target = targetWeight(start, c.goalWeight, c.rate, wk);
     const t = trendOn(emaTrend(src.weights), addDays(c.startDate, wk * 7 - 1));
     if (t != null && target != null && t - target > 1) flags.push({ key: 'behind', text: `Trend ${t.toFixed(1)} kg is ${(t - target).toFixed(1)} kg behind the week ${wk} target (${target} kg)` });
