@@ -55,16 +55,16 @@ Target trend weight = start − 0.75 × week (example from 73kg):
 
 | Week | Phase | Target trend weight | Training focus |
 |---|---|---|---|
-| 1 | Re-entry | 72.3 | Find working weights (RPE 7–8). Expect a bigger drop (holiday water). |
+| 1 | Block 1 | 72.3 | Carry on from your last weights: beat last time on every exercise. |
 | 2 | Block 1 | 71.5 | Progress |
 | 3 | Block 1 | 70.8 | Progress |
 | 4 | Block 1 | 70.0 | Progress, **checkpoint 1** |
-| 5 | Deload | 69.3 | Same weights, half the sets. Calories unchanged. |
+| 5 | Block 2 | 69.3 | Progress |
 | 6 | Block 2 | 68.5 | Progress / hold |
 | 7 | Block 2 | 67.8 | Progress / hold |
 | 8 | Block 2 | 67.0 | Hold, **checkpoint 2** |
 | 9 | Block 2 | 66.3 | Hold |
-| 10 | Deload | 65.5 | Same weights, half the sets |
+| 10 | Block 2 | 65.5 | Hold |
 | 11 | Final | 65.0 | **Goal week**: re-test lifts + 5k time trial |
 | 12–13 | Buffer | — | Only if behind. Otherwise start maintenance. |
 
@@ -137,9 +137,9 @@ Warm-up sets don't count. Bodyweight exercises without added weight are compared
 - **Held:** no main lift dropped (counts as a pass, especially in weeks 6–11)
 - **Dropped:** any main lift dropped. Two "Dropped" sessions in a row trigger the strength red flag.
 
-Main lifts: Machine Chest Press, Overhead Press, Chest-Supported T-Bar Row, Lat Pulldown/Pull-Up, Incline DB Press. In deload weeks, sessions are judged only on completion, not on performance.
+Main lifts: Machine Chest Press, Overhead Press, Chest-Supported T-Bar Row, Lat Pulldown/Pull-Up, Incline DB Press.
 
-**Deload weeks (5, 10):** same weights, 2 sets instead of 3–4, no grinding reps.
+**No deload weeks** (restart of 9 Nov 2026, goal 70 kg): every week is normal sessions, each judged Progressed / Held / Dropped against the last time. Gym history carries over the restart.
 
 ## Running (2x/week, on non-lifting days)
 **Easy run**, at a conversational pace (6:30–6:45/km):

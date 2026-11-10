@@ -17,12 +17,12 @@ const QUALITY = {
   2: { type: 'intervals', title: 'Intervals 5 × 800 m', main: '5 × 800 m @ 5:25/km, 2 min jog between reps.', pace: '5:25', km: 4 },
   3: { type: 'intervals', title: 'Intervals 4 × 1 km', main: '4 × 1 km @ 5:20/km, 2–3 min jog between reps.', pace: '5:20', km: 4 },
   4: { type: 'intervals', title: 'Intervals 5 × 1 km', main: '5 × 1 km @ 5:20/km, 2–3 min jog between reps.', pace: '5:20', km: 5 },
-  5: { type: 'strides', title: 'Deload: easy + strides', main: '3 km easy (about 20 min), then 6 × 20 s strides (quick and smooth, walk back to recover).', km: 3 },
+  5: { type: 'strides', title: 'Easy + strides', main: '3 km easy (about 20 min), then 6 × 20 s strides (quick and smooth, walk back to recover).', km: 3 },
   6: { type: 'intervals', title: 'Tempo 2 × 10 min', main: '2 × 10 min tempo @ 5:35/km, 3 min jog between.', pace: '5:35', km: 3.6 },
   7: { type: 'intervals', title: 'Tempo 3 × 8 min', main: '3 × 8 min tempo @ 5:35/km, 2 min jog between.', pace: '5:35', km: 4.3 },
   8: { type: 'tempo', title: 'Tempo 20 min', main: '20 min continuous tempo @ 5:40/km.', pace: '5:40', km: 3.5 },
   9: { type: 'intervals', title: 'Intervals 5 × 1 km', main: '5 × 1 km @ 5:15/km, 2 min jog between reps.', pace: '5:15', km: 5 },
-  10: { type: 'strides', title: 'Deload: easy + strides', main: '3 km easy (about 20 min), then 6 × 20 s strides (quick and smooth, walk back to recover).', km: 3 },
+  10: { type: 'strides', title: 'Easy + strides', main: '3 km easy (about 20 min), then 6 × 20 s strides (quick and smooth, walk back to recover).', km: 3 },
   11: { type: 'test5k', title: '5 km time trial', main: '5 km, run as fast as you can sustain evenly. Benchmark for the end of the cut.', km: 5 },
 };
 QUALITY[12] = QUALITY[9];
@@ -31,7 +31,7 @@ QUALITY[13] = QUALITY[8];
 const PURPOSE = {
   intervals: 'Hard reps at a set pace keep your speed and aerobic power while you are eating less.',
   tempo: 'Comfortably-hard running holds your threshold fitness through the cut.',
-  strides: 'Deload week: short, quick strides keep your legs sharp without fatigue.',
+  strides: 'Lighter run: short, quick strides keep your legs sharp without fatigue.',
   test5k: 'Benchmark: an honest 5 km effort to see where you finish the cut.',
 };
 

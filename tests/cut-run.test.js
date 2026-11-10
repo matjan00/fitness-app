@@ -9,7 +9,7 @@ test('cut plan: an easy and a quality run every week for 13 weeks', () => {
   assert.deepEqual(s.slice(0, 2).map((x) => x.type), ['easy', 'intervals']);
   assert.equal(s[0].main.startsWith('35 min easy'), true);
   assert.equal(s[21].type, 'test5k'); // week 11
-  assert.equal(s[9].type, 'strides'); // week 5 deload
+  assert.equal(s[9].type, 'strides'); // week 5: easy + strides
 });
 
 test('cut plan goes through the normal plan format and watch steps', () => {

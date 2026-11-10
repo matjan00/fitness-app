@@ -32,21 +32,23 @@ export const CUT_DEFAULTS = {
 export const CUT_TARGETS = { kcal: 1900, p: 120, f: 55, c: 231 };
 export const TARGETS_REV = 2; // bumped when saved targets should move to new CUT_TARGETS / proteinMin / kcalFloor
 export const PLAN_WEEKS_TOTAL = 11;
+// The plan was restarted from week 1 on this day (a Monday, so plan weeks match training weeks).
+export const RESTART_DATE = '2026-11-09';
 
 // ---------- the plan ----------
-// phase, deload, checkpoint, easy-run minutes and the quality-run session per week (13 = 11 + 2 buffer weeks).
+// phase, checkpoint, easy-run minutes and the quality-run session per week (13 = 11 + 2 buffer weeks).
 const Q = (text, reps = null, metres = null, pace = null) => ({ text, reps, metres, pace });
 export const PLAN = [
-  { week: 1, phase: 'Re-entry', focus: 'Find working weights (RPE 7–8). Expect a bigger drop (holiday water).', easyMin: 35, quality: Q('4 × 800 m @ 5:25/km, 2 min jog between', 4, 800, '5:25') },
+  { week: 1, phase: 'Block 1', focus: 'Carry on from your last weights: beat last time on every exercise.', easyMin: 35, quality: Q('4 × 800 m @ 5:25/km, 2 min jog between', 4, 800, '5:25') },
   { week: 2, phase: 'Block 1', focus: 'Progress', easyMin: 35, quality: Q('5 × 800 m @ 5:25/km, 2 min jog between', 5, 800, '5:25') },
   { week: 3, phase: 'Block 1', focus: 'Progress', easyMin: 35, quality: Q('4 × 1000 m @ 5:20/km, 2–3 min jog', 4, 1000, '5:20') },
   { week: 4, phase: 'Block 1', focus: 'Progress', checkpoint: 1, easyMin: 35, quality: Q('5 × 1000 m @ 5:20/km, 2–3 min jog', 5, 1000, '5:20') },
-  { week: 5, phase: 'Deload', deload: true, focus: 'Same weights, half the sets. Calories unchanged.', easyMin: 30, quality: Q('Deload: 20 min easy + 6 × 20 s strides') },
+  { week: 5, phase: 'Block 2', focus: 'Progress', easyMin: 30, quality: Q('20 min easy + 6 × 20 s strides') },
   { week: 6, phase: 'Block 2', focus: 'Progress / hold', easyMin: 40, quality: Q('2 × 10 min tempo @ 5:35/km, 3 min jog', null, null, '5:35') },
   { week: 7, phase: 'Block 2', focus: 'Progress / hold', easyMin: 40, quality: Q('3 × 8 min tempo @ 5:35/km', null, null, '5:35') },
   { week: 8, phase: 'Block 2', focus: 'Hold', checkpoint: 2, easyMin: 40, quality: Q('20 min continuous tempo @ 5:40/km', null, null, '5:40') },
   { week: 9, phase: 'Block 2', focus: 'Hold', easyMin: 40, quality: Q('5 × 1000 m @ 5:15/km', 5, 1000, '5:15') },
-  { week: 10, phase: 'Deload', deload: true, focus: 'Same weights, half the sets.', easyMin: 30, quality: Q('Deload: 20 min easy + 6 × 20 s strides') },
+  { week: 10, phase: 'Block 2', focus: 'Hold', easyMin: 30, quality: Q('20 min easy + 6 × 20 s strides') },
   { week: 11, phase: 'Final', focus: 'Goal week: re-test lifts + 5k time trial', easyMin: 45, quality: Q('5k time trial (benchmark)', 1, 5000, null) },
   { week: 12, phase: 'Buffer', buffer: true, focus: 'Only if behind. Otherwise start maintenance.', easyMin: 40, quality: Q('5 × 1000 m @ 5:15/km', 5, 1000, '5:15') },
   { week: 13, phase: 'Buffer', buffer: true, focus: 'Only if behind. Otherwise start maintenance.', easyMin: 40, quality: Q('20 min continuous tempo @ 5:40/km', null, null, '5:40') },

@@ -28,9 +28,9 @@ test('routines match Part 1 (A/B/C, sets × reps, rest)', () => {
   assert.equal(recs[0].rev, ROUTINES_REV);
 });
 
-test('plan has 11 weeks + 2 buffer, deloads in 5 and 10, checkpoints in 4 and 8', () => {
+test('plan has 11 weeks + 2 buffer, no deload weeks, checkpoints in 4 and 8', () => {
   assert.equal(PLAN.length, 13);
-  assert.deepEqual(PLAN.filter((w) => w.deload).map((w) => w.week), [5, 10]);
+  assert.equal(PLAN.some((w) => w.deload || /deload/i.test(`${w.phase} ${w.focus} ${w.quality.text}`)), false);
   assert.deepEqual(PLAN.filter((w) => w.checkpoint).map((w) => w.week), [4, 8]);
   assert.deepEqual(PLAN.filter((w) => w.buffer).map((w) => w.week), [12, 13]);
 });

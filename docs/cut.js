@@ -10,7 +10,7 @@ import * as foodUi from './food-ui.js';
 import { loadDb, exById } from './gym-data.js';
 import {
   CUT_DEFAULTS, CUT_TARGETS, TARGETS_REV, PROGRAM_NAME, ROUTINES_REV, routineRecords, planWeeks, weekNumber, startWeightFrom,
-  targetsChanged, daysToGoal,
+  targetsChanged, daysToGoal, RESTART_DATE,
 } from './cut-calc.js';
 import { adaptiveTdee } from './cut-flags.js';
 import { stopCutPlan } from './run-plan-ui.js';
@@ -105,6 +105,14 @@ export async function syncCutRegime() {
   await stopCutPlan();
 }
 
+// Restart (10 Nov 2026): the plan starts again at week 1, goal 70 kg, start weight taken from the first weigh-ins
+// of the new start. Logged days, weigh-ins and gym history stay. Moves a saved plan, once.
+export async function syncCutRestart() {
+  const c = cutSettings();
+  if (!c.startDate || (c.restartRev || 0) >= 1) return;
+  await saveCut({ startDate: RESTART_DATE, startWeight: null, goalWeight: CUT_DEFAULTS.goalWeight, restartRev: 1 });
+}
+
 // ---------- settings page ----------
 export function openCutSettings() {
   const c = cutSettings();
@@ -194,7 +202,7 @@ export function openPlan() {
         <div class="stat"><b>${n2(c.rate)}</b><span>kg / week</span></div>
       </div>
       <div class="card" style="margin-bottom:12px">${maintenanceHtml(c)}</div>
-      <div class="stack-sm">${weeks.map((w) => `<div class="card ct-week${w.week === cur ? ' on' : ''}${w.deload ? ' deload' : ''}${w.buffer ? ' buffer' : ''}">
+      <div class="stack-sm">${weeks.map((w) => `<div class="card ct-week${w.week === cur ? ' on' : ''}${w.buffer ? ' buffer' : ''}">
         <div class="row between"><b>Week ${w.week} · ${esc(w.phase)}${w.week === cur ? ' <span class="pill accent">Now</span>' : ''}</b>
           <b>${w.target ? `${n1(w.target)} kg` : '—'}</b></div>
         ${w.from ? `<p class="tiny muted">${esc(niceDate(fromDay(w.from)))} – ${esc(niceDate(fromDay(w.to)))}</p>` : ''}

@@ -94,10 +94,9 @@ export function prescribe(history = [], slot = null, { sets = null } = {}) {
   return out(kg, reps, 'reps', `Same weight: +1 rep on your weakest set · ${hi} on every set → add weight`);
 }
 
-// Whole session: 'progressed' | 'held' | 'dropped' ('completed' in deload weeks).
+// Whole session: 'progressed' | 'held' | 'dropped'.
 //   exercises: [{ exercise_id, verdict }]
-export function judgeSession(exercises = [], { deload = false } = {}) {
-  if (deload) return 'completed';
+export function judgeSession(exercises = []) {
   const judged = exercises.filter((e) => e.verdict);
   if (judged.some((e) => isMainLift(e.exercise_id) && e.verdict === 'dropped')) return 'dropped';
   const beat = judged.filter((e) => e.verdict === 'beat').length;
@@ -105,6 +104,7 @@ export function judgeSession(exercises = [], { deload = false } = {}) {
 }
 
 export const VERDICT = { beat: ['⬆️', 'Beat'], matched: ['➡️', 'Matched'], dropped: ['⬇️', 'Dropped'] };
+// 'completed' only exists on workouts saved in an old deload week.
 export const SESSION_VERDICT = { progressed: 'Progressed', held: 'Held', dropped: 'Dropped', completed: 'Completed (deload)' };
 export const MARK = { up: '⬆️', on: '➡️', down: '⬇️' };
 

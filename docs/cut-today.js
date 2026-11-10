@@ -6,7 +6,7 @@ import * as store from './store.js';
 import * as foodUi from './food-ui.js';
 import { push, sheet } from './nav.js';
 import { startWorkout } from './gym-workout.js';
-import { cutSettings, currentTargets, openCutSettings, openPlan, addCutRoutines, syncCutRoutines, syncCutTargets, syncCutGoal, syncCutRegime, startWeight, isSetUp } from './cut.js';
+import { cutSettings, currentTargets, openCutSettings, openPlan, addCutRoutines, syncCutRoutines, syncCutTargets, syncCutGoal, syncCutRegime, syncCutRestart, startWeight, isSetUp } from './cut.js';
 import { PLAN, PROGRAM_NAME, EASY_PACE, weekNumber, daysToGoal, daysBetween, emaTrend, trendOn, targetWeight } from './cut-calc.js';
 import { redFlags, isLogged } from './cut-flags.js';
 import { liftDayExtra, sessionFor, sessionDone, dayFacts, dayStatus, handStepsPatch, streak, minimumDaysInWeek, weekTraining, TRAIN_CHOICES, SESSION_LABEL } from './cut-day.js';
@@ -209,14 +209,13 @@ function sessionBlock(sess, done, wk) {
   const plan = PLAN[Math.min(Math.max(wk, 1), PLAN.length) - 1];
   if (sess.kind === 'lift') {
     const r = sess.routine;
-    const deload = plan?.deload;
     // A different workout than the rotation's next one still counts for the week; say which one it was.
     if (done && sess.did && sess.did.letter !== sess.letter) {
       return `<div class="ct-sess"><div class="row between"><b>${esc(sess.did.name)}</b><span class="pill up">${icon('check')} Done</span></div>
         <p class="small muted">Counts toward this week's gym sessions. Next in the rotation: ${esc(r.name)}.</p></div>`;
     }
-    return `<div class="ct-sess"><div class="row between"><b>${esc(r.name)}${deload ? ' · deload' : ''}</b>${done ? `<span class="pill up">${icon('check')} Done</span>` : ''}</div>
-      <p class="small muted">${r.exercises.length} exercises · ${esc(r.exercises.filter((x) => x.kind === 'main').map((x) => x.name).join(', '))}${deload ? ' · 2 sets each' : ''}</p>
+    return `<div class="ct-sess"><div class="row between"><b>${esc(r.name)}</b>${done ? `<span class="pill up">${icon('check')} Done</span>` : ''}</div>
+      <p class="small muted">${r.exercises.length} exercises · ${esc(r.exercises.filter((x) => x.kind === 'main').map((x) => x.name).join(', '))}</p>
       ${done ? '' : `<button class="primary block" id="ct-start" style="margin-top:10px">${icon('play')} Start ${esc(r.name)}</button>`}</div>`;
   }
   if (sess.kind === 'easy' || sess.kind === 'quality') {
@@ -383,6 +382,7 @@ export function init() {
   setTimeout(() => syncCutTargets().catch(() => {}), 1500);
   setTimeout(() => syncCutGoal().catch(() => {}), 1500);
   setTimeout(() => syncCutRegime().catch(() => {}), 1500);
+  setTimeout(() => syncCutRestart().catch(() => {}), 1500);
   scheduleReminders();
 }
 

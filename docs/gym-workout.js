@@ -673,7 +673,7 @@ function openSession(sess, kind, original = null) {
 function cutSummaryHtml(cut, w) {
   const cls = { progressed: 'up', held: '', dropped: 'down', completed: '' }[cut.session];
   return `<div class="card ct-verdict"><div class="row between"><b>Session</b><span class="pill ${cls}">${esc(SESSION_VERDICT[cut.session])}</span></div>
-    <p class="tiny muted" style="margin-top:6px">${cut.session === 'completed' ? 'Deload week: judged on completion only.' : 'Progressed: half the exercises beat last time and no main lift dropped. Held: no main lift dropped.'}</p></div>
+    <p class="tiny muted" style="margin-top:6px">Progressed: half the exercises beat last time and no main lift dropped. Held: no main lift dropped. Dropped: a main lift did less than last time.</p></div>
     <h3 class="section-title">Vs last time · next session</h3>
     <div class="card list">${cut.exercises.map((x) => {
       const v = x.verdict ? VERDICT[x.verdict] : null;

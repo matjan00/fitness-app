@@ -70,7 +70,7 @@ test('prescription: −5 %, −10 %', () => {
   assert.equal(prescribe([], slotPress), null);
 });
 
-test('prescription: deload uses 2 sets', () => {
+test('prescription: a set count can be forced', () => {
   assert.equal(prescribe([{ sets: S(40, 8, 8, 7) }], slotPress, { sets: 2 }).reps.length, 2);
 });
 
@@ -79,7 +79,7 @@ test('session verdict', () => {
   assert.equal(judgeSession([{ exercise_id: 'Leverage_Chest_Press', verdict: 'matched' }, { exercise_id: 'Side_Lateral_Raise', verdict: 'matched' }, { exercise_id: 'x', verdict: 'beat' }]), 'held');
   assert.equal(judgeSession([{ exercise_id: 'Leverage_Chest_Press', verdict: 'dropped' }, { exercise_id: 'x', verdict: 'beat' }]), 'dropped');
   assert.equal(judgeSession([{ exercise_id: 'x', verdict: 'dropped' }]), 'held'); // only main lifts make a session drop
-  assert.equal(judgeSession([], { deload: true }), 'completed');
+  assert.equal(judgeSession([]), 'held'); // nothing to compare with yet
 });
 
 test('plan slots, swaps and text', () => {
