@@ -74,13 +74,14 @@ Target trend weight = start − 0.75 × week (example from 73kg):
 Week 1: work up to a weight where each set ends with ~2 reps in reserve. That becomes your baseline.
 
 Upper body only in the gym; your legs get trained by the two runs and the daily steps. Abs are machine crunches only.
+No pec deck, reverse pec deck, cable crossover or barbell work for chest flys and rear delts: those stations are always busy. Biceps work avoids full supination where it can (left forearm), except the DB curl.
 
 **Upper A**
 | Exercise | Sets × reps | Rest |
 |---|---|---|
 | Machine Chest Press | 4 × 6–10 | 2–3 min |
 | Chest-Supported T-Bar Row | 4 × 8–10 | 2 min |
-| Pec Deck Fly | 3 × 12–15 | 60 s |
+| Incline DB Fly | 3 × 10–15 | 60 s |
 | DB Lateral Raise | 3 × 12–15 | 60 s |
 | DB Curl | 3 × 10–12 | 60 s |
 | Machine Crunch (weighted) | 3 × 12–20 | 60 s |
@@ -90,8 +91,9 @@ Upper body only in the gym; your legs get trained by the two runs and the daily 
 |---|---|---|
 | Overhead Press | 4 × 6–8 | 2–3 min |
 | Lat Pulldown (or Pull-Up) | 4 × 6–10 | 2 min |
-| Reverse Pec Deck | 3 × 12–15 | 60 s |
-| Triceps Pushdown | 3 × 12–15 | 60 s |
+| Chest-Supported DB Rear Delt Row (elbows wide) | 3 × 12–15 | 60 s |
+| Dips | 3 × 6–10 | 2 min |
+| Incline Hammer Curl | 3 × 10–12 | 60 s |
 | Machine Crunch (weighted) | 3 × 12–20 | 60 s |
 
 **Upper C**

@@ -63,8 +63,8 @@ const CRUNCH = E('Ab_Crunch_Machine', 'Machine Crunch (weighted)', 3, '12-20', 6
 export const ROUTINES = [
   { key: 'A', name: 'Upper A', exercises: [
     E('Leverage_Chest_Press', 'Machine Chest Press', 4, '6-10', 150, 'main', 'Dumbbell_Bench_Press'),
-    E('Lying_T-Bar_Row', 'Chest-Supported T-Bar Row', 4, '8-10', 120, 'main', 'Dumbbell_Incline_Row'),
-    E('Butterfly', 'Pec Deck Fly', 3, '12-15', 60, 'iso', 'Cable_Crossover'),
+    E('Lying_T-Bar_Row', 'Chest-Supported T-Bar Row', 4, '8-10', 120, 'main', 'One-Arm_Dumbbell_Row'),
+    E('Incline_Dumbbell_Flyes', 'Incline DB Fly', 3, '10-15', 60, 'iso', 'Dumbbell_Flyes'),
     E('Side_Lateral_Raise', 'DB Lateral Raise', 3, '12-15', 60, 'iso'),
     E('Dumbbell_Bicep_Curl', 'DB Curl', 3, '10-12', 60, 'iso'),
     CRUNCH,
@@ -72,8 +72,9 @@ export const ROUTINES = [
   { key: 'B', name: 'Upper B', exercises: [
     E('Standing_Military_Press', 'Overhead Press', 4, '6-8', 150, 'main', 'Dumbbell_Shoulder_Press'),
     E('Wide-Grip_Lat_Pulldown', 'Lat Pulldown', 4, '6-10', 120, 'main', 'Pullups'),
-    E('Reverse_Machine_Flyes', 'Reverse Pec Deck', 3, '12-15', 60, 'iso'),
-    E('Triceps_Pushdown', 'Triceps Pushdown', 3, '12-15', 60, 'iso'),
+    E('Dumbbell_Incline_Row', 'Chest-Supported DB Rear Delt Row (elbows wide)', 3, '12-15', 60, 'iso', 'Band_Pull_Apart'),
+    E('Dips_-_Chest_Version', 'Dips', 3, '6-10', 120, 'compound'),
+    E('Incline_Hammer_Curls', 'Incline Hammer Curl', 3, '10-12', 60, 'iso'),
     CRUNCH,
   ] },
   { key: 'C', name: 'Upper C', exercises: [
@@ -87,7 +88,7 @@ export const ROUTINES = [
 ];
 export const PROGRAM_NAME = 'Cut 11 weeks';
 // Bump when ROUTINES change: saved routines older than this are updated to the plan (syncCutRoutines).
-export const ROUTINES_REV = 2;
+export const ROUTINES_REV = 3;
 // Main lifts (Pull-Up and Lat Pulldown count as one).
 export const MAIN_LIFTS = ['Leverage_Chest_Press', 'Standing_Military_Press', 'Lying_T-Bar_Row', 'Pullups', 'Wide-Grip_Lat_Pulldown', 'Incline_Dumbbell_Press'];
 

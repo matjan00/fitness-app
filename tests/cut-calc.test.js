@@ -19,7 +19,8 @@ test('every plan exercise and swap exists in the exercise library', () => {
 
 test('routines match Part 1 (A/B/C, sets × reps, rest)', () => {
   assert.deepEqual(ROUTINES.map((r) => r.name), ['Upper A', 'Upper B', 'Upper C']);
-  assert.deepEqual(ROUTINES[0].exercises.map((x) => `${x.sets}x${x.reps}`), ['4x6-10', '4x8-10', '3x12-15', '3x12-15', '3x10-12', '3x12-20']);
+  assert.deepEqual(ROUTINES[0].exercises.map((x) => `${x.sets}x${x.reps}`), ['4x6-10', '4x8-10', '3x10-15', '3x12-15', '3x10-12', '3x12-20']);
+  assert.equal(ROUTINES[1].exercises.length, 6);
   assert.equal(ROUTINES[2].exercises.length, 6);
   const recs = routineRecords(5);
   assert.equal(recs[1].order, 6);
