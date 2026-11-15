@@ -40,9 +40,9 @@ export async function recordTargets(next, reason) {
   await store.put('targets', { day: today(), at: new Date().toISOString(), kcal: next.kcal ?? null, p: next.p ?? null, c: next.c ?? null, f: next.f ?? null, steps: next.steps ?? null, reason });
 }
 
-// Maintenance learned from the last 21 days (calories eaten vs trend change); null until 14 days are logged.
+// Maintenance learned from the last 21 days (calories typed in vs trend change); null until 14 days are logged.
 export function learnedMaintenance(day = today()) {
-  const src = { weights: store.all('bodyweight'), dailies: store.all('daily'), meals: foodUi.allFoodEntries() };
+  const src = { weights: store.all('bodyweight'), dailies: store.all('daily') };
   return adaptiveTdee(day, { weights: src.weights, kcalOf: (d) => dayFacts(d, src).kcal });
 }
 const maintenanceHtml = (c) => {
@@ -96,13 +96,22 @@ export async function syncCutGoal() {
   await saveCut({ goalWeight: CUT_DEFAULTS.goalWeight, goalRev: 1 });
 }
 
-// The no-running regime (8 Nov 2026): sleep 7.5 h, 15 km a day (bike + steps ÷ 1000), 3 gym sessions, no running,
-// no calories and macros. Moves a saved plan to it, once.
+// Regime changes, each moved onto a saved plan once:
+//  1 (8 Nov 2026): no running, sleep 7.5 h, 3 gym sessions a week.
+//  2 (15 Nov 2026): cutting to 70 kg again: calories and protein typed in by hand each evening (1,900 kcal ± 100,
+//    protein 130 g, at least 120), 10,000 steps a day (phone + added by hand) instead of 15 km bike + steps.
+export const REGIME_REV = 2;
 export async function syncCutRegime() {
   const c = cutSettings();
-  if (!c.startDate || (c.regimeRev || 0) >= 1) return;
-  await saveCut({ sleep: CUT_DEFAULTS.sleep, activeKm: CUT_DEFAULTS.activeKm, trackFood: false, runsFromCut: false, regimeRev: 1 });
-  await stopCutPlan();
+  const rev = c.regimeRev || 0;
+  if (!c.startDate || rev >= REGIME_REV) return;
+  if (rev < 1) await stopCutPlan();
+  const { id, key, ...saved } = store.getConfig('cut', {});
+  const { activeKm: _a, activeKmMin: _b, minKm: _c, ...rest } = saved;
+  await store.setConfig('cut', { ...rest, sleep: CUT_DEFAULTS.sleep, runsFromCut: false, trackFood: true, steps: CUT_DEFAULTS.steps,
+    stepsMin: CUT_DEFAULTS.stepsMin, minSteps: CUT_DEFAULTS.minSteps, proteinMin: CUT_DEFAULTS.proteinMin, regimeRev: REGIME_REV });
+  await foodUi.saveSettings({ targets: { ...CUT_TARGETS } });
+  await recordTargets({ ...CUT_TARGETS, steps: CUT_DEFAULTS.steps }, `Cut to ${n0(c.goalWeight)} kg: ${n0(CUT_TARGETS.kcal)} kcal, ${CUT_TARGETS.p} g protein, ${n0(CUT_DEFAULTS.steps)} steps`);
 }
 
 // Restart (10 Nov 2026): the plan starts again at week 1, goal 70 kg, start weight taken from the first weigh-ins
@@ -139,15 +148,16 @@ export function openCutSettings() {
       <div class="card form">
         <div class="form-row">${num('kcal', 'Calories (kcal)', tg.kcal, 'numeric')}${num('p', 'Protein (g)', tg.p, 'numeric')}</div>
         <div class="form-row">${num('f', 'Fat (g)', tg.f, 'numeric')}${num('c', 'Carbs (g)', tg.c, 'numeric')}</div>
-        <div class="form-row">${num('activeKm', 'Distance (km)', c.activeKm)}${num('sleep', 'Sleep (h)', c.sleep)}</div>
-        <p class="tiny muted">Distance = km on the bike (you type it in) + steps ÷ 1,000. The phone's steps arrive by themselves.</p>
-        <div class="form-row">${num('kcalFloor', 'Calorie floor', c.kcalFloor, 'numeric')}</div>
-        <label class="switch" style="margin-top:8px"><span>Count calories and protein<span class="tiny muted" style="display:block;font-weight:400">Off: the daily checks are weigh-in, distance, sleep and gym only. The Food tab keeps working.</span></span>
+        <div class="form-row">${num('steps', 'Steps a day', c.steps, 'numeric')}${num('sleep', 'Sleep (h)', c.sleep)}</div>
+        <p class="tiny muted">Steps = the phone's count (arrives the next morning) + steps you add by hand. ${n0(c.stepsMin)}+ is a yellow day.</p>
+        <div class="form-row">${num('cardioWeek', 'Cardio a week', c.cardioWeek, 'numeric')}${num('kcalFloor', 'Calorie floor', c.kcalFloor, 'numeric')}</div>
+        <p class="tiny muted">Cardio = stairs or bike, ticked by hand on the day (at most one a day). Judged like the gym: still on track for the week. 0 = not counted.</p>
+        <label class="switch" style="margin-top:8px"><span>Count calories and protein<span class="tiny muted" style="display:block;font-weight:400">You type the day's totals in Today → Food. Off: the daily checks are weigh-in, steps, sleep and gym only.</span></span>
           <input type="checkbox" name="trackFood" ${c.trackFood ? 'checked' : ''}></label>
         <p class="tiny muted">Calories and macros are the same targets the Food tab uses. Plan minimums: ${n0(CUT_TARGETS.kcal)} kcal · ${CUT_TARGETS.p} g protein (${CUT_TARGETS.f} g fat · ${CUT_TARGETS.c} g carbs).</p>
       </div>
       <h3 class="section-title">Reminders</h3>
-      <div class="card"><label class="switch"><span>Phone reminders<span class="tiny muted" style="display:block;font-weight:400">8:00 weigh-in, 21:00 log bike km and sleep — only if not done yet. Works while the app is open or in the background; when you open the app you always get the same prompt.</span></span>
+      <div class="card"><label class="switch"><span>Phone reminders<span class="tiny muted" style="display:block;font-weight:400">8:00 weigh-in, 21:00 log food totals and sleep — only if not done yet. Works while the app is open or in the background; when you open the app you always get the same prompt.</span></span>
         <input type="checkbox" name="reminders" ${c.reminders ? 'checked' : ''}></label></div>
             <h3 class="section-title">Gym</h3>
       <div class="card row between"><div class="grow"><b>Upper A / B / C</b><p class="small muted">3 upper-body routines, rotated A → B → C</p></div>
@@ -169,7 +179,8 @@ export function openCutSettings() {
         sleep: nv('sleep') || CUT_DEFAULTS.sleep,
         kcalFloor: Math.round(nv('kcalFloor') || CUT_DEFAULTS.kcalFloor),
         runsFromCut: false,
-        activeKm: nv('activeKm') > 0 ? nv('activeKm') : CUT_DEFAULTS.activeKm,
+        steps: nv('steps') > 0 ? Math.round(nv('steps')) : CUT_DEFAULTS.steps,
+        cardioWeek: nv('cardioWeek') != null && nv('cardioWeek') >= 0 ? Math.min(7, Math.round(nv('cardioWeek'))) : CUT_DEFAULTS.cardioWeek,
         trackFood: $('[name=trackFood]', el).checked,
         reminders: $('[name=reminders]', el).checked,
       };
@@ -178,7 +189,7 @@ export function openCutSettings() {
       const targets = cut.trackFood ? { kcal: Math.round(kcal), p: Math.round(nv('p') || 0), c: Math.round(nv('c') || 0), f: Math.round(nv('f') || 0) } : fs.targets;
       await saveCut(cut);
       await foodUi.saveSettings({ ...(targets ? { targets } : {}), profile: { ...(fs.profile || {}), sex, age: Math.round(nv('age')) || null, height: Math.round(nv('height')) || null } });
-      if (cut.trackFood && targets) await recordTargets({ ...targets, steps: c.steps }, 'Edited in settings');
+      if (cut.trackFood && targets) await recordTargets({ ...targets, steps: cut.steps }, 'Edited in settings');
       await stopCutPlan();
       toast('Cut plan saved');
       s.close();
@@ -208,7 +219,7 @@ export function openPlan() {
         ${w.from ? `<p class="tiny muted">${esc(niceDate(fromDay(w.from)))} – ${esc(niceDate(fromDay(w.to)))}</p>` : ''}
         <p class="small">${esc(w.focus)}</p>
       </div>`).join('')}</div>
-      <p class="tiny muted" style="margin:14px 2px">Target = trend weight at the end of the week. Once you are at ${n1(c.goalWeight)} kg, the job is to hold it and get stronger: 3 gym sessions a week, 15 km a day, 7.5 h sleep.</p>` });
+      <p class="tiny muted" style="margin:14px 2px">Target = trend weight at the end of the week. Once you are at ${n1(c.goalWeight)} kg, the job is to hold it and get stronger: 3 gym sessions${c.cardioWeek ? ` and ${n0(c.cardioWeek)} cardio sessions` : ''} a week, ${n0(c.steps)} steps a day, ${n1(c.sleep)} h sleep.</p>` });
   });
 }
 
@@ -224,7 +235,7 @@ export const meSection = {
     el.innerHTML = `<h3 class="section-title" style="margin-top:4px">Cut plan</h3>
       <div class="card"><div class="card-head" style="margin-bottom:6px"><h2>${c.startDate ? (wk ? (len && wk > len ? `Week ${wk} · plan finished` : `Week ${wk}${len ? ` of ${len}` : ''}`) : `Starts ${esc(niceDate(fromDay(c.startDate)))}`) : 'Not set up'}</h2>
         <button class="link" id="ct-edit">${c.startDate ? 'Edit' : 'Set up'}</button></div>
-        <p class="small muted">Goal ${n1(c.goalWeight)} kg at ${n2(c.rate)} kg/week${c.startDate && wk && left != null && wk <= len ? ` · ${n0(left)} days to go` : ''}${c.trackFood ? (t.kcal ? ` · ${n0(t.kcal)} kcal, ${n0(t.p || 0)} g protein, ${n0(c.activeKm)} km` : '') : ` · ${n0(c.activeKm)} km a day, ${n1(c.sleep)} h sleep, 3 gym sessions a week`}</p>
+        <p class="small muted">Goal ${n1(c.goalWeight)} kg at ${n2(c.rate)} kg/week${c.startDate && wk && left != null && wk <= len ? ` · ${n0(left)} days to go` : ''}${c.trackFood ? (t.kcal ? ` · ${n0(t.kcal)} kcal, ${n0(t.p || 0)} g protein, ${n0(c.steps)} steps` : '') : ` · ${n0(c.steps)} steps a day, ${n1(c.sleep)} h sleep, 3 gym sessions a week`}${c.cardioWeek ? ` · cardio ${n0(c.cardioWeek)}× a week` : ''}</p>
         <div style="margin-top:8px">${maintenanceHtml(c)}</div>
         <button class="ghost block" id="ct-plan" style="margin-top:12px">${icon('list')} View the plan</button></div>`;
     $('#ct-edit', el).onclick = openCutSettings;

@@ -46,6 +46,8 @@ A day is **green** if all of these are hit:
 
 **Holding weight (from 1 Nov 2026, ~70 kg):** calories and protein are not counted (setting *Count calories and protein* off). Green = weighed in, steps, sleep, week's training on track; minimum day = weigh-in + 6,000 steps. Goal weight 70 kg. The weekly check-in (measurements, photos) and weekly review are removed; old check-in records stay in the data but are not shown.
 
+**Cut to 70 kg again (from 15 Nov 2026):** calories and protein count again, typed in by hand each evening (Today → Food; nothing synced from Fitatu counts): 1,900 kcal ± 100, protein 130 g (at least 120 g). Distance (15 km bike + steps) is replaced by **10,000 steps** a day (8,000+ yellow), the phone's count plus steps added by hand. Minimum day = weigh-in + protein ≥ 120 g + 6,000 steps. **Cardio** (stairs / bike: 25 min after each gym session, 50 min on two other days) = 5 sessions a week, ticked by hand on the day (at most one a day), judged like the gym: a day is green only while the week is still on track for 5 (setting *Cardio a week*; 0 = not counted).
+
 **Minimum day** (for bad days, travel, illness): weigh-in + protein ≥ 140 + 6,000 steps. A minimum day keeps your streak alive but is graded yellow. Max 1 per week without a flag.
 
 **Travel day** (work trips; mark on the day or plan ahead): only the morning weigh-in is required. Calories, if logged, roughly on target (±300 kcal, else yellow); steps optional; no session expected. Travel days don't count as missed sessions, don't break the protein streak and don't trigger the protein flag; the A → B → C rotation simply continues afterwards.

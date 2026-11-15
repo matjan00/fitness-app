@@ -3,13 +3,12 @@
 
 import { $, $$, esc, icon, toast, today, n0, n1, parseNum, addDays, local } from './util.js';
 import * as store from './store.js';
-import * as foodUi from './food-ui.js';
 import { push, sheet } from './nav.js';
 import { startWorkout } from './gym-workout.js';
 import { cutSettings, currentTargets, openCutSettings, openPlan, addCutRoutines, syncCutRoutines, syncCutTargets, syncCutGoal, syncCutRegime, syncCutRestart, startWeight, isSetUp } from './cut.js';
 import { PLAN, PROGRAM_NAME, EASY_PACE, weekNumber, daysToGoal, planLength, daysBetween, emaTrend, trendOn, targetWeight } from './cut-calc.js';
 import { redFlags, isLogged } from './cut-flags.js';
-import { liftDayExtra, sessionFor, sessionDone, dayFacts, dayStatus, handStepsPatch, streak, minimumDaysInWeek, weekTraining, TRAIN_CHOICES, SESSION_LABEL } from './cut-day.js';
+import { liftDayExtra, sessionFor, sessionDone, dayFacts, dayStatus, handStepsPatch, streak, minimumDaysInWeek, weekTraining, weekCardio, TRAIN_CHOICES, SESSION_LABEL } from './cut-day.js';
 
 const STATUS = { green: ['Green day', 'up'], yellow: ['Yellow day', 'gold'], red: ['Red day', 'down'], open: ['In progress', ''] };
 
@@ -17,7 +16,7 @@ const STATUS = { green: ['Green day', 'up'], yellow: ['Yellow day', 'gold'], red
 const routineCut = (id) => store.get(id)?.cut || null;
 export function sources() {
   return {
-    weights: store.all('bodyweight'), dailies: store.all('daily'), meals: foodUi.allFoodEntries(),
+    weights: store.all('bodyweight'), dailies: store.all('daily'), // food: only the totals typed in (dailies)
     workouts: store.all('workout'), runs: store.all('run'), routineCut,
   };
 }
@@ -36,8 +35,9 @@ export function statusOf(day, src = sources(), cfg = cutSettings(), kcalTarget =
   const session = sessionFor(day, { workouts: src.workouts, runs: src.runs, routineCut, dailies: src.dailies });
   const done = sessionDone(session.kind, day, src);
   const week = weekTraining(day, src);
+  const cardio = weekCardio(day, { dailies: src.dailies, goal: cfg.cardioWeek });
   const target = kcalTarget ? kcalTarget + liftDayExtra(day, { cfg, workouts: src.workouts, dailies: src.dailies }) : kcalTarget;
-  return { facts: f, session, done, week, ...dayStatus(f, { kcalTarget: target, cfg, session, done, week, isToday: day === today() }) };
+  return { facts: f, session, done, week, cardio, ...dayStatus(f, { kcalTarget: target, cfg, session, done, week, cardio, isToday: day === today() }) };
 }
 
 // ---------- quick entry sheets ----------
@@ -74,13 +74,6 @@ function editItem(key, day, f) {
       await daily({ sleepHours: v.h, sleepSource: null }); // typed by hand: the Garmin sync leaves it alone
     });
   }
-  if (key === 'km') {
-    const note = `Km on the home bike. Steps add 1 km per 1,000 by themselves${f.steps != null ? ` (${n0(f.steps)} steps = ${n1(f.steps / 1000)} km)` : ''}. Goal ${n0(cutSettings().activeKm)} km a day.`;
-    return entrySheet('Bike today', [{ name: 'km', label: 'Bike (km)', value: f.bikeKm }], async (v) => {
-      if (v.km != null && !(v.km >= 0 && v.km <= 500)) { toast('Enter km, e.g. 12.5'); return false; }
-      await daily({ bikeKm: v.km });
-    }, note);
-  }
   if (key === 'steps') {
     const note = f.stepsPhone != null
       ? `Your phone counted ${n0(f.stepsPhone)}. Steps you add here go on top.`
@@ -91,11 +84,11 @@ function editItem(key, day, f) {
       await daily(handStepsPatch(cur, v.n == null ? null : Math.round(v.n)));
     }, note);
   }
-  // food: typed day totals win over the Fitatu sync (empty = use Fitatu)
+  // food: the day's totals, typed in by hand each evening (nothing is synced in)
   return entrySheet('Food totals', [
     { name: 'kcal', label: 'Calories (kcal)', value: f.kcal, mode: 'numeric' }, { name: 'p', label: 'Protein (g)', value: f.p, mode: 'numeric' },
     { name: 'c', label: 'Carbs (g)', value: f.c, mode: 'numeric' }, { name: 'f', label: 'Fat (g)', value: f.f, mode: 'numeric' },
-  ], async (v) => { await daily({ kcal: v.kcal, p: v.p, c: v.c, f: v.f }); }, 'Fitatu fills these in automatically. Type a number only to correct a day; leave empty to use Fitatu.');
+  ], async (v) => { await daily({ kcal: v.kcal, p: v.p, c: v.c, f: v.f }); }, `Type the whole day's totals in the evening. Targets: ${n0(currentTargets().kcal || 0)} kcal ± ${cutSettings().kcalBand}, protein at least ${cutSettings().proteinMin} g.`);
 }
 
 // ---------- runs ----------
@@ -142,9 +135,9 @@ function dayTypeHtml(f, st, minUsed) {
   const hint = {
     normal: 'Bad day or illness? Minimum day. Away for work? Travel day.',
     minimum: c.trackFood
-      ? (st.minimumMet ? 'Minimum met: weigh-in, protein and 6 km. Counts as yellow.' : `Minimum day: weigh-in, protein ≥ ${c.proteinMin} g and 6 km. Counts as yellow.`)
-      : (st.minimumMet ? 'Minimum met: weigh-in and 6 km. Counts as yellow.' : 'Minimum day: weigh-in and 6 km (bike + steps). Counts as yellow.'),
-    travel: c.trackFood ? 'Travel day: only the morning weigh-in counts. Calories roughly on target if you log them; distance optional; no session.' : 'Travel day: only the morning weigh-in counts. Distance optional; no session.',
+      ? (st.minimumMet ? `Minimum met: weigh-in, protein and ${n0(c.minSteps)} steps. Counts as yellow.` : `Minimum day: weigh-in, protein ≥ ${c.proteinMin} g and ${n0(c.minSteps)} steps. Counts as yellow.`)
+      : (st.minimumMet ? `Minimum met: weigh-in and ${n0(c.minSteps)} steps. Counts as yellow.` : `Minimum day: weigh-in and ${n0(c.minSteps)} steps. Counts as yellow.`),
+    travel: c.trackFood ? 'Travel day: only the morning weigh-in counts. Calories roughly on target if you log them; steps optional; no session.' : 'Travel day: only the morning weigh-in counts. Steps optional; no session.',
   }[type];
   return `<div class="seg ct-daytype" style="margin-top:12px" role="group" aria-label="Day type">${['normal', 'minimum', 'travel'].map((t) => `<button type="button" data-t="${t}" class="${t === type ? 'on' : ''}" aria-pressed="${t === type}">${t[0].toUpperCase() + t.slice(1)}</button>`).join('')}</div>
     <p class="tiny ${minUsed > 1 && type === 'minimum' ? 'down' : 'muted'}" style="margin-top:6px">${esc(hint)}${minUsed > 1 && type === 'minimum' ? ` ${minUsed} minimum days this week — more than 1 is flagged.` : ''}</p>`;
@@ -205,6 +198,22 @@ function trainingHtml(st, day, src) {
     <p class="tiny ${need > days ? 'warn' : 'muted'} ct-weekline">${esc(line)}</p>`;
 }
 
+// Cardio (stairs / bike), ticked by hand: today's tick and the week's count, on track like the gym.
+function cardioHtml(st, day, src) {
+  const w = st.cardio;
+  if (!w || !(w.goal > 0)) return '';
+  const raw = src.dailies.find((d) => d && d.day === day)?.cardio;
+  const days = w.daysLeft + (raw === true ? 0 : 1); // today still counts while it isn't ticked
+  const sum = `Cardio ${w.done}/${w.goal}`;
+  const line = w.complete ? `${sum} · week done`
+    : w.left <= days ? `${sum} · ${w.left} to go in ${days} day${days === 1 ? '' : 's'}, on track`
+      : `${sum} · ${w.left} to go but only ${days} day${days === 1 ? '' : 's'} left`;
+  const what = st.session.choice === 'lift' ? 'Stairs, 25 min after the gym' : 'Stairs or bike, 50 min';
+  return `<div class="row between" style="margin:14px 0 6px"><h3 class="ct-sub">Cardio</h3><span class="tiny muted">${esc(what)}</span></div>
+    <div class="seg ct-cardio" role="group" aria-label="Cardio today">${[[true, 'Done'], [false, 'Not done']].map(([v, t]) => `<button type="button" data-v="${v}" class="${raw === v ? 'on' : ''}" aria-pressed="${raw === v}">${t}</button>`).join('')}</div>
+    <p class="tiny ${w.left > days ? 'warn' : 'muted'} ct-weekline">${esc(line)}</p>`;
+}
+
 function sessionBlock(sess, done, wk) {
   const plan = PLAN[Math.min(Math.max(wk, 1), PLAN.length) - 1];
   if (sess.kind === 'lift') {
@@ -229,7 +238,7 @@ function sessionBlock(sess, done, wk) {
       ${run ? `<p class="small" style="margin-top:6px">${n1((+run.distance_m || 0) / 1000)} km · ${fmtPace(pace)}/km average${vs != null ? ` · ${sess.kind === 'easy' ? (vs > 0 ? 'easy enough' : `${fmtPace(-vs)} faster than easy pace`) : `${vs <= 0 ? `${fmtPace(-vs)} faster` : `${fmtPace(vs)} slower`} than ${target}/km (whole run incl. warm-up)`}` : ''}</p>`
         : `<button class="ghost block" id="ct-logrun" style="margin-top:10px">${icon('plus')} Log run by hand</button><p class="tiny muted" style="margin-top:4px">Garmin runs appear by themselves after the next sync.</p>`}</div>`;
   }
-  const note = { steps: 'No session — hit your steps.', travel: cutSettings().trackFood ? 'Weigh in this morning. Calories and distance are optional, roughly is fine.' : 'Weigh in this morning. Distance is optional.' }[sess.kind] || 'No session today. Hit your steps.';
+  const note = { steps: 'No session — hit your steps.', travel: cutSettings().trackFood ? 'Weigh in this morning. Calories and steps are optional, roughly is fine.' : 'Weigh in this morning. Steps are optional.' }[sess.kind] || 'No session today. Hit your steps.';
   return `<div class="ct-sess"><b>${SESSION_LABEL[sess.kind]}</b><p class="small muted">${note}</p></div>`;
 }
 
@@ -240,7 +249,7 @@ function headStats(f, tg, trend, trackFood) {
   const weight = `<div class="stat"><b>${kg == null ? '–' : `${n1(kg)}<small> kg</small>`}</b><span>${trend != null ? 'trend weight' : 'weight'}</span></div>`;
   if (!trackFood) {
     return `<div class="stats ct-headstats">
-    <div class="stat"><b class="${f.km != null && f.km >= cutSettings().activeKm ? 'up' : ''}">${f.km == null ? '–' : `${n1(f.km)}<small> km</small>`}</b><span>of ${n0(cutSettings().activeKm)} km</span></div>
+    <div class="stat"><b class="${f.steps != null && f.steps >= cutSettings().steps ? 'up' : ''}">${f.steps == null ? '–' : n0(f.steps)}</b><span>of ${n0(cutSettings().steps)} steps</span></div>
     <div class="stat"><b>${f.sleep == null ? '–' : `${n1(f.sleep)}<small> h</small>`}</b><span>sleep</span></div>
     ${weight}
   </div>`;
@@ -290,7 +299,8 @@ function render(el) {
   // The icon says whether something is entered (+ = add it, ✓ = entered); the colour says whether it hits
   // the target (green), is close or short (amber).
   const row = (key, label, value, extra = '', has = false) => {
-    const chk = ok(key);
+    // Food covers two checks (calories and protein): amber unless both are met.
+    const chk = key === 'food' ? { ok: ['kcal', 'protein'].every((k) => !ok(k) || ok(k).ok), label: [ok('kcal')?.label, ok('protein')?.label].filter(Boolean).join(' · ') } : ok(key);
     const cls = !has ? '' : !chk || chk.ok ? 'ok' : 'warn';
     return `<button class="list-item ct-item" data-k="${key}"><span class="ct-tick ${cls}">${icon(has ? 'check' : 'plus')}</span>
       <div class="grow"><b>${label}</b><div class="sub">${esc(extra || (key === 'weight' && !chk?.ok ? 'Morning, before food' : chk?.label) || '')}</div></div><span class="ct-val">${value}</span></button>`;
@@ -305,13 +315,13 @@ function render(el) {
       ${flags.length > 1 ? flags.map((x) => `<p>${esc(x.text)}</p>`).join('') : ''}</details>` : ''}
     ${wk > 0 && !f.travel ? trainingHtml(st, day, src) : ''}
     ${wk > 0 ? sessionBlock(st.session, st.done, wk) : ''}
+    ${wk > 0 && !f.travel ? cardioHtml(st, day, src) : ''}
     <div class="row between" style="margin:14px 0 4px"><h3 class="ct-sub">Today</h3><span class="pill ${stCls}">${stLabel}</span></div>
     <div class="list">
       ${row('weight', 'Weight', v(f.weight == null ? null : n1(f.weight), ' kg'), trend != null ? `trend ${n1(trend)} kg${inWeeks && start ? ` · target ${n1(targetWeight(start, c.goalWeight, c.rate, wk))} by ${new Date(`${addDays(c.startDate, wk * 7 - 1)}T12:00`).toLocaleDateString('en-GB', { weekday: 'short' })}` : ''}` : '', f.weight != null)}
       ${row('sleep', 'Sleep', v(f.sleep == null ? null : n1(f.sleep), ' h'), '', f.sleep != null)}
-      ${row('km', 'Distance', v(f.km == null ? null : n1(f.km), ' km'), `${f.bikeKm == null ? 'Tap to add your bike km' : `bike ${n1(f.bikeKm)} km`} + steps ${n1((f.steps || 0) / 1000)} km`, f.km != null)}
-      ${row('steps', 'Steps', v(f.steps == null ? null : n0(f.steps)), f.stepsPhone != null && f.stepsExtra ? `phone ${n0(f.stepsPhone)} + ${n0(f.stepsExtra)} by hand` : 'Counted by your phone, 1 km per 1,000', f.steps != null)}
-      ${c.trackFood ? row(f.travel ? 'kcal' : 'protein', 'Food', food, '', f.kcal != null || f.p != null) : ''}
+      ${row('steps', 'Steps', v(f.steps == null ? null : n0(f.steps)), f.stepsPhone != null && f.stepsExtra ? `phone ${n0(f.stepsPhone)} + ${n0(f.stepsExtra)} by hand · goal ${n0(c.steps)}` : `Phone's count arrives the next morning · tap to add steps by hand`, f.steps != null)}
+      ${c.trackFood ? row('food', 'Food', food, f.kcal == null && f.p == null ? 'Type the day’s totals in the evening' : '', f.kcal != null || f.p != null) : ''}
     </div>
     ${dayTypeHtml(f, st, minUsed)}
     <div class="row between ct-links"><button class="link small" id="ct-yday">Edit yesterday</button><button class="link small" id="ct-trip">Plan travel days</button></div>
@@ -322,9 +332,10 @@ function render(el) {
     </div></div>`;
 
   $('#ct-plan', el).onclick = openPlan;
-  $$('.ct-item', el).forEach((b) => { b.onclick = () => editItem(['protein', 'kcal'].includes(b.dataset.k) ? 'food' : b.dataset.k, day, f); });
+  $$('.ct-item', el).forEach((b) => { b.onclick = () => editItem(b.dataset.k, day, f); });
   bindDayType(el, day, f, minUsed);
   $$('.ct-train button', el).forEach((b) => { b.onclick = () => saveDaily(day, { train: b.dataset.v }); });
+  $$('.ct-cardio button', el).forEach((b) => { b.onclick = () => saveDaily(day, { cardio: b.dataset.v === 'true' }); });
   $('#ct-trip', el).onclick = planTravel;
   $('#ct-yday', el).onclick = () => openDay(addDays(day, -1));
   $('#ct-logrun', el)?.addEventListener('click', () => logRun(st.session.kind));
@@ -349,12 +360,13 @@ export function openDay(day) {
         <div class="fab-row" style="margin-top:12px;flex-wrap:wrap">
           <button class="ghost" data-k="weight">Weight${f.weight != null ? ` ${n1(f.weight)}` : ''}</button>
           <button class="ghost" data-k="sleep">Sleep${f.sleep != null ? ` ${n1(f.sleep)} h` : ''}</button>
-          <button class="ghost" data-k="km">Bike${f.bikeKm != null ? ` ${n1(f.bikeKm)} km` : ''}</button>
           <button class="ghost" data-k="steps">Steps${f.steps != null ? ` ${n0(f.steps)}` : ''}</button>
+          <button class="ghost" data-c="cardio" aria-pressed="${f.cardio}">${f.cardio ? `${icon('check')} Cardio done` : 'Cardio not done'}</button>
           ${cutSettings().trackFood ? `<button class="ghost" data-k="food">Food${f.kcal != null ? ` ${n0(f.kcal)}` : ''}</button>` : ''}
         </div>
         ${dayTypeHtml(f, st, minimumDaysInWeek(day, store.all('daily')))}` });
       $$('[data-k]', el).forEach((b) => { b.onclick = () => editItem(b.dataset.k, day, f); });
+      $('[data-c=cardio]', el).onclick = () => saveDaily(day, { cardio: !f.cardio });
       bindDayType(el, day, f, minimumDaysInWeek(day, store.all('daily')));
     };
     draw();
@@ -388,7 +400,7 @@ export function init() {
 }
 
 // ---------- reminders ----------
-// Morning: weigh-in. Evening: bike km and sleep. Shown as a prompt when the app opens; as a phone
+// Morning: weigh-in. Evening: food totals and sleep. Shown as a prompt when the app opens; as a phone
 // notification at 8:00 and 21:00 when switched on (only while the app is open or in the background —
 // a web app can't wake itself up once the phone has closed it).
 function reminderText(day = today(), hour = new Date().getHours()) {
@@ -396,7 +408,7 @@ function reminderText(day = today(), hour = new Date().getHours()) {
   const f = dayFacts(day, sources());
   if (hour >= 5 && hour < 12 && f.weight == null) return 'Morning weigh-in: after the bathroom, before food.';
   if (hour >= 19) {
-    const miss = [cutSettings().trackFood && f.kcal == null && 'food', f.bikeKm == null && 'bike km', f.sleep == null && 'sleep'].filter(Boolean);
+    const miss = [cutSettings().trackFood && f.kcal == null && 'food', f.sleep == null && 'sleep'].filter(Boolean);
     if (miss.length) return `Evening log: ${miss.join(', ')} still missing for today.`;
   }
   return '';

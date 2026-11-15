@@ -15,21 +15,20 @@ export const CUT_DEFAULTS = {
   goalWeight: 70,
   rate: 0.75,           // kg of trend weight per week
   kcalFloor: 1900,     // lowest calorie target the plan works with
-  steps: 10000,         // no longer a daily check: steps count towards activeKm (1 km per 1,000)
-  activeKm: 15,         // daily distance goal: bike km typed in + steps / 1000
-  activeKmMin: 12,      // yellow, not failed
-  minKm: 6,             // minimum day
-  stepsMin: 8000,
+  steps: 10000,         // daily steps goal (phone + steps added by hand)
+  stepsMin: 8000,       // yellow, not failed
+  minSteps: 6000,       // minimum day
   sleep: 7.5,
+  cardioWeek: 5,        // cardio sessions a week (stairs / bike, ticked by hand): 25 min after each gym session + 2 × 50 min
   proteinMin: 120,
   runsFromCut: false,   // no running in the plan
-  trackFood: false,     // count calories and protein in the daily checks (off while holding weight)
+  trackFood: true,      // count calories and protein in the daily checks (typed in by hand each evening)
   kcalBand: 100,        // calories within target ±100
   travelKcalBand: 300,  // travel day: calories roughly on target (±300), only if entered
   liftDayBonus: 0,      // extra kcal on lifting days (set by hand; was a weekly review suggestion)
   maintenance: 2500,    // initial maintenance estimate (kcal); the app learns the real one from data
 };
-export const CUT_TARGETS = { kcal: 1900, p: 120, f: 55, c: 231 };
+export const CUT_TARGETS = { kcal: 1900, p: 130, f: 60, c: 210 };
 export const TARGETS_REV = 2; // bumped when saved targets should move to new CUT_TARGETS / proteinMin / kcalFloor
 // The plan was restarted from week 1 on this day (a Monday, so plan weeks match training weeks).
 export const RESTART_DATE = '2026-11-09';
