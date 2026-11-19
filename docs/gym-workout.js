@@ -3,7 +3,7 @@
 // The workout in progress lives in localStorage ('gym.active') and is saved on every change, so closing the
 // app never loses it. Inputs update the model directly; the screen only re-renders on structural changes
 // (adding/removing sets or exercises), so the keyboard never loses focus while typing.
-import { $, $$, esc, icon, toast, uid, parseNum, clock, mins, bigKg, niceDate, niceTime } from './util.js';
+import { $, $$, esc, icon, toast, local, uid, parseNum, clock, mins, bigKg, niceDate, niceTime } from './util.js';
 import * as store from './store.js';
 import { push, chooseSheet, confirmSheet } from './nav.js';
 import {
@@ -29,6 +29,19 @@ export function initWorkout() {
   active = getActive();
   if (active && !Array.isArray(active.exercises)) { active = null; clearActive(); }
   if (active) { ensureTicker(); wake(true); }
+  else local.del(OPEN_KEY);
+  // Android kills a backgrounded app to free memory and reloads it when you come back: if the workout screen
+  // was open then, open it again (scrolled to where you were) instead of dropping you on the tab.
+  if (active && local.get(OPEN_KEY, false)) openActive();
+}
+
+// Was the workout screen open (so a reload should bring it back), and where it was scrolled to.
+const OPEN_KEY = 'gym.activeOpen';
+const SCROLL_KEY = 'gym.activeScroll';
+const workoutScroller = () => $('.screen.gx-workout:not(.gx-editing):not(.closing) .scroll');
+function rememberScroll() {
+  const sc = workoutScroller();
+  if (active && sc) local.set(SCROLL_KEY, sc.scrollTop);
 }
 
 const REST_CHOICES = [0, 30, 45, 60, 75, 90, 120, 150, 180, 240, 300];
@@ -166,12 +179,19 @@ export async function openActive() {
   if (!active) return;
   if ($('.screen.gx-workout:not(.closing)')) return;
   await loadDb().catch(() => {});
+  if (!active || $('.screen.gx-workout:not(.closing)')) return;
   openSession(active, 'active');
+  local.set(OPEN_KEY, true);
+  const y = local.get(SCROLL_KEY, 0);
+  if (y) requestAnimationFrame(() => { const sc = workoutScroller(); if (sc) sc.scrollTop = y; });
 }
 
 function endActive() {
   active = null;
+  scheduleBeep(null);
   clearActive();
+  local.del(OPEN_KEY);
+  local.del(SCROLL_KEY);
   wake(false);
   tick();
 }
@@ -413,12 +433,14 @@ function openSession(sess, kind, original = null) {
       const rb = b.dataset.rest;
       if (rb) {
         if (!active?.rest) return;
+        unlockAudio();
         if (rb === 'skip') active.rest = null;
         else {
           active.rest.end += Number(rb) * 1000;
           const rem = (active.rest.end - Date.now()) / 1000;
           if (rem <= 0) active.rest = null; else active.rest.total = Math.max(active.rest.total, rem);
         }
+        scheduleBeep(active.rest);
         persist();
         tick();
         return;
@@ -479,7 +501,12 @@ function openSession(sess, kind, original = null) {
         default:
       }
     };
-  }, { className: isActive ? 'gx-workout' : 'gx-workout gx-editing', label: isActive ? 'Workout' : 'Edit workout' });
+  }, {
+    className: isActive ? 'gx-workout' : 'gx-workout gx-editing',
+    label: isActive ? 'Workout' : 'Edit workout',
+    // Closed on purpose (back, swipe down): a reload should leave it closed too.
+    onClose: isActive ? () => { local.del(OPEN_KEY); local.del(SCROLL_KEY); } : undefined,
+  });
 
   function updateRow(e, i, row) {
     const s = e.sets[i];
@@ -522,6 +549,7 @@ function openSession(sess, kind, original = null) {
       unlockAudio();
       if (e.rest > 0) {
         active.rest = { end: Date.now() + e.rest * 1000, total: e.rest, k: e.k };
+        scheduleBeep(active.rest);
         persist();
         tick();
       }
@@ -746,6 +774,8 @@ function bindSummary(el, s, sum) {
 // ---------- rest timer, elapsed clock, alarm ----------
 let ticker = null;
 let audio = null;
+let lastRung = 0;        // end time of the rest that last rang, so one rest never rings twice
+const LATE_S = 30;       // a rest that ended longer ago than this only gets a toast
 function ensureTicker() {
   if (!ticker) ticker = setInterval(tick, 250);
 }
@@ -775,8 +805,17 @@ export function tick() {
     if (rem <= 0) {
       active.rest = null;
       persist();
-      if (rem > -5) alarm();
+      // Phones slow down or pause timers while the screen is off or another app is in front, so this can run
+      // late. The beep scheduled at rest start has usually rung on time already; if not, ring now unless it's
+      // so late that it would only be noise. Each rest rings once (lastRung).
+      if (r.end !== lastRung) {
+        lastRung = r.end;
+        if (rem > -LATE_S) alarm();
+        else { cancelBeep(); toast(`Rest ended ${clock(-rem)} ago`); }
+      }
     } else {
+      // On screen, let the <audio> clip ring instead of the scheduled beep: it makes Spotify duck.
+      if (rem <= 0.3 && document.visibilityState === 'visible') cancelBeep();
       const txt = clock(Math.ceil(rem));
       $$('[data-gx-rest]').forEach((x) => { x.textContent = txt; });
       $$('.gx-rest-fill').forEach((x) => { x.style.width = `${Math.min(100, (rem / r.total) * 100)}%`; });
@@ -816,10 +855,11 @@ function duck() {
     return () => { try { s.type = was; } catch { /* ignore */ } };
   } catch { return () => {}; }
 }
-function beepWebAudio() {
-  const t0 = audio.currentTime + 0.02;
+function beepWebAudio(delay = 0) {
+  const t0 = audio.currentTime + 0.02 + delay;
   const comp = audio.createDynamicsCompressor();
   comp.connect(audio.destination);
+  const oscs = [];
   [0, 0.2, 0.4, 0.95, 1.15, 1.35].forEach((d, i) => {
     const o = audio.createOscillator();
     const g = audio.createGain();
@@ -832,18 +872,45 @@ function beepWebAudio() {
     o.connect(g).connect(comp);
     o.start(t0 + d);
     o.stop(t0 + d + 0.14);
+    oscs.push(o);
   });
+  return { at: t0, comp, oscs };
 }
+
+// The rest-over beep is scheduled on the audio clock when the rest starts (a tap, so audio is allowed).
+// The audio clock keeps running when the phone throttles timers in the background, so the beep is on time
+// even if tick() isn't. Rescheduled on ±15, cancelled on Skip.
+let sched = null;
+function cancelBeep() {
+  if (!sched) return;
+  try { sched.oscs.forEach((o) => o.stop()); sched.comp.disconnect(); } catch { /* ignore */ }
+  sched = null;
+}
+function scheduleBeep(rest) {
+  cancelBeep();
+  if (!rest || !settings().sound) return;
+  try {
+    if (!audio || audio.state === 'closed') return;
+    const delay = (rest.end - Date.now()) / 1000;
+    if (delay > 0.5) sched = beepWebAudio(delay);
+  } catch { sched = null; }
+}
+// Has the scheduled beep started? A suspended clock (iOS in the background) doesn't count.
+const beepPlayed = () => Boolean(sched && audio?.state === 'running' && audio.currentTime >= sched.at - 0.05);
 function alarm() {
   buzz([400, 150, 400, 150, 400]);
   toast('Rest over — next set!');
-  if (!settings().sound) return;
+  if (!settings().sound) { cancelBeep(); return; }
+  // The beep scheduled at rest start already played (on time, even with the screen off): don't ring again.
+  if (beepPlayed()) { sched = null; return; }
+  cancelBeep();
   const restore = duck();
   let done = false;
   const end = () => { if (!done) { done = true; restore(); } };
   setTimeout(end, 2200);
   const fallback = () => {
-    try { unlockAudio(); if (audio) beepWebAudio(); } catch { /* ignore */ }
+    // Only on a running context: beeps queued on a suspended one would ring later, out of nowhere.
+    try { unlockAudio(); if (audio?.state === 'running') beepWebAudio(); } catch { /* ignore */ }
   };
   try {
     if (!clip) return fallback();
@@ -873,7 +940,10 @@ async function wake(on) {
 export const setWake = (on) => wake(on);
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && active) { wake(true); tick(); }
+  // Leaving the app: save now, since Android may kill it without another chance.
+  if (document.visibilityState === 'hidden' && active) { persist(); rememberScroll(); }
 });
+addEventListener('pagehide', () => { if (active) { persist(); rememberScroll(); } });
 
 function autosize(list) {
   list.forEach((t) => { t.style.height = 'auto'; t.style.height = `${Math.min(200, t.scrollHeight + 2)}px`; });
